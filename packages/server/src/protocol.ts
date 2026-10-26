@@ -3,11 +3,21 @@ import type { GameRecord, LeaderboardEntry, PlayerProfile } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile };
 
+/** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
+export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
+export const COLORS = ['#e8b931', '#d1453b', '#4fb477', '#3b82c4', '#9b59b6', '#e67e22', '#1abc9c', '#ec6fa6'];
+
+/** Apparence choisie par le joueur ; sans choix, on affiche ses initiales sur le fond doré habituel. */
+export interface Look {
+  avatar?: string;
+  color?: string;
+}
+
 /** Ce que chacun voit du salon, avant et pendant la partie. */
 export interface RoomView {
   code: string;
   hostId: string;
-  players: { id: string; name: string; connected: boolean; bot: boolean }[];
+  players: ({ id: string; name: string; connected: boolean; bot: boolean } & Look)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;
@@ -51,8 +61,8 @@ export interface Session {
 }
 
 export interface ClientToServerEvents {
-  'room:create': (payload: { name: string }, ack: Ack<Session>) => void;
-  'room:join': (payload: { code: string; name: string }, ack: Ack<Session>) => void;
+  'room:create': (payload: { name: string } & Look, ack: Ack<Session>) => void;
+  'room:join': (payload: { code: string; name: string } & Look, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
   'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;

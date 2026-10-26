@@ -1,12 +1,13 @@
 import type { PlayerView } from '@gof/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { type Socket, io } from 'socket.io-client';
-import type { ChatMessage, ClientToServerEvents, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
+import type { ChatMessage, ClientToServerEvents, Look, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
 
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SESSION_KEY = 'gof-session';
 const NAME_KEY = 'gof-name';
+const LOOK_KEY = 'gof-look';
 
 export const socket: GameSocket = io({ autoConnect: true });
 
@@ -39,6 +40,16 @@ function writeStorage(kind: 'local' | 'session', key: string, value: string | nu
 
 export const savedName = () => readStorage('local', NAME_KEY) ?? '';
 export const saveName = (name: string) => writeStorage('local', NAME_KEY, name);
+
+/** Avatar et couleur choisis, retenus pour tout le navigateur comme le pseudo. */
+export function savedLook(): Look {
+  try {
+    return JSON.parse(readStorage('local', LOOK_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+export const saveLook = (look: Look) => writeStorage('local', LOOK_KEY, JSON.stringify(look));
 
 function readSession(): Session | null {
   try {
