@@ -145,11 +145,66 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   );
 }
 
+/** Fin de manche : le paquet ramassé, vu de côté. Le donneur clique entre deux cartes pour le couper. */
+function CutDeck({ game }: { game: PlayerView }) {
+  const mine = game.dealer === game.you;
+  const [hover, setHover] = useState(0);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+  const size = game.deckSize;
+  // Le dessus du paquet est à gauche : cliquer sur la carte i coupe les i cartes de gauche (au moins une).
+  const position = (i: number) => Math.min(Math.max(i, 1), size - 1);
+
+  async function cutAt(i: number) {
+    setSent(true);
+    const result = await socket.emitWithAck('game:cut', { position: position(i) });
+    if (!result.ok) {
+      setSent(false);
+      setError(errorLabel(result.error));
+    }
+  }
+
+  return (
+    <div className="center-pile">
+      <div className="pile-label">
+        {mine ? 'À toi de couper le paquet : clique là où tu veux couper' : `${game.players[game.dealer]!.name} coupe le paquet…`}
+      </div>
+      <div
+        className={`cut-deck pop-in ${mine && !sent ? 'mine' : ''}`}
+        style={{ '--size': size } as CSSProperties}
+        onMouseLeave={() => setHover(0)}
+      >
+        {Array.from({ length: size }, (_, i) => (
+          <button
+            key={i}
+            type="button"
+            className={`cut-card ${mine && hover > 0 && i < position(hover) ? 'lifted' : ''}`}
+            disabled={!mine || sent}
+            onMouseEnter={() => setHover(i)}
+            onClick={() => void cutAt(i)}
+            aria-label={`Couper ${position(i)} cartes`}
+          />
+        ))}
+      </div>
+      <div className="pile-empty">
+        {error ||
+          (mine
+            ? hover > 0
+              ? `${position(hover)} carte${position(hover) > 1 ? 's' : ''} du dessus passent dessous`
+              : `Ensuite, ${game.players[(game.dealer - 1 + game.players.length) % game.players.length]!.name} distribue.`
+            : 'La nouvelle manche commence juste après.')}
+      </div>
+    </div>
+  );
+}
+
 /** Le centre de la table : la combinaison à battre, les coups précédents du pli en retrait, ou l'échange de cartes. */
 function CenterPile({ game }: { game: PlayerView }) {
   const plays = game.trick.filter((e) => e.combination);
   const top = game.table;
   const exchange = game.exchange;
+
+  if (game.phase === 'cut') return <CutDeck game={game} />;
 
   if (game.phase === 'exchange' && exchange) {
     return (
@@ -292,7 +347,9 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const current = game.players[game.currentPlayer]!;
 
   let status: string;
-  if (game.phase === 'exchange') {
+  if (game.phase === 'cut') {
+    status = game.dealer === me ? 'À toi de couper le paquet.' : `${game.players[game.dealer]!.name} coupe le paquet…`;
+  } else if (game.phase === 'exchange') {
     status = mustGive
       ? `Tu as reçu ${cardLabel(exchange!.loserCard)} de ${game.players[exchange!.loserIndex]!.name}. Choisis une carte à lui rendre.`
       : `${game.players[exchange!.winnerIndex]!.name} choisit une carte à rendre à ${game.players[exchange!.loserIndex]!.name}…`;

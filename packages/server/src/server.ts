@@ -126,6 +126,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     socket.on('game:pass', (ack) => act({ type: 'pass' })(ack));
     socket.on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: String(payload?.cardId ?? '') })(ack));
     socket.on('game:nextRound', (ack) => act({ type: 'nextRound' })(ack));
+    socket.on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload?.position) })(ack));
     socket.on('stats:get', (ack) => ack?.({ ok: true, leaderboard: history.leaderboard(), recent: history.recent() }));
 
     socket.on('disconnect', () => {

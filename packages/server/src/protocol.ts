@@ -40,6 +40,7 @@ export interface ClientToServerEvents {
   'game:pass': (ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
+  'game:cut': (payload: { position: number }, ack: Ack) => void;
   'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; recent: GameRecord[] }>) => void;
 }
 
