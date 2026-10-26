@@ -10,29 +10,39 @@ const NAME_KEY = 'gof-name';
 
 export const socket: GameSocket = io({ autoConnect: true });
 
-function readStorage(key: string): string | null {
+// Le siège est gardé par onglet (sessionStorage) : un rechargement reprend la même place,
+// mais un nouvel onglet est un nouveau joueur. Le pseudo, lui, est retenu pour tout le navigateur.
+function storage(kind: 'local' | 'session'): Storage | null {
   try {
-    return localStorage.getItem(key);
+    return kind === 'local' ? localStorage : sessionStorage;
   } catch {
     return null;
   }
 }
 
-function writeStorage(key: string, value: string | null) {
+function readStorage(kind: 'local' | 'session', key: string): string | null {
   try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
+    return storage(kind)?.getItem(key) ?? null;
   } catch {
-    // Stockage indisponible (navigation privée) : on se passe de la reconnexion automatique.
+    return null;
   }
 }
 
-export const savedName = () => readStorage(NAME_KEY) ?? '';
-export const saveName = (name: string) => writeStorage(NAME_KEY, name);
+function writeStorage(kind: 'local' | 'session', key: string, value: string | null) {
+  try {
+    if (value === null) storage(kind)?.removeItem(key);
+    else storage(kind)?.setItem(key, value);
+  } catch {
+    // Stockage indisponible : on se passe de la reconnexion automatique.
+  }
+}
+
+export const savedName = () => readStorage('local', NAME_KEY) ?? '';
+export const saveName = (name: string) => writeStorage('local', NAME_KEY, name);
 
 function readSession(): Session | null {
   try {
-    return JSON.parse(readStorage(SESSION_KEY) ?? 'null');
+    return JSON.parse(readStorage('session', SESSION_KEY) ?? 'null');
   } catch {
     return null;
   }
@@ -47,7 +57,7 @@ export function useGameConnection() {
 
   const remember = useCallback((s: Session | null) => {
     setSession(s);
-    writeStorage(SESSION_KEY, s ? JSON.stringify(s) : null);
+    writeStorage('session', SESSION_KEY, s ? JSON.stringify(s) : null);
     if (!s) {
       setRoom(null);
       setGame(null);
