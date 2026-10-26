@@ -19,7 +19,8 @@ export type RoomError =
   | 'notInRoom'
   | 'notHost'
   | 'notEnoughPlayers'
-  | 'gameNotStarted';
+  | 'gameNotStarted'
+  | 'serverError';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
