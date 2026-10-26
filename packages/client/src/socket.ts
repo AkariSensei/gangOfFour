@@ -1,7 +1,7 @@
 import type { PlayerView } from '@gof/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { type Socket, io } from 'socket.io-client';
-import type { ClientToServerEvents, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
+import type { ChatMessage, ClientToServerEvents, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
 
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -54,6 +54,8 @@ export function useGameConnection() {
   const [session, setSession] = useState<Session | null>(null);
   const [room, setRoom] = useState<RoomView | null>(null);
   const [game, setGame] = useState<PlayerView | null>(null);
+  // Le chat ne vit que dans la page : rien n'est gardé, ni ici après un départ, ni sur le serveur.
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const remember = useCallback((s: Session | null) => {
     setSession(s);
@@ -61,6 +63,7 @@ export function useGameConnection() {
     if (!s) {
       setRoom(null);
       setGame(null);
+      setMessages([]);
     }
   }, []);
 
@@ -79,14 +82,17 @@ export function useGameConnection() {
     socket.on('disconnect', onDisconnect);
     socket.on('room:state', setRoom);
     socket.on('game:state', setGame);
+    const onMessage = (m: ChatMessage) => setMessages((list) => [...list.slice(-99), m]);
+    socket.on('chat:message', onMessage);
     if (socket.connected) void rejoin();
     return () => {
       socket.off('connect', rejoin);
       socket.off('disconnect', onDisconnect);
       socket.off('room:state', setRoom);
       socket.off('game:state', setGame);
+      socket.off('chat:message', onMessage);
     };
   }, [remember]);
 
-  return { connected, session, room, game, remember };
+  return { connected, session, room, game, messages, remember };
 }

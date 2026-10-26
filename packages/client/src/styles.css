@@ -1350,6 +1350,19 @@ input {
   margin: 0 0 0.6rem;
 }
 .live-rooms ul {
+
+/* Chat du salon : dans le salon d'attente sous les réglages, pendant la partie dans une bulle sous l'en-tête. */
+.lobby-chat {
+  margin-top: 1rem;
+}
+.lobby-chat h2 {
+  margin-top: 0;
+}
+.chat {
+  display: grid;
+  gap: 0.5rem;
+}
+.chat-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1377,5 +1390,96 @@ input {
     grid-column: 1 / -1;
     inset: auto;
     translate: none;
+
+  align-content: start;
+  gap: 0.3rem;
+  max-height: 220px;
+  min-height: 60px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.chat-list li {
+  padding: 0.3rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  justify-self: start;
+  max-width: 90%;
+}
+.chat-list li.mine {
+  justify-self: end;
+  background: rgba(232, 185, 49, 0.25);
+}
+.chat-list .chat-empty {
+  background: none;
+  color: var(--muted);
+  font-style: italic;
+}
+.chat-name {
+  font-weight: 700;
+  margin-right: 0.2rem;
+}
+.chat-form {
+  display: flex;
+  gap: 0.4rem;
+}
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+}
+.chat-anchor {
+  position: relative;
+}
+.chat-anchor > button.icon {
+  position: relative;
+}
+.chat-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+}
+.chat-popover {
+  color: var(--text);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(330px, calc(100vw - 32px));
+  padding: 0.8rem;
+}
+.chat-preview {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  text-align: left;
+  font-weight: 400;
+  background: rgba(10, 30, 20, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 0.45rem 0.7rem;
+  overflow-wrap: anywhere;
+  animation: pop-in 0.2s ease;
+}
+@media (max-width: 560px) {
+  .chat-popover,
+  .chat-preview {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
   }
 }
