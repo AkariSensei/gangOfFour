@@ -7,7 +7,7 @@ export type { GameRecord, LeaderboardEntry };
 export interface RoomView {
   code: string;
   hostId: string;
-  players: { id: string; name: string; connected: boolean }[];
+  players: { id: string; name: string; connected: boolean; bot: boolean }[];
   started: boolean;
 }
 
@@ -35,6 +35,8 @@ export interface ClientToServerEvents {
   'room:join': (payload: { code: string; name: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
+  'room:addBot': (ack: Ack) => void;
+  'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number }, ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;

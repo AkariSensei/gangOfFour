@@ -125,4 +125,38 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.recent).toHaveLength(1);
     expect(stats.ok && stats.leaderboard).toHaveLength(count);
   }, 60000);
+
+  it('fait jouer les bots tout seuls : une partie complète avec un humain et deux bots', async () => {
+    await start({ botDelayMs: 0 });
+    const { code, players } = await lobby(1);
+    const human = players[0]!;
+    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
+    await waitFor(() => human.room?.players.length === 3);
+    expect(human.room!.players.map((p) => p.bot)).toEqual([false, true, true]);
+    await human.emitWithAck('game:start', {});
+    await waitFor(() => !!human.game);
+
+    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls.
+    const seats = [human, human, human];
+    const humanMustAct = (g: PlayerView) =>
+      g.phase === 'roundOver' ||
+      (g.phase === 'cut' && g.dealer === g.you) ||
+      (g.phase === 'exchange' && g.exchange?.winnerIndex === g.you) ||
+      (g.phase === 'playing' && g.currentPlayer === g.you);
+    const over = () => human.game!.phase === 'gameOver';
+    for (let steps = 0; !over(); steps++) {
+      expect(steps).toBeLessThan(5000);
+      await waitFor(() => over() || humanMustAct(human.game!), 5000);
+      if (over()) break;
+      const before = JSON.stringify(human.game);
+      await playBotTurn(seats);
+      await waitFor(() => JSON.stringify(human.game) !== before);
+    }
+
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.recent).toHaveLength(1);
+    expect(stats.ok && stats.leaderboard.map((e) => e.name)).toEqual(['Alice']);
+    expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
+  }, 60000);
 });

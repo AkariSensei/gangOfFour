@@ -275,6 +275,19 @@ input {
 .player-list li.offline {
   opacity: 0.5;
 }
+.player-list .remove-bot {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  min-height: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.player-list .remove-bot:hover {
+  color: #b3261e;
+}
 
 /* Classement du bureau sur l'accueil */
 .leaderboard {

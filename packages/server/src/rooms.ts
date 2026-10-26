@@ -21,7 +21,12 @@ export interface Seat {
   token: string;
   name: string;
   connected: boolean;
+  /** Siège tenu par l'ordinateur, ajouté par l'hôte pour compléter la table. */
+  bot?: boolean;
 }
+
+/** Noms donnés aux bots, dans l'ordre. */
+const BOT_NAMES = ['Robot Ada', 'Robot Alan', 'Robot Grace'];
 
 export interface Room {
   code: string;
@@ -107,10 +112,12 @@ export class RoomManager {
       return;
     }
     room.seats = room.seats.filter((s) => s.playerId !== playerId);
-    if (room.seats.length === 0) {
+    // Sans humain, le salon disparaît ; sinon l'hôte passe au premier humain restant (jamais à un bot).
+    const human = room.seats.find((s) => !s.bot);
+    if (!human) {
       this.rooms.delete(room.code);
     } else if (room.hostId === playerId) {
-      room.hostId = room.seats[0]!.playerId;
+      room.hostId = human.playerId;
     }
   }
 
@@ -119,9 +126,48 @@ export class RoomManager {
     if (seat) seat.connected = connected;
   }
 
+  /** Un salon est abandonné quand plus aucun humain n'y est connecté (les bots ne comptent pas). */
   isAbandoned(code: string): boolean {
     const room = this.get(code);
-    return !!room && room.seats.every((s) => !s.connected);
+    return !!room && room.seats.every((s) => s.bot || !s.connected);
+  }
+
+  /** L'hôte ajoute un bot sur un siège libre, avant la partie. */
+  addBot(code: string, playerId: string): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
+    if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
+    if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
+    const name = BOT_NAMES.find((n) => !room.seats.some((s) => s.name === n)) ?? 'Robot';
+    room.seats.push({ playerId: randomUUID(), token: randomUUID(), name, connected: true, bot: true });
+    return { ok: true };
+  }
+
+  removeBot(code: string, playerId: string, botId: string): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
+    if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
+    room.seats = room.seats.filter((s) => !(s.bot && s.playerId === botId));
+    return { ok: true };
+  }
+
+  /** Le bot qui doit agir maintenant dans ce salon (jouer, rendre une carte ou couper), s'il y en a un. */
+  botToAct(code: string): Seat | null {
+    const room = this.get(code);
+    const game = room?.game;
+    if (!room || !game) return null;
+    const index =
+      game.phase === 'playing'
+        ? game.currentPlayer
+        : game.phase === 'exchange'
+          ? game.exchange!.winnerIndex
+          : game.phase === 'cut'
+            ? game.dealer
+            : -1;
+    const seat = room.seats[index];
+    return seat?.bot ? seat : null;
   }
 
   delete(code: string): void {
@@ -160,7 +206,7 @@ export class RoomManager {
     return {
       code: room.code,
       hostId: room.hostId,
-      players: room.seats.map((s) => ({ id: s.playerId, name: s.name, connected: s.connected })),
+      players: room.seats.map((s) => ({ id: s.playerId, name: s.name, connected: s.connected, bot: s.bot ?? false })),
       started: room.game !== null,
     };
   }

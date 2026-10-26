@@ -18,6 +18,16 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
     if (!result.ok) setError(errorLabel(result.error));
   }
 
+  async function addBot() {
+    const result = await socket.emitWithAck('room:addBot');
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
+  async function removeBot(botId: string) {
+    const result = await socket.emitWithAck('room:removeBot', { botId });
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
   async function leave() {
     await socket.emitWithAck('room:leave');
     onLeave();
@@ -45,11 +55,17 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
           {room.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="avatar" aria-hidden>
-                {p.name.slice(0, 2).toUpperCase()}
+                {p.bot ? '🤖' : p.name.slice(0, 2).toUpperCase()}
               </span>
               {p.name}
+              {p.bot && <span className="tag">bot</span>}
               {p.id === room.hostId && <span className="tag">hôte</span>}
               {p.id === session.playerId && <span className="tag you">toi</span>}
+              {p.bot && isHost && (
+                <button className="remove-bot" aria-label={`Retirer ${p.name}`} onClick={() => removeBot(p.id)}>
+                  ✕
+                </button>
+              )}
             </li>
           ))}
           {Array.from({ length: 4 - room.players.length }, (_, i) => (
@@ -58,6 +74,9 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
             </li>
           ))}
         </ul>
+        {isHost && room.players.length < 4 && (
+          <button onClick={addBot}>🤖 Ajouter un bot</button>
+        )}
 
         {isHost && (
           <div className="target-score">

@@ -94,4 +94,44 @@ describe('RoomManager', () => {
     expect(view.hand).toEqual(room.game!.players[2]!.hand);
     expect(JSON.stringify(view)).not.toContain(JSON.stringify(room.game!.players[0]!.hand));
   });
+
+  it('laisse l\'hôte ajouter et retirer des bots avant la partie, puis lancer à 3 avec un seul autre humain', () => {
+    const { rooms, host, others } = roomWith(2);
+    expect(rooms.addBot(host.code, others[0]!.playerId)).toEqual({ ok: false, error: 'notHost' });
+    expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: true });
+    expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: true });
+    expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: false, error: 'roomFull' });
+    const bots = rooms.get(host.code)!.seats.filter((s) => s.bot);
+    expect(bots.map((b) => b.name)).toEqual(['Robot Ada', 'Robot Alan']);
+
+    expect(rooms.removeBot(host.code, host.playerId, others[0]!.playerId)).toEqual({ ok: true });
+    expect(rooms.get(host.code)!.seats).toHaveLength(4); // un humain ne se retire pas comme un bot
+    expect(rooms.removeBot(host.code, host.playerId, bots[1]!.playerId)).toEqual({ ok: true });
+    expect(rooms.get(host.code)!.seats).toHaveLength(3);
+
+    expect(rooms.start(host.code, host.playerId)).toEqual({ ok: true });
+    expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: false, error: 'gameAlreadyStarted' });
+  });
+
+  it('ne donne jamais l\'hôte à un bot, et supprime un salon où il ne reste que des bots', () => {
+    const { rooms, host, others } = roomWith(2);
+    rooms.addBot(host.code, host.playerId);
+    rooms.leave(host.code, host.playerId);
+    expect(rooms.get(host.code)!.hostId).toBe(others[0]!.playerId);
+    rooms.leave(host.code, others[0]!.playerId);
+    expect(rooms.get(host.code)).toBeUndefined();
+  });
+
+  it('dit quel bot doit agir, et ne compte pas les bots pour savoir si un salon est abandonné', () => {
+    const { rooms, host } = roomWith(1);
+    rooms.addBot(host.code, host.playerId);
+    rooms.addBot(host.code, host.playerId);
+    rooms.start(host.code, host.playerId, { seed: 3 });
+    const room = rooms.get(host.code)!;
+    const game = room.game!;
+    const actor = game.phase === 'cut' ? game.dealer : game.phase === 'exchange' ? game.exchange!.winnerIndex : game.currentPlayer;
+    expect(rooms.botToAct(host.code)).toBe(actor === 0 ? null : room.seats[actor]);
+    rooms.setConnected(host.code, host.playerId, false);
+    expect(rooms.isAbandoned(host.code)).toBe(true);
+  });
 });

@@ -35,12 +35,14 @@ function Opponent({
   index,
   seat,
   connected,
+  bot,
   move,
 }: {
   game: PlayerView;
   index: number;
   seat: Seat;
   connected: boolean;
+  bot: boolean;
   move?: TrickEntry;
 }) {
   const p = game.players[index]!;
@@ -49,7 +51,7 @@ function Opponent({
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
       <div className="avatar" aria-hidden>
-        {initials(p.name)}
+        {bot ? '🤖' : initials(p.name)}
       </div>
       <div className="opponent-info">
         <div className="opponent-name">
@@ -447,6 +449,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             index={index}
             seat={seat}
             connected={room.players[index]?.connected ?? true}
+            bot={room.players[index]?.bot ?? false}
             move={moves.get(index)}
           />
         ))}
