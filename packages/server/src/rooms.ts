@@ -239,7 +239,28 @@ export class RoomManager {
       started: room.game !== null,
       turnSeconds: room.turnSeconds ?? 0,
       turnRemainingMs: null,
+      spectators: 0,
     };
+  }
+
+  /** Ce que voit un spectateur : toute la table, mais aucune main (`you` vaut -1). */
+  spectatorView(room: Room) {
+    return room.game ? { ...getPlayerView(room.game, 0), you: -1, hand: [] } : null;
+  }
+
+  /** Parties en cours (ni en attente de joueurs, ni terminées), pour les spectateurs. */
+  live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number }[] {
+    return this.all().flatMap((room) =>
+      room.game && room.game.phase !== 'gameOver'
+        ? [
+            {
+              code: room.code,
+              round: room.game.round,
+              players: room.game.players.map((p, i) => ({ name: p.name, score: p.score, bot: room.seats[i]?.bot ?? false })),
+            },
+          ]
+        : [],
+    );
   }
 
   gameView(room: Room, playerId: string) {

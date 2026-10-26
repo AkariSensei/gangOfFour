@@ -1,5 +1,5 @@
-import { type FormEvent, useState } from 'react';
-import type { Session } from '../../server/src/protocol';
+import { type FormEvent, useEffect, useState } from 'react';
+import type { LiveRoom, Session } from '../../server/src/protocol';
 import { Leaderboard } from './Leaderboard';
 import { errorLabel } from './labels';
 import { saveName, savedName, socket } from './socket';
@@ -60,7 +60,59 @@ export function Home({ onEnter }: { onEnter: (s: Session) => void }) {
         {error && <p className="error">{error}</p>}
       </form>
 
+      <LiveRooms onWatch={onEnter} />
       <Leaderboard />
     </main>
+  );
+}
+
+/** Parties en cours que l'on peut regarder sans jouer ; la liste se met à jour toute seule. */
+function LiveRooms({ onWatch }: { onWatch: (s: Session) => void }) {
+  const [rooms, setRooms] = useState<LiveRoom[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const result = await socket.emitWithAck('rooms:live');
+      if (active && result.ok) setRooms(result.rooms);
+    };
+    void load();
+    const t = setInterval(load, 10_000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  async function watch(code: string) {
+    setError('');
+    const result = await socket.emitWithAck('room:watch', { code });
+    if (result.ok) onWatch(result);
+    else setError(errorLabel(result.error));
+  }
+
+  if (rooms.length === 0) return null;
+  return (
+    <section className="panel live-rooms">
+      <h2>Parties en cours</h2>
+      <ul>
+        {rooms.map((r) => (
+          <li key={r.code}>
+            <div className="live-info">
+              <span className="live-players">
+                {r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}
+              </span>
+              <span className="muted">
+                Manche {r.round}
+                {r.spectators > 0 && ` · 👀 ${r.spectators}`}
+              </span>
+            </div>
+            <button onClick={() => watch(r.code)}>Regarder</button>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }

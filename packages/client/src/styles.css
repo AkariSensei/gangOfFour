@@ -1213,3 +1213,52 @@ input {
 .controls[hidden] {
   display: none;
 }
+
+/* Spectateur : le premier joueur prend la place du bas, et l'accueil liste les parties à regarder. */
+.seat-bottom {
+  bottom: clamp(8px, 2vh, 18px);
+  left: 50%;
+  translate: -50% 0;
+}
+.my-area.spectating {
+  min-height: 0;
+}
+.live-rooms {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.live-rooms h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+.live-rooms ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.live-rooms li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.live-info {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.live-players {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px), (max-height: 560px) {
+  .seat-bottom {
+    order: 5;
+    grid-column: 1 / -1;
+    inset: auto;
+    translate: none;
+  }
+}

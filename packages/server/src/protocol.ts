@@ -13,6 +13,16 @@ export interface RoomView {
   turnSeconds: number;
   /** Temps qu'il reste au joueur qui doit agir, au moment de l'envoi ; null sans minuteur en cours. */
   turnRemainingMs: number | null;
+  /** Nombre de personnes qui regardent la partie sans jouer. */
+  spectators: number;
+}
+
+/** Partie en cours, proposée sur l'accueil à ceux qui veulent la regarder. */
+export interface LiveRoom {
+  code: string;
+  players: { name: string; score: number; bot: boolean }[];
+  round: number;
+  spectators: number;
 }
 
 export type RoomError =
@@ -35,6 +45,8 @@ export interface Session {
   playerId: string;
   /** Jeton secret à garder côté client pour se reconnecter au même siège. */
   token: string;
+  /** Spectateur : regarde la partie sans siège (playerId et token sont alors vides). */
+  spectator?: boolean;
 }
 
 export interface ClientToServerEvents {
@@ -42,6 +54,8 @@ export interface ClientToServerEvents {
   'room:join': (payload: { code: string; name: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
+  'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;
+  'rooms:live': (ack: Ack<{ rooms: LiveRoom[] }>) => void;
   'room:addBot': (ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
