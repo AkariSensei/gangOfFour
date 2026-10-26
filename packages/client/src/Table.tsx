@@ -54,6 +54,7 @@ function Opponent({
       <div className="opponent-info">
         <div className="opponent-name">
           {p.name}
+          {game.dealer === index && <span className="tag">donneur</span>}
           {!connected && <span className="tag">hors ligne</span>}
         </div>
         <div className="opponent-meta">
@@ -314,6 +315,11 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           <span className="direction" title="Sens de jeu de la manche">
             {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
           </span>
+          {game.dealer === me && (
+            <span className="direction" title="Tu as distribué les cartes de cette manche">
+              Tu es donneur
+            </span>
+          )}
         </div>
         <Scores game={game} />
         <div className="header-right">

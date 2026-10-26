@@ -55,6 +55,12 @@ export interface GameState {
   round: number;
   phase: Phase;
   players: PlayerState[];
+  /** Donneur de la manche : le créateur du salon pour la première, puis son voisin de gauche à chaque manche. */
+  dealer: number;
+  /** Cartes posées pendant la manche, dans l'ordre (la dernière dessus), ramassées pour la donne suivante. */
+  pile: Card[];
+  /** À trois joueurs, les 16 cartes non distribuées (hors jeu pour la manche). */
+  dummy: Card[];
   /** Sens de jeu de la manche : +1 (antihoraire, première manche) ou -1, alterné à chaque manche. */
   direction: 1 | -1;
   currentPlayer: number;
@@ -101,13 +107,45 @@ function step(state: GameState, index: number, direction: number = state.directi
   return (index + direction + n) % n;
 }
 
-/** Distribue 16 cartes à chacun ; à trois joueurs, les 16 cartes restantes forment une main morte, hors jeu. */
-function deal(state: GameState): void {
+/** Le voisin de gauche (sens horaire), quel que soit le sens de jeu de la manche. */
+function leftOf(state: GameState, index: number): number {
+  return step(state, index, -1);
+}
+
+/**
+ * Distribue le paquet (la première carte du tableau est le dessus) une carte à la fois, en commençant par
+ * le voisin de gauche du donneur, jusqu'à 16 cartes chacun. À trois, les 16 cartes restantes forment
+ * une main morte, hors jeu.
+ */
+function deal(state: GameState, deck: Card[]): void {
+  const n = state.players.length;
+  const hands: Card[][] = state.players.map(() => []);
+  let seat = leftOf(state, state.dealer);
+  for (const card of deck.slice(0, n * HAND_SIZE)) {
+    hands[seat]!.push(card);
+    seat = leftOf(state, seat);
+  }
+  state.players.forEach((p, i) => (p.hand = sortHand(hands[i]!)));
+  state.dummy = deck.slice(n * HAND_SIZE);
+  state.pile = [];
+}
+
+/**
+ * Comme dans le jeu réel, on ne remélange pas entre deux manches : on ramasse les cartes posées (la main morte
+ * dessous, puis les combinaisons dans l'ordre où elles ont été jouées, puis les mains restantes), le donneur
+ * coupe le paquet vers le milieu et son voisin de gauche distribue.
+ */
+function gatherAndCut(state: GameState): Card[] {
+  const hands: Card[] = [];
+  for (let i = 0, seat = leftOf(state, state.dealer); i < state.players.length; i++, seat = leftOf(state, seat)) {
+    hands.push(...state.players[seat]!.hand);
+  }
+  // Du dessous vers le dessus, puis retourné pour que le dessus soit la première carte.
+  const deck = [...state.dummy, ...state.pile, ...hands].reverse();
   const rng = createRng(state.seed + state.round);
-  const deck = shuffle(createDeck(), rng);
-  state.players.forEach((p, i) => {
-    p.hand = sortHand(deck.slice(i * HAND_SIZE, (i + 1) * HAND_SIZE));
-  });
+  const quarter = Math.floor(deck.length / 4);
+  const cut = quarter + Math.floor(rng() * (2 * quarter + 1));
+  return [...deck.slice(cut), ...deck.slice(0, cut)];
 }
 
 /** Le joueur 0 est le donneur de la première manche (le plus âgé dans le jeu réel). */
@@ -119,6 +157,9 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     round: 1,
     phase: 'playing',
     players: players.map((p) => ({ ...p, hand: [], score: 0 })),
+    dealer: 0,
+    pile: [],
+    dummy: [],
     direction: 1,
     currentPlayer: 0,
     table: null,
@@ -129,7 +170,8 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     lastRound: null,
     winners: [],
   };
-  deal(state);
+  // Seul le tout premier paquet est mélangé.
+  deal(state, shuffle(createDeck(), createRng(state.seed)));
   // Le détenteur du 1 multicolore ouvre avec ce 1. À trois, s'il est dans la main morte, le voisin du donneur ouvre.
   const holder = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
   state.mustPlayMultiOne = holder >= 0;
@@ -163,6 +205,7 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
   }
 
   player.hand = player.hand.filter((c) => !cardIds.includes(c.id));
+  state.pile.push(...cards);
   if (!state.table) state.trick = [];
   state.trick.push({ playerIndex, combination });
   state.table = { playerIndex, combination };
@@ -228,10 +271,12 @@ function endRound(state: GameState, winnerIndex: number): void {
 
 function nextRound(state: GameState): ActionResult {
   const { winnerIndex, loserIndex } = state.lastRound!;
+  const deck = gatherAndCut(state);
   state.round += 1;
   state.direction = state.round % 2 === 1 ? 1 : -1;
   state.trick = [];
-  deal(state);
+  state.dealer = leftOf(state, state.dealer);
+  deal(state, deck);
 
   // Le perdant donne automatiquement sa meilleure carte au gagnant, qui lui en rend une de son choix.
   const loser = state.players[loserIndex]!;
@@ -289,6 +334,7 @@ export interface PlayerView {
   you: number;
   hand: Card[];
   players: { id: string; name: string; score: number; cardCount: number }[];
+  dealer: number;
   direction: 1 | -1;
   currentPlayer: number;
   table: TablePlay | null;
@@ -307,6 +353,7 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     you: playerIndex,
     hand: state.players[playerIndex]!.hand,
     players: state.players.map((p) => ({ id: p.id, name: p.name, score: p.score, cardCount: p.hand.length })),
+    dealer: state.dealer,
     direction: state.direction,
     currentPlayer: state.currentPlayer,
     table: state.table,
