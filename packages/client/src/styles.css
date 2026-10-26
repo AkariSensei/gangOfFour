@@ -778,6 +778,27 @@ input {
   align-items: center;
   gap: 0.5rem;
 }
+.my-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .my-tools {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+  }
+}
+.my-count {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
 .status {
   font-weight: 700;
   display: flex;

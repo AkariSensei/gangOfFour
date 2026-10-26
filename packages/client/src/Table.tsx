@@ -673,9 +673,14 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             )}
             {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
           </div>
-          <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
-            Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
-          </button>
+          <div className="my-tools">
+            <span className="my-count">
+              <strong>{hand.length}</strong> carte{hand.length > 1 ? 's' : ''}
+            </span>
+            <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
+              Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
+            </button>
+          </div>
         </div>
 
         <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
