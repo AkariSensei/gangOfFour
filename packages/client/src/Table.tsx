@@ -145,6 +145,26 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   );
 }
 
+/** Grosse annonce au centre de l'écran quand le tour du joueur arrive, qui s'efface d'elle-même. */
+function TurnBanner({ text }: { text: string | null }) {
+  const [shown, setShown] = useState<string | null>(null);
+  useEffect(() => {
+    if (!text) {
+      setShown(null);
+      return;
+    }
+    setShown(text);
+    const timer = setTimeout(() => setShown(null), 1600);
+    return () => clearTimeout(timer);
+  }, [text]);
+  if (!shown) return null;
+  return (
+    <div className="turn-banner" role="status">
+      <div className="turn-banner-box">{shown}</div>
+    </div>
+  );
+}
+
 /** Fin de manche : le paquet ramassé, vu de côté. Le donneur clique entre deux cartes pour le couper. */
 function CutDeck({ game }: { game: PlayerView }) {
   const mine = game.dealer === game.you;
@@ -290,7 +310,19 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
-  const { sound, toggleSound } = useTurnAlert(myTurn || mustGive);
+  const mustCut = game.phase === 'cut' && game.dealer === me;
+  const { sound, toggleSound } = useTurnAlert(myTurn || mustGive || mustCut);
+  // L'annonce change de texte à chaque nouveau tour (le compteur de cartes jouées la relance).
+  const bannerText = myTurn
+    ? game.table
+      ? 'À toi de jouer !'
+      : 'À toi d’ouvrir !'
+    : mustGive
+      ? 'Choisis une carte à rendre'
+      : mustCut
+        ? 'À toi de couper !'
+        : null;
+  const turnKey = `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}`;
 
   // La main change à chaque coup : on oublie la sélection des cartes qui ne sont plus là.
   useEffect(() => {
@@ -466,6 +498,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           {error}
         </div>
       )}
+      <TurnBanner key={bannerText ? turnKey : 'none'} text={bannerText} />
       {(game.phase === 'roundOver' || game.phase === 'gameOver') && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );
