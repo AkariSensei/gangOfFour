@@ -35,6 +35,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   mustPlayMultiOne: 'Le premier coup doit contenir le 1 multicolore.',
   mustPlayHighestSingle: 'Le joueur suivant n\'a plus qu\'une carte : joue ta carte la plus forte.',
   mustLeadCombination: 'Le joueur suivant n\'a plus qu\'une carte : ouvre avec une combinaison.',
+  invalidCut: 'Coupe le paquet entre deux cartes.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 

@@ -29,7 +29,12 @@ export async function playBotTurn(players: Client[]): Promise<void> {
     return;
   }
   const client = players[view.currentPlayer]!;
-  const { hand, table, mustPlayMultiOne, phase, direction } = client.game!;
+  const { hand, table, mustPlayMultiOne, phase, direction, deckSize } = client.game!;
+  if (phase === 'cut') {
+    const result = await client.emitWithAck('game:cut', { position: Math.floor(deckSize / 2) });
+    if (!result.ok) throw new Error(result.error);
+    return;
+  }
   if (phase === 'exchange') {
     await client.emitWithAck('game:giveCard', { cardId: hand[0]!.id });
     return;

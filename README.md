@@ -42,7 +42,7 @@ Conformes au livret officiel (Days of Wonder).
 
 - 64 cartes : 1 à 10 en vert, jaune et rouge (deux exemplaires de chaque), le 1 multicolore, le phénix vert, le phénix jaune et le dragon rouge. Ordre des couleurs : vert < jaune < rouge ; le 1 multicolore est le plus fort des 1.
 - 3 ou 4 joueurs, 16 cartes chacun. À 3, les 16 cartes restantes forment une main morte qui n'est pas jouée.
-- Donne : le paquet n'est mélangé qu'une fois, en début de partie. Ensuite, comme dans le jeu réel, on ramasse les cartes, le donneur coupe et son voisin de gauche (nouveau donneur) distribue une carte à la fois en commençant par sa gauche.
+- Donne : le paquet n'est mélangé qu'une fois, en début de partie. Ensuite, comme dans le jeu réel, on ramasse les cartes, le donneur coupe le paquet où il veut (il clique entre deux cartes) et son voisin de gauche (nouveau donneur) distribue une carte à la fois en commençant par sa gauche.
 - Première manche : le détenteur du 1 multicolore ouvre avec une combinaison qui le contient. À 3, si ce 1 est dans la main morte, le voisin du donneur ouvre. Manches suivantes : le gagnant de la manche précédente ouvre.
 - Le sens de jeu s'inverse à chaque manche (antihoraire pour la première).
 - Combinaisons : carte seule, paire (dont la paire de phénix), brelan, et cinq cartes (suite < couleur < full < quinte flush). Le 1 multicolore prend la couleur voulue dans une couleur ou une quinte flush. Les phénix peuvent servir de paire dans un full, mais jamais dans une suite, une couleur ou une quinte flush. Le dragon se joue seul.

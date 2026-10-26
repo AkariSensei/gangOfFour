@@ -183,6 +183,7 @@ describe('fin de manche', () => {
     expect(state.players.map((p) => p.score)).toEqual([0, 2, 18, 1]);
 
     state = apply(state, { type: 'nextRound' });
+    state = apply(state, { type: 'cut', playerIndex: 0, position: 30 });
     expect(state.phase).toBe('exchange');
     expect(state.direction).toBe(-1);
     expect(state.players[0]!.hand).toHaveLength(17);
@@ -224,7 +225,19 @@ describe('fin de manche', () => {
     state = withHands([['rD'], ['g3', 'y4'], ['g5', 'g6']]);
     state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });
     state = apply(state, { type: 'nextRound' });
+
+    // L'ancien donneur coupe où il veut : le paquet est montré, pas son contenu.
+    expect(state.phase).toBe('cut');
+    expect(getPlayerView(state, 1).deckSize).toBe(64);
+    expect(getPlayerView(state, 1)).not.toHaveProperty('deck');
+    expect(applyAction(state, { type: 'cut', playerIndex: 1, position: 10 })).toEqual({ ok: false, error: 'notYourTurn' });
+    expect(applyAction(state, { type: 'cut', playerIndex: 0, position: 64 })).toEqual({ ok: false, error: 'invalidCut' });
+    const top = state.deck.slice(0, 10).map((c) => c.id);
+    state = apply(state, { type: 'cut', playerIndex: 0, position: 10 });
+
     expect(state.dealer).toBe(2);
+    // Les 10 cartes coupées sont passées dessous : à trois, elles finissent dans la main morte.
+    expect(state.dummy.map((c) => c.id).slice(-10)).toEqual(top);
     const faces = (list: Card[]) => list.map((c) => `${c.color}${c.value}`).sort();
     expect(faces([...state.players.flatMap((p) => p.hand), ...state.dummy])).toEqual(faces(createDeck()));
     expect(state.dummy).toHaveLength(16);
@@ -275,6 +288,7 @@ describe('partie complète simulée', () => {
     for (let steps = 0; state.phase !== 'gameOver'; steps++) {
       expect(steps).toBeLessThan(20000);
       if (state.phase === 'roundOver') state = apply(state, { type: 'nextRound' });
+      else if (state.phase === 'cut') state = apply(state, { type: 'cut', playerIndex: state.dealer, position: 32 });
       else if (state.phase === 'exchange') {
         const giver = state.exchange!.winnerIndex;
         state = apply(state, { type: 'giveCard', playerIndex: giver, cardId: state.players[giver]!.hand[0]!.id });

@@ -591,6 +591,45 @@ input {
   color: #d9eadf;
 }
 
+.cut-deck {
+  --strip: min(9px, calc(min(560px, 70vw) / var(--size)));
+  display: flex;
+  align-items: flex-end;
+  height: 112px;
+  padding-right: 60px;
+  pointer-events: auto;
+}
+.cut-card {
+  position: relative;
+  flex: none;
+  width: var(--strip);
+  height: 84px;
+  padding: 0;
+  border: none;
+  background: none;
+  transition: transform 0.15s ease;
+}
+.cut-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 60px;
+  aspect-ratio: 1066 / 1475;
+  border-radius: 4px;
+  background: url('/cards/dos-mini.webp') center / cover;
+  box-shadow: -1px 0 2px rgba(0, 0, 0, 0.55);
+}
+.cut-deck.mine .cut-card {
+  cursor: pointer;
+}
+.cut-card.lifted {
+  transform: translateY(-22px);
+}
+.cut-card:disabled {
+  cursor: default;
+}
+
 .pop-in {
   animation: pop-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.3);
 }

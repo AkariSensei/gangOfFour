@@ -29,7 +29,8 @@ export type PlayerAction =
   | { type: 'play'; cardIds: string[] }
   | { type: 'pass' }
   | { type: 'giveCard'; cardId: string }
-  | { type: 'nextRound' };
+  | { type: 'nextRound' }
+  | { type: 'cut'; position: number };
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError };
 

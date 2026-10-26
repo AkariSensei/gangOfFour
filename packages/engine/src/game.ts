@@ -47,7 +47,7 @@ export interface Exchange {
   winnerCard: Card | null;
 }
 
-export type Phase = 'exchange' | 'playing' | 'roundOver' | 'gameOver';
+export type Phase = 'cut' | 'exchange' | 'playing' | 'roundOver' | 'gameOver';
 
 export interface GameState {
   config: GameConfig;
@@ -61,6 +61,8 @@ export interface GameState {
   pile: Card[];
   /** À trois joueurs, les 16 cartes non distribuées (hors jeu pour la manche). */
   dummy: Card[];
+  /** Paquet ramassé en fin de manche (le dessus en premier), en attente de la coupe. Jamais montré aux joueurs. */
+  deck: Card[];
   /** Sens de jeu de la manche : +1 (antihoraire, première manche) ou -1, alterné à chaque manche. */
   direction: 1 | -1;
   currentPlayer: number;
@@ -82,7 +84,9 @@ export type Action =
   | { type: 'play'; playerIndex: number; cardIds: string[] }
   | { type: 'pass'; playerIndex: number }
   | { type: 'giveCard'; playerIndex: number; cardId: string }
-  | { type: 'nextRound' };
+  | { type: 'nextRound' }
+  /** Le donneur coupe le paquet : les `position` cartes du dessus passent dessous. */
+  | { type: 'cut'; playerIndex: number; position: number };
 
 export type ActionError =
   | 'wrongPhase'
@@ -93,7 +97,8 @@ export type ActionError =
   | 'cannotPassWhenLeading'
   | 'mustPlayMultiOne'
   | 'mustPlayHighestSingle'
-  | 'mustLeadCombination';
+  | 'mustLeadCombination'
+  | 'invalidCut';
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: ActionError };
 
@@ -132,20 +137,16 @@ function deal(state: GameState, deck: Card[]): void {
 
 /**
  * Comme dans le jeu réel, on ne remélange pas entre deux manches : on ramasse les cartes posées (la main morte
- * dessous, puis les combinaisons dans l'ordre où elles ont été jouées, puis les mains restantes), le donneur
- * coupe le paquet vers le milieu et son voisin de gauche distribue.
+ * dessous, puis les combinaisons dans l'ordre où elles ont été jouées, puis les mains restantes). Le donneur
+ * coupe ensuite ce paquet où il veut, et son voisin de gauche distribue.
  */
-function gatherAndCut(state: GameState): Card[] {
+function gather(state: GameState): Card[] {
   const hands: Card[] = [];
   for (let i = 0, seat = leftOf(state, state.dealer); i < state.players.length; i++, seat = leftOf(state, seat)) {
     hands.push(...state.players[seat]!.hand);
   }
   // Du dessous vers le dessus, puis retourné pour que le dessus soit la première carte.
-  const deck = [...state.dummy, ...state.pile, ...hands].reverse();
-  const rng = createRng(state.seed + state.round);
-  const quarter = Math.floor(deck.length / 4);
-  const cut = quarter + Math.floor(rng() * (2 * quarter + 1));
-  return [...deck.slice(cut), ...deck.slice(0, cut)];
+  return [...state.dummy, ...state.pile, ...hands].reverse();
 }
 
 /** Le joueur 0 est le donneur de la première manche (le plus âgé dans le jeu réel). */
@@ -160,6 +161,7 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     dealer: 0,
     pile: [],
     dummy: [],
+    deck: [],
     direction: 1,
     currentPlayer: 0,
     table: null,
@@ -269,14 +271,32 @@ function endRound(state: GameState, winnerIndex: number): void {
   }
 }
 
+/** Fin de manche : on ramasse les cartes et le donneur de la manche écoulée doit couper le paquet. */
 function nextRound(state: GameState): ActionResult {
-  const { winnerIndex, loserIndex } = state.lastRound!;
-  const deck = gatherAndCut(state);
+  state.deck = gather(state);
+  state.players.forEach((p) => (p.hand = []));
+  state.pile = [];
+  state.dummy = [];
+  state.trick = [];
+  state.exchange = null;
+  state.phase = 'cut';
+  state.currentPlayer = state.dealer;
+  return { ok: true, state };
+}
+
+/** Le donneur coupe, puis son voisin de gauche devient donneur et distribue la nouvelle manche. */
+function cut(state: GameState, position: number): ActionResult {
+  if (!Number.isInteger(position) || position < 1 || position >= state.deck.length) {
+    return { ok: false, error: 'invalidCut' };
+  }
+  const deck = [...state.deck.slice(position), ...state.deck.slice(0, position)];
+  state.deck = [];
   state.round += 1;
   state.direction = state.round % 2 === 1 ? 1 : -1;
-  state.trick = [];
   state.dealer = leftOf(state, state.dealer);
   deal(state, deck);
+
+  const { winnerIndex, loserIndex } = state.lastRound!;
 
   // Le perdant donne automatiquement sa meilleure carte au gagnant, qui lui en rend une de son choix.
   const loser = state.players[loserIndex]!;
@@ -325,6 +345,10 @@ export function applyAction(previous: GameState, action: Action): ActionResult {
     case 'nextRound':
       if (state.phase !== 'roundOver') return { ok: false, error: 'wrongPhase' };
       return nextRound(state);
+    case 'cut':
+      if (state.phase !== 'cut') return { ok: false, error: 'wrongPhase' };
+      if (action.playerIndex !== state.dealer) return { ok: false, error: 'notYourTurn' };
+      return cut(state, action.position);
   }
 }
 
@@ -335,6 +359,8 @@ export interface PlayerView {
   hand: Card[];
   players: { id: string; name: string; score: number; cardCount: number }[];
   dealer: number;
+  /** Nombre de cartes du paquet à couper (phase « cut »), 0 sinon. */
+  deckSize: number;
   direction: 1 | -1;
   currentPlayer: number;
   table: TablePlay | null;
@@ -354,6 +380,7 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     hand: state.players[playerIndex]!.hand,
     players: state.players.map((p) => ({ id: p.id, name: p.name, score: p.score, cardCount: p.hand.length })),
     dealer: state.dealer,
+    deckSize: state.deck.length,
     direction: state.direction,
     currentPlayer: state.currentPlayer,
     table: state.table,
