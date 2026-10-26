@@ -1,4 +1,4 @@
-import { type Card, type Color, COLOR_RANK, PHOENIX_VALUE, isSpecial } from './cards';
+import { type Card, type Color, COLOR_RANK, PHOENIX_VALUE, compareCards, isSpecial } from './cards';
 
 export type CombinationType =
   | 'single'
@@ -149,4 +149,34 @@ export function hasMultiCardCombination(hand: Card[]): boolean {
   for (const pair of subsets(hand, 2)) if (analyzeCombination(pair)) return true;
   for (const five of subsets(hand, 5)) if (analyzeCombination(five)) return true;
   return false;
+}
+
+/**
+ * Cartes de la main qui entrent dans au moins une combinaison capable de battre la table (toutes si on ouvre).
+ * Avec `onlyHighestSingle` (règle « Carte ! »), seule la plus forte carte compte parmi les cartes seules.
+ */
+export function playableCards(hand: Card[], current: Combination | null, onlyHighestSingle = false): Set<string> {
+  if (!current) return new Set(hand.map((c) => c.id));
+  const playable = new Set<string>();
+  const consider = (cards: Card[]) => {
+    const combination = analyzeCombination(cards);
+    if (combination && canBeat(combination, current)) cards.forEach((c) => playable.add(c.id));
+  };
+
+  if (current.type !== 'gang') {
+    const size = current.cards.length;
+    if (size === 1 && onlyHighestSingle) {
+      const best = hand.reduce<Card | null>((b, c) => (!b || compareCards(c, b) > 0 ? c : b), null);
+      if (best) consider([best]);
+    } else {
+      for (const cards of subsets(hand, size)) consider(cards);
+    }
+  }
+  // Un gang (4 cartes ou plus de même valeur) peut battre n'importe quoi.
+  const byValue = new Map<number, Card[]>();
+  for (const card of hand) byValue.set(card.value, [...(byValue.get(card.value) ?? []), card]);
+  for (const group of byValue.values()) {
+    for (let size = 4; size <= group.length; size++) consider(group.slice(0, size));
+  }
+  return playable;
 }

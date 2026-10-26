@@ -1,7 +1,7 @@
-import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat } from '@gof/engine';
+import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import type { RoomView } from '../../server/src/protocol';
-import { CardView } from './CardView';
+import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert } from './turnAlert';
@@ -109,6 +109,7 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             <tr>
               <th />
               <th>Joueur</th>
+              <th>Cartes restantes</th>
               <th>Manche</th>
               <th>Total</th>
             </tr>
@@ -118,6 +119,13 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
               <tr key={p.id} className={p.i === game.you ? 'me' : ''}>
                 <td className="rank">{rank + 1}</td>
                 <td>{p.name}</td>
+                <td>
+                  <div className="leftover">
+                    {r.hands[p.i]!.length === 0
+                      ? '—'
+                      : r.hands[p.i]!.map((c) => <img key={c.id} src={cardImage(c)} alt={cardLabel(c)} title={cardLabel(c)} />)}
+                  </div>
+                </td>
                 <td className={r.penalties[p.i] === 0 ? 'zero' : 'penalty'}>+{r.penalties[p.i]}</td>
                 <td>
                   <strong>{p.score}</strong>
@@ -338,9 +346,16 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const hand = useMemo(() => sortHand(game.hand, sortMode), [game.hand, sortMode]);
   const selectedCards = selected.map((id) => game.hand.find((c) => c.id === id)).filter((c): c is Card => !!c);
 
+  // Cartes qui peuvent battre la table, pour mettre les autres en retrait (règle « Carte ! » comprise).
+  const playable = useMemo(() => {
+    if (!myTurn || !game.table) return null;
+    const nextPlayer = game.players[(me + game.direction + n) % n]!;
+    return playableCards(game.hand, game.table.combination, nextPlayer.cardCount === 1);
+  }, [myTurn, game.table, game.hand, game.players, game.direction, me, n]);
+
   const hint = useMemo(() => {
     if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis la carte à rendre';
-    if (selectedCards.length === 0) return '';
+    if (selectedCards.length === 0) return playable?.size === 0 ? 'Rien ne passe : tu peux passer' : '';
     const combo = analyzeCombination(selectedCards);
     if (!combo) return { text: 'Combinaison invalide', ok: false };
     const label = combinationLabel(combo.type, combo.cards.length);
@@ -351,7 +366,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     }
     if (target && !canBeat(combo, target)) return { text: `${label} · trop faible`, ok: false };
     return { text: label, ok: true };
-  }, [selectedCards, mustGive, game.table]);
+  }, [selectedCards, mustGive, game.table, playable]);
 
   function toggle(card: Card) {
     setError('');
@@ -401,6 +416,9 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
       <header className="table-header">
         <div className="header-left">
           <span className="round">Manche {game.round}</span>
+          <span className="direction" title="La partie s'arrête quand un joueur atteint ce score">
+            en {game.targetScore} pts
+          </span>
           <span className="direction" title="Sens de jeu de la manche">
             {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
           </span>
@@ -453,6 +471,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
               key={c.id}
               card={c}
               selected={selected.includes(c.id)}
+              dimmed={playable !== null && !playable.has(c.id)}
               onClick={() => toggle(c)}
               style={{ '--offset': i - mid } as CSSProperties}
             />

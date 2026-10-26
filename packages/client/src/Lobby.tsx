@@ -3,14 +3,18 @@ import type { RoomView, Session } from '../../server/src/protocol';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
+/** Scores de fin de partie proposés à l'hôte (le serveur accepte les mêmes). */
+const TARGET_SCORES = [50, 100, 200];
+
 export function Lobby({ room, session, onLeave }: { room: RoomView; session: Session; onLeave: () => void }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [targetScore, setTargetScore] = useState(100);
   const isHost = room.hostId === session.playerId;
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
-    const result = await socket.emitWithAck('game:start');
+    const result = await socket.emitWithAck('game:start', { targetScore });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -55,6 +59,24 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
           ))}
         </ul>
 
+        {isHost && (
+          <div className="target-score">
+            <span className="muted">Partie en</span>
+            <div className="segmented" role="radiogroup" aria-label="Score de fin de partie">
+              {TARGET_SCORES.map((score) => (
+                <button
+                  key={score}
+                  role="radio"
+                  aria-checked={targetScore === score}
+                  className={targetScore === score ? 'on' : ''}
+                  onClick={() => setTargetScore(score)}
+                >
+                  {score} pts
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {isHost ? (
           <button className="primary" disabled={room.players.length < 3} onClick={start}>
             {room.players.length < 3 ? 'Il faut au moins 3 joueurs' : 'Lancer la partie'}

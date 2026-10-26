@@ -33,7 +33,7 @@ for (let i = 1; i < count; i++) {
   await players[i]!.emitWithAck('room:join', { code: created.code, name: names[i] });
   console.log(`${names[i]} rejoint le salon`);
 }
-await players[0]!.emitWithAck('game:start');
+await players[0]!.emitWithAck('game:start', {});
 
 const wait = () => new Promise((r) => setTimeout(r, 1));
 while (!players.every((p) => p.game)) await wait();

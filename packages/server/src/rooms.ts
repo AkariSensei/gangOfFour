@@ -5,6 +5,14 @@ import type { RoomError, RoomView, Session } from './protocol';
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 3;
 const MAX_NAME_LENGTH = 20;
+/** Scores de fin de partie que l'hôte peut choisir. */
+export const TARGET_SCORES = [50, 100, 200];
+const DEFAULT_TARGET_SCORE = 100;
+
+export interface StartOptions {
+  seed?: number;
+  targetScore?: number;
+}
 /** Lettres sans ambiguïté à l'oral ou à l'écrit (pas de I, O, 0, 1). */
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
@@ -120,7 +128,7 @@ export class RoomManager {
     this.rooms.delete(code.toUpperCase());
   }
 
-  start(code: string, playerId: string, seed = randomInt(2 ** 31)): Result {
+  start(code: string, playerId: string, options: StartOptions = {}): Result {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
@@ -128,7 +136,8 @@ export class RoomManager {
     if (room.seats.length < MIN_PLAYERS) return { ok: false, error: 'notEnoughPlayers' };
     room.game = createGame(
       room.seats.map((s) => ({ id: s.playerId, name: s.name })),
-      seed,
+      options.seed ?? randomInt(2 ** 31),
+      { targetScore: TARGET_SCORES.includes(options.targetScore!) ? options.targetScore! : DEFAULT_TARGET_SCORE },
     );
     return { ok: true };
   }

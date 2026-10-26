@@ -793,7 +793,7 @@ input {
   padding: 1rem;
 }
 .modal {
-  width: min(440px, 100%);
+  width: min(520px, 100%);
   display: grid;
   gap: 0.85rem;
   text-align: center;
@@ -808,6 +808,46 @@ input {
   font-size: 3rem;
   line-height: 1;
 }
+.hand .card.dimmed img {
+  filter: brightness(0.55) saturate(0.6);
+}
+.leftover {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+  max-width: 180px;
+  margin: 0 auto;
+}
+.leftover img {
+  width: 20px;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.target-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid #d8ccb3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.segmented button {
+  border: none;
+  border-radius: 0;
+  padding: 0.35rem 0.8rem;
+  background: transparent;
+}
+.segmented button.on {
+  background: var(--gold);
+  color: #2a1d02;
+  font-weight: 700;
+}
+
 .results {
   width: 100%;
   border-collapse: collapse;

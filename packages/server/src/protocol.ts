@@ -35,7 +35,7 @@ export interface ClientToServerEvents {
   'room:join': (payload: { code: string; name: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
-  'game:start': (ack: Ack) => void;
+  'game:start': (payload: { targetScore?: number }, ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;

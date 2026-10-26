@@ -21,15 +21,20 @@ export function CardView({
   selected,
   onClick,
   small,
+  dimmed,
   style,
 }: {
   card: Card;
   selected?: boolean;
+  /** Carte qui ne peut pas battre la table : affichée en retrait. */
+  dimmed?: boolean;
   onClick?: () => void;
   small?: boolean;
   style?: CSSProperties;
 }) {
-  const classes = ['card', selected && 'selected', small && 'small', onClick && 'clickable'].filter(Boolean).join(' ');
+  const classes = ['card', selected && 'selected', small && 'small', dimmed && 'dimmed', onClick && 'clickable']
+    .filter(Boolean)
+    .join(' ');
   const image = <img src={cardImage(card)} alt={cardLabel(card)} draggable={false} />;
   return onClick ? (
     <button type="button" className={classes} onClick={onClick} title={cardLabel(card)} aria-pressed={selected} style={style}>

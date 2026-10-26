@@ -68,7 +68,7 @@ describe('serveur de jeu', () => {
   it('envoie à chacun sa main au lancement, sans les mains des autres', async () => {
     await start();
     const { players } = await lobby(4);
-    expect(await players[0]!.emitWithAck('game:start')).toEqual({ ok: true });
+    expect(await players[0]!.emitWithAck('game:start', {})).toEqual({ ok: true });
     await waitFor(() => players.every((p) => p.game));
     const hands = players.map((p) => p.game!.hand.map((c) => c.id));
     expect(new Set(hands.flat()).size).toBe(64);
@@ -84,7 +84,7 @@ describe('serveur de jeu', () => {
 
     // On récupère le jeton de Bruno côté serveur pour simuler sa reconnexion depuis un nouvel onglet.
     const token = server.rooms.get(code)!.seats[1]!.token;
-    await players[0]!.emitWithAck('game:start');
+    await players[0]!.emitWithAck('game:start', {});
     bruno.disconnect();
     await waitFor(() => players[0]!.room!.players[1]!.connected === false);
 
@@ -104,7 +104,7 @@ describe('serveur de jeu', () => {
   it.each([3, 4])('joue une partie complète à %i joueurs par les sockets', async (count) => {
     await start();
     const { players } = await lobby(count);
-    await players[0]!.emitWithAck('game:start');
+    await players[0]!.emitWithAck('game:start', {});
     await waitFor(() => players.every((p) => p.game));
 
     // Partie publique de l'état, identique chez tous les joueurs une fois la diffusion terminée.

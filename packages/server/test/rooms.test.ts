@@ -43,6 +43,15 @@ describe('RoomManager', () => {
     expect(rooms.join(host.code, 'Emma')).toEqual({ ok: false, error: 'gameAlreadyStarted' });
   });
 
+  it('applique le score de fin choisi par l\'hôte, ou 100 par défaut', () => {
+    const a = roomWith(3);
+    a.rooms.start(a.host.code, a.host.playerId, { targetScore: 50 });
+    expect(a.rooms.get(a.host.code)!.game!.config.targetScore).toBe(50);
+    const b = roomWith(3);
+    b.rooms.start(b.host.code, b.host.playerId, { targetScore: 7 });
+    expect(b.rooms.get(b.host.code)!.game!.config.targetScore).toBe(100);
+  });
+
   it('transmet l\'hôte quand il quitte le salon avant la partie, et supprime le salon vide', () => {
     const { rooms, host, others } = roomWith(2);
     rooms.leave(host.code, host.playerId);
@@ -65,7 +74,7 @@ describe('RoomManager', () => {
 
   it('déduit le siège du joueur et refuse de jouer à sa place', () => {
     const { rooms, host, others } = roomWith(4);
-    rooms.start(host.code, host.playerId, 42);
+    rooms.start(host.code, host.playerId, { seed: 42 });
     const room = rooms.get(host.code)!;
     const current = room.seats[room.game!.currentPlayer]!;
     const someoneElse = [host, ...others].find((s) => s.playerId !== current.playerId)!;

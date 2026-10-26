@@ -119,7 +119,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       leaveCurrent();
       ack?.({ ok: true });
     });
-    socket.on('game:start', (ack) => handle(ack, (code, playerId) => rooms.start(code, playerId)));
+    socket.on('game:start', (payload, ack) =>
+      handle(ack, (code, playerId) => rooms.start(code, playerId, { targetScore: Number(payload?.targetScore) })),
+    );
     socket.on('game:play', (payload, ack) =>
       act({ type: 'play', cardIds: Array.isArray(payload?.cardIds) ? payload.cardIds.map(String) : [] })(ack),
     );
