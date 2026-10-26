@@ -4,6 +4,7 @@ import { GameHistory } from './history';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
+import { chooseBotAction } from './bot';
 import { type PlayerAction, RoomManager, type Result } from './rooms';
 
 /** Délai avant de supprimer un salon dont tous les joueurs sont partis. */
@@ -30,6 +31,8 @@ export interface GameServerOptions {
   staticDir?: string;
   /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
   historyFile?: string;
+  /** Temps de réflexion des bots, pour que les humains voient leurs coups passer. */
+  botDelayMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
   roomsFile?: string;
 }
@@ -54,7 +57,39 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
-    history.record(room.game);
+    const bots = room.seats.flatMap((s, i) => (s.bot ? [i] : []));
+    history.record(room.game, new Date(), bots);
+  }
+
+  const botTimers = new Map<string, NodeJS.Timeout>();
+  const botDelay = options.botDelayMs ?? 1100;
+
+  /** Si c'est à un bot d'agir, il joue après un court délai, puis on regarde si le suivant est aussi un bot. */
+  function scheduleBots(code: string) {
+    if (botTimers.has(code) || !rooms.botToAct(code)) return;
+    botTimers.set(
+      code,
+      setTimeout(() => {
+        botTimers.delete(code);
+        const room = rooms.get(code);
+        const seat = rooms.botToAct(code);
+        if (!room?.game || !seat) return;
+        const index = room.seats.indexOf(seat);
+        const choice = chooseBotAction(room.game, index);
+        if (!choice) return;
+        const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
+        let result = rooms.act(code, seat.playerId, action as PlayerAction);
+        // Coup refusé (cas non prévu par la stratégie) : le bot passe, ou ouvre avec sa plus petite carte.
+        if (!result.ok && room.game.phase === 'playing') {
+          const hand = room.game.players[index]!.hand;
+          result = rooms.act(code, seat.playerId, room.game.table ? { type: 'pass' } : { type: 'play', cardIds: [hand[0]!.id] });
+        }
+        if (!result.ok) console.error(`Bot bloqué dans le salon ${code} :`, result.error);
+        recordIfFinished(code);
+        void broadcast(code);
+        scheduleBots(code);
+      }, botDelay),
+    );
   }
   const cleanupTimers = new Map<string, NodeJS.Timeout>();
   const abandonDelay = options.abandonDelayMs ?? ABANDONED_ROOM_DELAY_MS;
@@ -141,7 +176,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!code || !playerId) return ack({ ok: false, error: 'notInRoom' });
       const result = run(code, playerId);
       ack(result);
-      if (result.ok) void broadcast(code);
+      if (result.ok) {
+        void broadcast(code);
+        scheduleBots(code);
+      }
     }
 
     const act = (action: PlayerAction, ack: AnyAck) =>
@@ -158,7 +196,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       leaveCurrent();
       ack({ ok: true });
     });
-    on('game:start', (_payload, ack) => handle(ack, (code, playerId) => rooms.start(code, playerId)));
+    on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
+    on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
+    on('game:start', (payload, ack) =>
+      handle(ack, (code, playerId) => rooms.start(code, playerId, { targetScore: Number(payload.targetScore) })),
+    );
     on('game:play', (payload, ack) =>
       act({ type: 'play', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
     );
@@ -178,7 +220,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   });
 
   // Les salons rechargés après un redémarrage sont supprimés si personne ne revient.
-  rooms.all().forEach((room) => scheduleCleanup(room.code));
+  // Les bots d'une partie rechargée reprennent la main s'ils devaient jouer.
+  rooms.all().forEach((room) => {
+    scheduleCleanup(room.code);
+    scheduleBots(room.code);
+  });
 
   io.engine.on('close', () => cleanupTimers.forEach(clearTimeout));
   return { http, io, rooms, history, saveRooms: () => saved.saveNow() };

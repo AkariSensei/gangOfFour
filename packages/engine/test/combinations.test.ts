@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeCombination, canBeat } from '../src';
+import { analyzeCombination, canBeat, playableCards } from '../src';
 import { cards } from './helpers';
 
 const combo = (...codes: string[]) => {
@@ -109,5 +109,27 @@ describe('canBeat', () => {
     expect(canBeat(gang5, gang4High)).toBe(true);
     expect(canBeat(gang4High, gang5)).toBe(false);
     expect(canBeat(combo('rD'), gang4)).toBe(false);
+  });
+});
+
+describe('playableCards', () => {
+  it('retient les cartes qui entrent dans une combinaison capable de battre la table', () => {
+    const hand = cards('g3', 'y3', 'r5', 'g9', 'y9');
+    const pair = analyzeCombination(cards('r4', 'g4'))!;
+    const ids = (set: Set<string>) => hand.filter((c) => set.has(c.id)).map((c) => c.id);
+    expect(ids(playableCards(hand, pair))).toEqual(['g9-3', 'y9-4']);
+    expect(playableCards(hand, null).size).toBe(5);
+  });
+
+  it('compte les gangs, qui battent tout', () => {
+    const hand = cards('g6', 'y6', 'r6', 'g6', 'r2');
+    const flush = analyzeCombination(cards('r1', 'r3', 'r5', 'r7', 'r9'))!;
+    expect(playableCards(hand, flush).size).toBe(4);
+  });
+
+  it('ne garde que la plus forte carte seule quand la règle « Carte ! » l’impose', () => {
+    const hand = cards('g3', 'r8', 'y5');
+    const single = analyzeCombination(cards('g2'))!;
+    expect([...playableCards(hand, single, true)]).toEqual(['r8-1']);
   });
 });

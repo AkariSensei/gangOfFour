@@ -5,7 +5,7 @@ import type { GameState } from '@gof/engine';
 export interface GameRecord {
   finishedAt: string;
   rounds: number;
-  players: { name: string; score: number; winner: boolean }[];
+  players: { name: string; score: number; winner: boolean; bot?: boolean }[];
 }
 
 export interface LeaderboardEntry {
@@ -30,11 +30,17 @@ export class GameHistory {
     }
   }
 
-  record(game: GameState, finishedAt = new Date()): GameRecord {
+  /** `bots` : indices des joueurs tenus par l'ordinateur, gardés dans l'historique mais pas dans le classement. */
+  record(game: GameState, finishedAt = new Date(), bots: number[] = []): GameRecord {
     const record: GameRecord = {
       finishedAt: finishedAt.toISOString(),
       rounds: game.round,
-      players: game.players.map((p, i) => ({ name: p.name, score: p.score, winner: game.winners.includes(i) })),
+      players: game.players.map((p, i) => ({
+        name: p.name,
+        score: p.score,
+        winner: game.winners.includes(i),
+        ...(bots.includes(i) ? { bot: true } : {}),
+      })),
     };
     this.records.push(record);
     this.save();
@@ -63,6 +69,7 @@ export class GameHistory {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
     for (const record of this.records) {
       for (const p of record.players) {
+        if (p.bot) continue;
         const entry = byName.get(key(p.name)) ?? { name: p.name, games: 0, wins: 0, averageScore: 0, total: 0 };
         entry.name = p.name;
         entry.games += 1;

@@ -43,4 +43,11 @@ describe('GameHistory', () => {
   it('démarre avec un historique vide si le fichier est absent ou illisible', () => {
     expect(new GameHistory('/chemin/inexistant/parties.json').leaderboard()).toEqual([]);
   });
+
+  it('garde les bots dans l\'historique mais pas dans le classement', () => {
+    const history = new GameHistory();
+    history.record(finished({ Alice: 20, 'Robot Ada': 104, 'Robot Alan': 60 }), new Date(), [1, 2]);
+    expect(history.recent(1)[0]!.players.filter((p) => p.bot).map((p) => p.name)).toEqual(['Robot Ada', 'Robot Alan']);
+    expect(history.leaderboard().map((e) => e.name)).toEqual(['Alice']);
+  });
 });

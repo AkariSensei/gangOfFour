@@ -197,7 +197,8 @@ describe('fin de manche', () => {
     state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });
 
     expect(state.phase).toBe('roundOver');
-    expect(state.lastRound).toEqual({ winnerIndex: 0, loserIndex: 2, penalties: [0, 2, 18, 1] });
+    expect(state.lastRound).toMatchObject({ winnerIndex: 0, loserIndex: 2, penalties: [0, 2, 18, 1] });
+    expect(state.lastRound!.hands.map((h) => h.length)).toEqual([0, 2, 9, 1]);
     expect(state.players.map((p) => p.score)).toEqual([0, 2, 18, 1]);
 
     state = apply(state, { type: 'nextRound' });

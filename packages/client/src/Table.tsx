@@ -1,7 +1,7 @@
-import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat } from '@gof/engine';
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
+import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomView } from '../../server/src/protocol';
-import { CardView } from './CardView';
+import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert } from './turnAlert';
@@ -35,12 +35,14 @@ function Opponent({
   index,
   seat,
   connected,
+  bot,
   move,
 }: {
   game: PlayerView;
   index: number;
   seat: Seat;
   connected: boolean;
+  bot: boolean;
   move?: TrickEntry;
 }) {
   const p = game.players[index]!;
@@ -49,7 +51,7 @@ function Opponent({
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
       <div className="avatar" aria-hidden>
-        {initials(p.name)}
+        {bot ? '🤖' : initials(p.name)}
       </div>
       <div className="opponent-info">
         <div className="opponent-name">
@@ -109,6 +111,7 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             <tr>
               <th />
               <th>Joueur</th>
+              <th>Cartes restantes</th>
               <th>Manche</th>
               <th>Total</th>
             </tr>
@@ -118,6 +121,13 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
               <tr key={p.id} className={p.i === game.you ? 'me' : ''}>
                 <td className="rank">{rank + 1}</td>
                 <td>{p.name}</td>
+                <td>
+                  <div className="leftover">
+                    {r.hands[p.i]!.length === 0
+                      ? '—'
+                      : r.hands[p.i]!.map((c) => <img key={c.id} src={cardImage(c)} alt={cardLabel(c)} title={cardLabel(c)} />)}
+                  </div>
+                </td>
                 <td className={r.penalties[p.i] === 0 ? 'zero' : 'penalty'}>+{r.penalties[p.i]}</td>
                 <td>
                   <strong>{p.score}</strong>
@@ -300,10 +310,30 @@ function sortHand(hand: Card[], mode: SortMode): Card[] {
   return [...hand].sort((a, b) => COLOR_RANK[a.color] - COLOR_RANK[b.color] || a.value - b.value);
 }
 
+/** Applique l'ordre choisi à la main par glisser-déposer ; les cartes nouvelles (échange, nouvelle manche) viennent après, triées. */
+function orderHand(sorted: Card[], order: string[] | null): Card[] {
+  if (!order) return sorted;
+  const byId = new Map(sorted.map((c) => [c.id, c]));
+  const known = order.flatMap((id) => byId.get(id) ?? []);
+  const placed = new Set(known.map((c) => c.id));
+  return [...known, ...sorted.filter((c) => !placed.has(c.id))];
+}
+
+/** Distance (en pixels) au-delà de laquelle un appui sur une carte devient un glisser plutôt qu'un clic. */
+const DRAG_THRESHOLD = 8;
+
+/** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
+type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
+
 export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomView; onLeave: () => void }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('value');
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const [planned, setPlanned] = useState<Planned | null>(null);
 
   const me = game.you;
   const n = game.players.length;
@@ -335,12 +365,67 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     return () => clearTimeout(t);
   }, [error]);
 
-  const hand = useMemo(() => sortHand(game.hand, sortMode), [game.hand, sortMode]);
+  const hand = useMemo(() => orderHand(sortHand(game.hand, sortMode), order), [game.hand, sortMode, order]);
+
+  // Glisser-déposer : la carte saisie prend la place de la carte la plus proche du doigt (ou de la souris).
+  function onPointerDown(e: PointerEvent<HTMLButtonElement>, card: Card) {
+    if (e.button !== 0) return;
+    drag.current = { id: card.id, x: e.clientX, y: e.clientY, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: PointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d) return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < DRAG_THRESHOLD) return;
+      d.moved = true;
+      setDragging(d.id);
+    }
+    const elements = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[data-card]') ?? [])];
+    let nearest: string | null = null;
+    let best = Infinity;
+    for (const el of elements) {
+      const r = el.getBoundingClientRect();
+      const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      if (dist < best) {
+        best = dist;
+        nearest = el.dataset.card!;
+      }
+    }
+    if (!nearest || nearest === d.id) return;
+    const ids = hand.map((c) => c.id);
+    const from = ids.indexOf(d.id);
+    const to = ids.indexOf(nearest);
+    ids.splice(from, 1);
+    ids.splice(to, 0, d.id);
+    setOrder(ids);
+  }
+
+  function onPointerUp() {
+    if (drag.current?.moved) suppressClick.current = true;
+    drag.current = null;
+    setDragging(null);
+  }
+
+  function changeSort() {
+    setOrder(null);
+    setSortMode((m) => (m === 'value' ? 'color' : 'value'));
+  }
   const selectedCards = selected.map((id) => game.hand.find((c) => c.id === id)).filter((c): c is Card => !!c);
 
+  // Cartes qui peuvent battre la table, pour mettre les autres en retrait (règle « Carte ! » comprise).
+  const playable = useMemo(() => {
+    if (!myTurn || !game.table) return null;
+    const nextPlayer = game.players[(me + game.direction + n) % n]!;
+    return playableCards(game.hand, game.table.combination, nextPlayer.cardCount === 1);
+  }, [myTurn, game.table, game.hand, game.players, game.direction, me, n]);
+
   const hint = useMemo(() => {
+    if (planned?.type === 'pass') return { text: 'Passe prévue : tu passeras dès que ce sera ton tour', ok: true };
+    if (planned?.type === 'play') return { text: 'Coup prévu : il partira dès que ce sera ton tour (s\'il passe encore)', ok: true };
     if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis la carte à rendre';
-    if (selectedCards.length === 0) return '';
+    if (selectedCards.length === 0) return playable?.size === 0 ? 'Rien ne passe : tu peux passer' : '';
     const combo = analyzeCombination(selectedCards);
     if (!combo) return { text: 'Combinaison invalide', ok: false };
     const label = combinationLabel(combo.type, combo.cards.length);
@@ -351,10 +436,16 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     }
     if (target && !canBeat(combo, target)) return { text: `${label} · trop faible`, ok: false };
     return { text: label, ok: true };
-  }, [selectedCards, mustGive, game.table]);
+  }, [selectedCards, mustGive, game.table, playable, planned]);
 
   function toggle(card: Card) {
+    // Le clic qui termine un glisser ne sélectionne pas la carte.
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     setError('');
+    setPlanned(null);
     if (mustGive) return setSelected([card.id]);
     setSelected((s) => (s.includes(card.id) ? s.filter((id) => id !== card.id) : [...s, card.id]));
   }
@@ -364,6 +455,35 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     if (r.ok) setSelected([]);
     else setError(errorLabel(r.error));
   }
+
+  // Un coup préparé ne vaut que pour le pli en cours : il est oublié quand un nouveau pli ou une nouvelle manche commence.
+  const trickLength = game.trick.length;
+  const previousTrick = useRef({ round: game.round, length: trickLength });
+  useEffect(() => {
+    const prev = previousTrick.current;
+    if (game.round !== prev.round || trickLength < prev.length || game.phase !== 'playing') setPlanned(null);
+    previousTrick.current = { round: game.round, length: trickLength };
+  }, [game.round, trickLength, game.phase]);
+
+  // Le tour arrive : le coup préparé part tout seul, s'il est encore possible.
+  useEffect(() => {
+    if (!myTurn || !planned) return;
+    setPlanned(null);
+    // Nouveau pli entre-temps (le pli a été remporté) : le coup préparé ne vaut plus.
+    if (game.round !== planned.round || game.trick.length < planned.trickLength) return;
+    if (planned.type === 'pass') {
+      if (game.table) void send(socket.emitWithAck('game:pass'));
+      else setError('Tu ouvres le pli : passer n\'est pas possible, à toi de choisir.');
+      return;
+    }
+    const cards = planned.cardIds.map((id) => game.hand.find((c) => c.id === id));
+    const combo = cards.every((c) => c) ? analyzeCombination(cards as Card[]) : null;
+    if (!combo || (game.table && !canBeat(combo, game.table.combination))) {
+      setError('Ton coup préparé ne passe plus : à toi de choisir.');
+      return;
+    }
+    void send(socket.emitWithAck('game:play', { cardIds: planned.cardIds }));
+  }, [myTurn, planned]);
 
   async function exit() {
     await socket.emitWithAck('room:leave');
@@ -394,6 +514,8 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   }
 
   const myMove = moves.get(me);
+  // On peut préparer son coup pendant le tour des autres, sauf si on a déjà passé ce pli.
+  const canPlan = game.phase === 'playing' && !myTurn && !game.mustPlayMultiOne && myMove?.combination !== null;
   const mid = (hand.length - 1) / 2;
 
   return (
@@ -401,6 +523,9 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
       <header className="table-header">
         <div className="header-left">
           <span className="round">Manche {game.round}</span>
+          <span className="direction" title="La partie s'arrête quand un joueur atteint ce score">
+            en {game.targetScore} pts
+          </span>
           <span className="direction" title="Sens de jeu de la manche">
             {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
           </span>
@@ -429,6 +554,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             index={index}
             seat={seat}
             connected={room.players[index]?.connected ?? true}
+            bot={room.players[index]?.bot ?? false}
             move={moves.get(index)}
           />
         ))}
@@ -442,7 +568,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             {status}
             {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
           </div>
-          <button className="link small" onClick={() => setSortMode((m) => (m === 'value' ? 'color' : 'value'))}>
+          <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
             Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
           </button>
         </div>
@@ -453,8 +579,16 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
               key={c.id}
               card={c}
               selected={selected.includes(c.id)}
+              dimmed={playable !== null && !playable.has(c.id)}
+              dragging={dragging === c.id}
               onClick={() => toggle(c)}
               style={{ '--offset': i - mid } as CSSProperties}
+              handlers={{
+                onPointerDown: (e) => onPointerDown(e, c),
+                onPointerMove,
+                onPointerUp,
+                onPointerCancel: onPointerUp,
+              }}
             />
           ))}
         </div>
@@ -473,21 +607,51 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             </button>
           ) : (
             <>
-              {selected.length > 0 && (
+              {selected.length > 0 && !planned && (
                 <button className="ghost" onClick={() => setSelected([])}>
                   Annuler
                 </button>
               )}
-              <button disabled={!myTurn || !game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
-                Passer
-              </button>
-              <button
-                className="primary"
-                disabled={!myTurn || selected.length === 0}
-                onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
-              >
-                Jouer
-              </button>
+              {myTurn ? (
+                <>
+                  <button disabled={!game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
+                    Passer
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={selected.length === 0}
+                    onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
+                  >
+                    Jouer
+                  </button>
+                </>
+              ) : planned ? (
+                <button className="ghost" onClick={() => setPlanned(null)}>
+                  Annuler {planned.type === 'pass' ? 'la passe prévue' : 'le coup prévu'}
+                </button>
+              ) : (
+                // Pas encore son tour : on prépare son coup (ou sa passe), joué dès que le tour arrive.
+                <>
+                  <button
+                    disabled={!canPlan}
+                    onClick={() => {
+                      setSelected([]);
+                      setPlanned({ type: 'pass', round: game.round, trickLength: game.trick.length });
+                    }}
+                    title="Passer automatiquement quand ce sera ton tour"
+                  >
+                    Passer à mon tour
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={!canPlan || typeof hint !== 'object' || !hint.ok}
+                    onClick={() => setPlanned({ type: 'play', cardIds: selected, round: game.round, trickLength: game.trick.length })}
+                    title="Jouer ces cartes automatiquement quand ce sera ton tour"
+                  >
+                    Jouer à mon tour
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

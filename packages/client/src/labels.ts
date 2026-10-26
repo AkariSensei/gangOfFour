@@ -23,7 +23,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   gameAlreadyStarted: 'La partie a déjà commencé dans ce salon.',
   invalidName: 'Choisis un pseudo.',
   notInRoom: "Tu n'es pas dans un salon.",
-  notHost: "Seul l'hôte peut lancer la partie.",
+  notHost: "Seul l'hôte peut faire ça.",
   notEnoughPlayers: 'Il faut au moins 3 joueurs.',
   gameNotStarted: "La partie n'a pas commencé.",
   wrongPhase: "Ce n'est pas le moment.",

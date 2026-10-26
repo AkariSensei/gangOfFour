@@ -35,6 +35,8 @@ export interface RoundResult {
   loserIndex: number;
   /** Pénalités de la manche, dans l'ordre des joueurs. */
   penalties: number[];
+  /** Cartes restées en main à la fin de la manche, dans l'ordre des joueurs (montrées à tous). */
+  hands: Card[][];
 }
 
 /** Échange du début de manche, visible de tous comme dans le jeu réel. */
@@ -264,7 +266,12 @@ function endRound(state: GameState, winnerIndex: number): void {
   const penalties = state.players.map((p) => penaltyForCards(p.hand.length));
   state.players.forEach((p, i) => (p.score += penalties[i]!));
 
-  state.lastRound = { winnerIndex, loserIndex: findLoser(state, winnerIndex), penalties };
+  state.lastRound = {
+    winnerIndex,
+    loserIndex: findLoser(state, winnerIndex),
+    penalties,
+    hands: state.players.map((p) => p.hand),
+  };
   state.table = null;
   state.passed = state.players.map(() => false);
 
@@ -365,6 +372,8 @@ export interface PlayerView {
   hand: Card[];
   players: { id: string; name: string; score: number; cardCount: number }[];
   dealer: number;
+  /** Score qui met fin à la partie. */
+  targetScore: number;
   /** Nombre de cartes du paquet à couper (phase « cut »), 0 sinon. */
   deckSize: number;
   direction: 1 | -1;
@@ -386,6 +395,7 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     hand: state.players[playerIndex]!.hand,
     players: state.players.map((p) => ({ id: p.id, name: p.name, score: p.score, cardCount: p.hand.length })),
     dealer: state.dealer,
+    targetScore: state.config.targetScore,
     deckSize: state.deck.length,
     direction: state.direction,
     currentPlayer: state.currentPlayer,

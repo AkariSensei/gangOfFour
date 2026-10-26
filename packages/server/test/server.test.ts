@@ -71,7 +71,7 @@ describe('serveur de jeu', () => {
   it('envoie à chacun sa main au lancement, sans les mains des autres', async () => {
     await start();
     const { players } = await lobby(4);
-    expect(await players[0]!.emitWithAck('game:start')).toEqual({ ok: true });
+    expect(await players[0]!.emitWithAck('game:start', {})).toEqual({ ok: true });
     await waitFor(() => players.every((p) => p.game));
     const hands = players.map((p) => p.game!.hand.map((c) => c.id));
     expect(new Set(hands.flat()).size).toBe(64);
@@ -87,7 +87,7 @@ describe('serveur de jeu', () => {
 
     // On récupère le jeton de Bruno côté serveur pour simuler sa reconnexion depuis un nouvel onglet.
     const token = server.rooms.get(code)!.seats[1]!.token;
-    await players[0]!.emitWithAck('game:start');
+    await players[0]!.emitWithAck('game:start', {});
     bruno.disconnect();
     await waitFor(() => players[0]!.room!.players[1]!.connected === false);
 
@@ -107,7 +107,7 @@ describe('serveur de jeu', () => {
   it.each([3, 4])('joue une partie complète à %i joueurs par les sockets', async (count) => {
     await start();
     const { players } = await lobby(count);
-    await players[0]!.emitWithAck('game:start');
+    await players[0]!.emitWithAck('game:start', {});
     await waitFor(() => players.every((p) => p.game));
 
     // Partie publique de l'état, identique chez tous les joueurs une fois la diffusion terminée.
@@ -129,12 +129,46 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.leaderboard).toHaveLength(count);
   }, 60000);
 
+  it('fait jouer les bots tout seuls : une partie complète avec un humain et deux bots', async () => {
+    await start({ botDelayMs: 0 });
+    const { code, players } = await lobby(1);
+    const human = players[0]!;
+    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
+    await waitFor(() => human.room?.players.length === 3);
+    expect(human.room!.players.map((p) => p.bot)).toEqual([false, true, true]);
+    await human.emitWithAck('game:start', {});
+    await waitFor(() => !!human.game);
+
+    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls.
+    const seats = [human, human, human];
+    const humanMustAct = (g: PlayerView) =>
+      g.phase === 'roundOver' ||
+      (g.phase === 'cut' && g.dealer === g.you) ||
+      (g.phase === 'exchange' && g.exchange?.winnerIndex === g.you) ||
+      (g.phase === 'playing' && g.currentPlayer === g.you);
+    const over = () => human.game!.phase === 'gameOver';
+    for (let steps = 0; !over(); steps++) {
+      expect(steps).toBeLessThan(5000);
+      await waitFor(() => over() || humanMustAct(human.game!), 5000);
+      if (over()) break;
+      const before = JSON.stringify(human.game);
+      await playBotTurn(seats);
+      await waitFor(() => JSON.stringify(human.game) !== before);
+    }
+
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.recent).toHaveLength(1);
+    expect(stats.ok && stats.leaderboard.map((e) => e.name)).toEqual(['Alice']);
+    expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
+  }, 60000);
+
   it('survit aux messages bizarres : sans réponse attendue, sans données, ou avec des données invalides', async () => {
     await start();
     const { players } = await lobby(3);
     const raw = players[1]! as unknown as { emit: (event: string, ...args: unknown[]) => void };
     // Ce qui a fait planter le site : un événement envoyé sans fonction de réponse.
-    for (const event of ['room:create', 'room:join', 'room:rejoin', 'room:leave', 'game:start', 'game:play', 'game:pass', 'game:cut', 'stats:get']) {
+    for (const event of ['room:create', 'room:join', 'room:rejoin', 'room:leave', 'room:addBot', 'room:removeBot', 'game:start', 'game:play', 'game:pass', 'game:cut', 'stats:get']) {
       raw.emit(event);
       raw.emit(event, null);
       raw.emit(event, 'n\'importe quoi', 42);
@@ -153,7 +187,7 @@ describe('serveur de jeu', () => {
     const roomsFile = join(mkdtempSync(join(tmpdir(), 'gof-')), 'salons.json');
     await start({ roomsFile });
     const { code, players } = await lobby(3);
-    await players[0]!.emitWithAck('game:start');
+    await players[0]!.emitWithAck('game:start', {});
     await waitFor(() => players.every((p) => p.game));
     await playBotTurn(players);
     await waitFor(() => players[0]!.game!.phase !== 'cut' || players[0]!.game!.round > 1);
