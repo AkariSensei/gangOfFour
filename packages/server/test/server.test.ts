@@ -1,4 +1,7 @@
+import { mkdtempSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PlayerView } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -125,4 +128,50 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.recent).toHaveLength(1);
     expect(stats.ok && stats.leaderboard).toHaveLength(count);
   }, 60000);
+
+  it('survit aux messages bizarres : sans réponse attendue, sans données, ou avec des données invalides', async () => {
+    await start();
+    const { players } = await lobby(3);
+    const raw = players[1]! as unknown as { emit: (event: string, ...args: unknown[]) => void };
+    // Ce qui a fait planter le site : un événement envoyé sans fonction de réponse.
+    for (const event of ['room:create', 'room:join', 'room:rejoin', 'room:leave', 'game:start', 'game:play', 'game:pass', 'game:cut', 'stats:get']) {
+      raw.emit(event);
+      raw.emit(event, null);
+      raw.emit(event, 'n\'importe quoi', 42);
+      raw.emit(event, { name: 12, code: {}, token: [], cardIds: 'm1', position: 'x' });
+    }
+    // Sans charge utile, la réponse arrive quand même (la fonction est alors le premier argument).
+    const fresh = connect();
+    const result = await (fresh as unknown as { emitWithAck: (e: string) => Promise<{ ok: boolean; error?: string }> }).emitWithAck('room:join');
+    expect(result).toEqual({ ok: false, error: 'invalidName' });
+    // Le serveur répond toujours.
+    const stats = await players[0]!.emitWithAck('stats:get');
+    expect(stats.ok).toBe(true);
+  });
+
+  it('retrouve les parties en cours après un redémarrage du serveur', async () => {
+    const roomsFile = join(mkdtempSync(join(tmpdir(), 'gof-')), 'salons.json');
+    await start({ roomsFile });
+    const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start');
+    await waitFor(() => players.every((p) => p.game));
+    await playBotTurn(players);
+    await waitFor(() => players[0]!.game!.phase !== 'cut' || players[0]!.game!.round > 1);
+    const before = server.rooms.get(code)!.game!;
+    const session = { code, token: server.rooms.get(code)!.seats[1]!.token };
+
+    // Arrêt « propre » comme alwaysData (SIGTERM), puis nouveau serveur sur le même fichier.
+    server.saveRooms();
+    clients.splice(0).forEach((c) => c.disconnect());
+    await new Promise((resolve) => server.io.close(resolve));
+    await start({ roomsFile });
+
+    expect(server.rooms.get(code)!.game).toEqual(before);
+    const back = connect();
+    const rejoined = await back.emitWithAck('room:rejoin', session);
+    expect(rejoined.ok).toBe(true);
+    await waitFor(() => !!back.game);
+    expect(back.game!.you).toBe(1);
+    expect(back.game!.hand).toEqual(before.players[1]!.hand);
+  });
 });
