@@ -24,6 +24,12 @@ export interface TablePlay {
   combination: Combination;
 }
 
+/** Un coup du pli en cours : une combinaison posée, ou null pour une passe. */
+export interface TrickEntry {
+  playerIndex: number;
+  combination: Combination | null;
+}
+
 export interface RoundResult {
   winnerIndex: number;
   loserIndex: number;
@@ -56,6 +62,8 @@ export interface GameState {
   table: TablePlay | null;
   /** Nombre de passes consécutives depuis la dernière combinaison posée. */
   passes: number;
+  /** Coups du pli en cours (ou du dernier pli terminé, jusqu'à l'ouverture du suivant). */
+  trick: TrickEntry[];
   /** Le prochain coup doit contenir le 1 multicolore (ouverture de la première manche). */
   mustPlayMultiOne: boolean;
   exchange: Exchange | null;
@@ -115,6 +123,7 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     currentPlayer: 0,
     table: null,
     passes: 0,
+    trick: [],
     mustPlayMultiOne: false,
     exchange: null,
     lastRound: null,
@@ -154,6 +163,8 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
   }
 
   player.hand = player.hand.filter((c) => !cardIds.includes(c.id));
+  if (!state.table) state.trick = [];
+  state.trick.push({ playerIndex, combination });
   state.table = { playerIndex, combination };
   state.passes = 0;
   state.mustPlayMultiOne = false;
@@ -169,6 +180,7 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
 function pass(state: GameState, playerIndex: number): ActionResult {
   if (!state.table) return { ok: false, error: 'cannotPassWhenLeading' };
   state.passes += 1;
+  state.trick.push({ playerIndex, combination: null });
   if (state.passes >= state.players.length - 1) {
     // Tout le monde a passé : celui qui a posé la dernière combinaison ouvre un nouveau pli.
     state.currentPlayer = state.table.playerIndex;
@@ -218,6 +230,7 @@ function nextRound(state: GameState): ActionResult {
   const { winnerIndex, loserIndex } = state.lastRound!;
   state.round += 1;
   state.direction = state.round % 2 === 1 ? 1 : -1;
+  state.trick = [];
   deal(state);
 
   // Le perdant donne automatiquement sa meilleure carte au gagnant, qui lui en rend une de son choix.
@@ -279,6 +292,7 @@ export interface PlayerView {
   direction: 1 | -1;
   currentPlayer: number;
   table: TablePlay | null;
+  trick: TrickEntry[];
   mustPlayMultiOne: boolean;
   exchange: Exchange | null;
   lastRound: RoundResult | null;
@@ -296,6 +310,7 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     direction: state.direction,
     currentPlayer: state.currentPlayer,
     table: state.table,
+    trick: state.trick,
     mustPlayMultiOne: state.mustPlayMultiOne,
     exchange: state.exchange,
     lastRound: state.lastRound,

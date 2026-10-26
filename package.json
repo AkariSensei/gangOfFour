@@ -11,7 +11,8 @@
     "demo": "npm run demo -w @gof/server --",
     "dev:server": "npm run dev -w @gof/server",
     "dev": "concurrently -n serveur,client -c green,cyan \"npm run dev -w @gof/server\" \"npm run dev -w @gof/client\"",
-    "build": "npm run build -w @gof/client"
+    "build": "npm run build -w @gof/client",
+    "start": "npm run start -w @gof/server"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"
