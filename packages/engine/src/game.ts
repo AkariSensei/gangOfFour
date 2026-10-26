@@ -1,25 +1,16 @@
 import { type Card, MULTI_ONE_ID, compareCards, createDeck, highestCard, sortHand } from './cards';
-import { type Combination, analyzeCombination, canBeat } from './combinations';
+import { type Combination, analyzeCombination, canBeat, hasMultiCardCombination } from './combinations';
 import { createRng, shuffle } from './random';
 import { penaltyForCards } from './scoring';
 
-export const PLAYER_COUNT = 4;
 export const HAND_SIZE = 16;
 
 export interface GameConfig {
   /** Score à partir duquel la partie s'arrête. */
   targetScore: number;
-  /** Qui ouvre les manches suivantes : le perdant ou le gagnant de la manche précédente. */
-  nextRoundLeader: 'loser' | 'winner';
-  /** Le premier coup de la partie doit contenir le 1 multicolore. */
-  firstPlayMustIncludeMultiOne: boolean;
 }
 
-export const DEFAULT_CONFIG: GameConfig = {
-  targetScore: 100,
-  nextRoundLeader: 'loser',
-  firstPlayMustIncludeMultiOne: true,
-};
+export const DEFAULT_CONFIG: GameConfig = { targetScore: 100 };
 
 export interface PlayerState {
   id: string;
@@ -40,6 +31,16 @@ export interface RoundResult {
   penalties: number[];
 }
 
+/** Échange du début de manche, visible de tous comme dans le jeu réel. */
+export interface Exchange {
+  winnerIndex: number;
+  loserIndex: number;
+  /** Meilleure carte donnée par le perdant. */
+  loserCard: Card;
+  /** Carte rendue par le gagnant, null tant qu'il n'a pas choisi. */
+  winnerCard: Card | null;
+}
+
 export type Phase = 'exchange' | 'playing' | 'roundOver' | 'gameOver';
 
 export interface GameState {
@@ -48,14 +49,16 @@ export interface GameState {
   round: number;
   phase: Phase;
   players: PlayerState[];
+  /** Sens de jeu de la manche : +1 (antihoraire, première manche) ou -1, alterné à chaque manche. */
+  direction: 1 | -1;
   currentPlayer: number;
   /** Dernière combinaison posée sur la table dans le pli en cours. */
   table: TablePlay | null;
   /** Nombre de passes consécutives depuis la dernière combinaison posée. */
   passes: number;
-  firstPlayOfGame: boolean;
-  /** Pendant l'échange : le gagnant doit rendre une carte au perdant. */
-  exchange: { fromIndex: number; toIndex: number; receivedCardId: string } | null;
+  /** Le prochain coup doit contenir le 1 multicolore (ouverture de la première manche). */
+  mustPlayMultiOne: boolean;
+  exchange: Exchange | null;
   lastRound: RoundResult | null;
   /** Indices des joueurs avec le score le plus bas en fin de partie. */
   winners: number[];
@@ -75,7 +78,8 @@ export type ActionError =
   | 'tooWeak'
   | 'cannotPassWhenLeading'
   | 'mustPlayMultiOne'
-  | 'mustPlayHighestSingle';
+  | 'mustPlayHighestSingle'
+  | 'mustLeadCombination';
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: ActionError };
 
@@ -84,10 +88,12 @@ export interface NewPlayer {
   name: string;
 }
 
-function nextIndex(index: number): number {
-  return (index + 1) % PLAYER_COUNT;
+function step(state: GameState, index: number, direction: number = state.direction): number {
+  const n = state.players.length;
+  return (index + direction + n) % n;
 }
 
+/** Distribue 16 cartes à chacun ; à trois joueurs, les 16 cartes restantes forment une main morte, hors jeu. */
 function deal(state: GameState): void {
   const rng = createRng(state.seed + state.round);
   const deck = shuffle(createDeck(), rng);
@@ -96,24 +102,29 @@ function deal(state: GameState): void {
   });
 }
 
+/** Le joueur 0 est le donneur de la première manche (le plus âgé dans le jeu réel). */
 export function createGame(players: NewPlayer[], seed: number, config: Partial<GameConfig> = {}): GameState {
-  if (players.length !== PLAYER_COUNT) throw new Error(`Gang of Four se joue à ${PLAYER_COUNT} joueurs`);
+  if (players.length !== 3 && players.length !== 4) throw new Error('Gang of Four se joue à 3 ou 4 joueurs');
   const state: GameState = {
     config: { ...DEFAULT_CONFIG, ...config },
     seed,
     round: 1,
     phase: 'playing',
     players: players.map((p) => ({ ...p, hand: [], score: 0 })),
+    direction: 1,
     currentPlayer: 0,
     table: null,
     passes: 0,
-    firstPlayOfGame: true,
+    mustPlayMultiOne: false,
     exchange: null,
     lastRound: null,
     winners: [],
   };
   deal(state);
-  state.currentPlayer = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
+  // Le détenteur du 1 multicolore ouvre avec ce 1. À trois, s'il est dans la main morte, le voisin du donneur ouvre.
+  const holder = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
+  state.mustPlayMultiOne = holder >= 0;
+  state.currentPlayer = holder >= 0 ? holder : step(state, 0);
   return state;
 }
 
@@ -131,27 +142,26 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
   const combination = analyzeCombination(cards);
   if (!combination) return { ok: false, error: 'invalidCombination' };
 
-  if (state.firstPlayOfGame && state.config.firstPlayMustIncludeMultiOne && !cardIds.includes(MULTI_ONE_ID)) {
-    return { ok: false, error: 'mustPlayMultiOne' };
-  }
+  if (state.mustPlayMultiOne && !cardIds.includes(MULTI_ONE_ID)) return { ok: false, error: 'mustPlayMultiOne' };
   if (!canBeat(combination, state.table?.combination ?? null)) return { ok: false, error: 'tooWeak' };
 
-  // Si le joueur suivant n'a plus qu'une carte, on ne peut jouer une carte seule que si c'est sa plus forte.
-  const nextPlayer = state.players[nextIndex(playerIndex)]!;
+  // « Carte ! » : quand le joueur suivant n'a plus qu'une carte, on ouvre avec une combinaison si possible,
+  // et une carte seule ne peut être que sa plus forte.
+  const nextPlayer = state.players[step(state, playerIndex)]!;
   if (combination.type === 'single' && nextPlayer.hand.length === 1) {
-    const best = highestCard(player.hand)!;
-    if (compareCards(cards[0]!, best) !== 0) return { ok: false, error: 'mustPlayHighestSingle' };
+    if (!state.table && hasMultiCardCombination(player.hand)) return { ok: false, error: 'mustLeadCombination' };
+    if (compareCards(cards[0]!, highestCard(player.hand)!) !== 0) return { ok: false, error: 'mustPlayHighestSingle' };
   }
 
   player.hand = player.hand.filter((c) => !cardIds.includes(c.id));
   state.table = { playerIndex, combination };
   state.passes = 0;
-  state.firstPlayOfGame = false;
+  state.mustPlayMultiOne = false;
 
   if (player.hand.length === 0) {
     endRound(state, playerIndex);
   } else {
-    state.currentPlayer = nextIndex(playerIndex);
+    state.currentPlayer = step(state, playerIndex);
   }
   return { ok: true, state };
 }
@@ -159,29 +169,39 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
 function pass(state: GameState, playerIndex: number): ActionResult {
   if (!state.table) return { ok: false, error: 'cannotPassWhenLeading' };
   state.passes += 1;
-  if (state.passes >= PLAYER_COUNT - 1) {
+  if (state.passes >= state.players.length - 1) {
     // Tout le monde a passé : celui qui a posé la dernière combinaison ouvre un nouveau pli.
     state.currentPlayer = state.table.playerIndex;
     state.table = null;
     state.passes = 0;
   } else {
-    state.currentPlayer = nextIndex(playerIndex);
+    state.currentPlayer = step(state, playerIndex);
   }
   return { ok: true, state };
+}
+
+/**
+ * Le perdant est celui à qui il reste le plus de cartes ; à égalité, celui qui a le plus gros score total,
+ * puis le plus proche du gagnant dans le sens antihoraire.
+ */
+function findLoser(state: GameState, winnerIndex: number): number {
+  let loser = -1;
+  for (let i = step(state, winnerIndex, 1); i !== winnerIndex; i = step(state, i, 1)) {
+    if (loser < 0) {
+      loser = i;
+      continue;
+    }
+    const [a, b] = [state.players[i]!, state.players[loser]!];
+    if (a.hand.length > b.hand.length || (a.hand.length === b.hand.length && a.score > b.score)) loser = i;
+  }
+  return loser;
 }
 
 function endRound(state: GameState, winnerIndex: number): void {
   const penalties = state.players.map((p) => penaltyForCards(p.hand.length));
   state.players.forEach((p, i) => (p.score += penalties[i]!));
 
-  // Le perdant est celui qui prend le plus de points ; à égalité, le premier après le gagnant.
-  let loserIndex = winnerIndex;
-  for (let step = 1; step < PLAYER_COUNT; step++) {
-    const i = (winnerIndex + step) % PLAYER_COUNT;
-    if (loserIndex === winnerIndex || penalties[i]! > penalties[loserIndex]!) loserIndex = i;
-  }
-
-  state.lastRound = { winnerIndex, loserIndex, penalties };
+  state.lastRound = { winnerIndex, loserIndex: findLoser(state, winnerIndex), penalties };
   state.table = null;
   state.passes = 0;
 
@@ -197,6 +217,7 @@ function endRound(state: GameState, winnerIndex: number): void {
 function nextRound(state: GameState): ActionResult {
   const { winnerIndex, loserIndex } = state.lastRound!;
   state.round += 1;
+  state.direction = state.round % 2 === 1 ? 1 : -1;
   deal(state);
 
   // Le perdant donne automatiquement sa meilleure carte au gagnant, qui lui en rend une de son choix.
@@ -206,7 +227,7 @@ function nextRound(state: GameState): ActionResult {
   loser.hand = loser.hand.filter((c) => c.id !== best.id);
   winner.hand = sortHand([...winner.hand, best]);
 
-  state.exchange = { fromIndex: winnerIndex, toIndex: loserIndex, receivedCardId: best.id };
+  state.exchange = { winnerIndex, loserIndex, loserCard: best, winnerCard: null };
   state.phase = 'exchange';
   state.currentPlayer = winnerIndex;
   return { ok: true, state };
@@ -218,13 +239,14 @@ function giveCard(state: GameState, playerIndex: number, cardId: string): Action
   const card = giver.hand.find((c) => c.id === cardId);
   if (!card) return { ok: false, error: 'unknownCard' };
 
-  const receiver = state.players[exchange.toIndex]!;
+  const receiver = state.players[exchange.loserIndex]!;
   giver.hand = giver.hand.filter((c) => c.id !== cardId);
   receiver.hand = sortHand([...receiver.hand, card]);
 
-  state.exchange = null;
+  exchange.winnerCard = card;
   state.phase = 'playing';
-  state.currentPlayer = state.config.nextRoundLeader === 'loser' ? exchange.toIndex : exchange.fromIndex;
+  // Le gagnant de la manche précédente ouvre la nouvelle.
+  state.currentPlayer = exchange.winnerIndex;
   return { ok: true, state };
 }
 
@@ -240,7 +262,7 @@ export function applyAction(previous: GameState, action: Action): ActionResult {
       return action.type === 'play' ? play(state, action.playerIndex, action.cardIds) : pass(state, action.playerIndex);
     case 'giveCard':
       if (state.phase !== 'exchange') return { ok: false, error: 'wrongPhase' };
-      if (action.playerIndex !== state.exchange!.fromIndex) return { ok: false, error: 'notYourTurn' };
+      if (action.playerIndex !== state.exchange!.winnerIndex) return { ok: false, error: 'notYourTurn' };
       return giveCard(state, action.playerIndex, action.cardId);
     case 'nextRound':
       if (state.phase !== 'roundOver') return { ok: false, error: 'wrongPhase' };
@@ -254,9 +276,11 @@ export interface PlayerView {
   you: number;
   hand: Card[];
   players: { id: string; name: string; score: number; cardCount: number }[];
+  direction: 1 | -1;
   currentPlayer: number;
   table: TablePlay | null;
-  exchange: GameState['exchange'];
+  mustPlayMultiOne: boolean;
+  exchange: Exchange | null;
   lastRound: RoundResult | null;
   winners: number[];
 }
@@ -269,12 +293,11 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     you: playerIndex,
     hand: state.players[playerIndex]!.hand,
     players: state.players.map((p) => ({ id: p.id, name: p.name, score: p.score, cardCount: p.hand.length })),
+    direction: state.direction,
     currentPlayer: state.currentPlayer,
     table: state.table,
-    exchange:
-      state.exchange && playerIndex !== state.exchange.fromIndex && playerIndex !== state.exchange.toIndex
-        ? { ...state.exchange, receivedCardId: '' }
-        : state.exchange,
+    mustPlayMultiOne: state.mustPlayMultiOne,
+    exchange: state.exchange,
     lastRound: state.lastRound,
     winners: state.winners,
   };

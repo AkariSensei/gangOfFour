@@ -10,8 +10,8 @@ export interface Card {
 export const PHOENIX_VALUE = 11;
 export const DRAGON_VALUE = 12;
 
-/** Ordre des couleurs pour départager deux cartes de même valeur. */
-export const COLOR_RANK: Record<Color, number> = { multi: 0, green: 1, yellow: 2, red: 3 };
+/** Ordre des couleurs pour départager deux cartes de même valeur. Le 1 multicolore est le plus fort des 1. */
+export const COLOR_RANK: Record<Color, number> = { green: 1, yellow: 2, red: 3, multi: 4 };
 
 const NUMBER_COLORS: Color[] = ['green', 'yellow', 'red'];
 

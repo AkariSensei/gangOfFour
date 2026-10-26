@@ -19,6 +19,7 @@ describe('analyzeCombination', () => {
     [['g1', 'g3', 'g5', 'g7', 'g9'], 'flush'],
     [['m1', 'r3', 'r5', 'r7', 'r9'], 'flush'],
     [['g5', 'r5', 'y5', 'g2', 'r2'], 'fullHouse'],
+    [['g5', 'r5', 'y5', 'gP', 'yP'], 'fullHouse'],
     [['y6', 'y7', 'y8', 'y9', 'y10'], 'straightFlush'],
     [['m1', 'r2', 'r3', 'r4', 'r5'], 'straightFlush'],
     [['g5', 'r5', 'y5', 'g5'], 'gang'],
@@ -32,6 +33,8 @@ describe('analyzeCombination', () => {
     [['gP', 'rD']],
     [['g5', 'r5', 'y5', 'g6']],
     [['g7', 'y8', 'r9', 'g10', 'gP']],
+    [['g5', 'r5', 'y5', 'gP', 'rD']],
+    [['gP', 'yP', 'g5', 'r5', 'y6']],
     [['g9', 'y10', 'r1', 'g2', 'g3']],
     [['g1', 'y2', 'r3', 'g4', 'g5', 'g6']],
     [['g2', 'r2', 'y3', 'r3', 'g4']],
@@ -48,6 +51,13 @@ describe('canBeat', () => {
     expect(canBeat(combo('g5'), combo('g5'))).toBe(false);
     expect(canBeat(combo('rD'), combo('yP'))).toBe(true);
     expect(canBeat(combo('yP'), combo('gP'))).toBe(true);
+    expect(canBeat(combo('m1'), combo('r1'))).toBe(true);
+    expect(canBeat(combo('r2'), combo('m1'))).toBe(true);
+  });
+
+  it('classe un full par son brelan, même avec la paire de phénix', () => {
+    expect(canBeat(combo('g6', 'r6', 'y6', 'g2', 'r2'), combo('g5', 'r5', 'y5', 'gP', 'yP'))).toBe(true);
+    expect(canBeat(combo('g5', 'r5', 'y5', 'gP', 'yP'), combo('g6', 'r6', 'y6', 'g2', 'r2'))).toBe(false);
   });
 
   it('impose le même nombre de cartes', () => {

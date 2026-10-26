@@ -65,7 +65,16 @@ export function analyzeCombination(cards: Card[]): Combination | null {
     if (n >= 4) return { type: 'gang', cards, rank: [n, value] };
   }
 
-  if (n !== 5 || cards.some(isSpecial)) return null;
+  if (n !== 5) return null;
+
+  // Les phénix ne peuvent entrer dans une combinaison de cinq cartes que comme paire d'un full.
+  const specials = cards.filter(isSpecial);
+  if (specials.length > 0) {
+    const numbers = cards.filter((c) => !isSpecial(c));
+    const phoenixPair = specials.length === 2 && specials.every((c) => c.value === PHOENIX_VALUE);
+    if (!phoenixPair || !allSameValue(numbers)) return null;
+    return { type: 'fullHouse', cards, rank: [numbers[0]!.value, maxColor(numbers)] };
+  }
 
   const values = cards.map((c) => c.value);
   const color = commonColor(cards);
@@ -122,4 +131,22 @@ export function canBeat(play: Combination, current: Combination | null): boolean
     return false;
   }
   return compareRanks(play.rank, current.rank) > 0;
+}
+
+function* subsets<T>(items: T[], size: number, start = 0, picked: T[] = []): Generator<T[]> {
+  if (picked.length === size) {
+    yield picked;
+    return;
+  }
+  for (let i = start; i <= items.length - (size - picked.length); i++) {
+    yield* subsets(items, size, i + 1, [...picked, items[i]!]);
+  }
+}
+
+/** Indique si la main permet de poser autre chose qu'une carte seule (paire, brelan, cinq cartes ou gang). */
+export function hasMultiCardCombination(hand: Card[]): boolean {
+  // Brelans, gangs et fulls contiennent tous une paire : il suffit de chercher les paires et les cinq cartes.
+  for (const pair of subsets(hand, 2)) if (analyzeCombination(pair)) return true;
+  for (const five of subsets(hand, 5)) if (analyzeCombination(five)) return true;
+  return false;
 }
