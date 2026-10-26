@@ -8,4 +8,13 @@ export default defineConfig({
   // Les modules natifs facultatifs de ws ne sont pas emportés : on dit à ws de s'en passer.
   define: { 'process.env.WS_NO_BUFFER_UTIL': '"1"', 'process.env.WS_NO_UTF_8_VALIDATE': '"1"' },
   logLevel: 'warn',
+  plugins: [
+    {
+      // main.js est un module ES : on le dit à Node, quelle que soit sa version (avant Node 22, il le refuserait).
+      name: 'module-es',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'package.json', source: '{ "type": "module" }\n' });
+      },
+    },
+  ],
 });
