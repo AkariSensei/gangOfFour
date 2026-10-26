@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
+import { ErrorLog } from './errors';
 import { GameHistory } from './history';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
@@ -20,6 +21,7 @@ export interface GameServer {
   io: Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
   rooms: RoomManager;
   history: GameHistory;
+  errors: ErrorLog;
   /** Enregistre tout de suite les salons sur disque (avant un arrêt du serveur). */
   saveRooms: () => void;
 }
@@ -31,6 +33,10 @@ export interface GameServerOptions {
   staticDir?: string;
   /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
   historyFile?: string;
+  /** Journal des erreurs (une ligne JSON par erreur), relevé par la surveillance GitHub. */
+  errorsFile?: string;
+  /** Durée d'une « seconde » du minuteur de tour, en millisecondes (raccourcie dans les tests). */
+  turnSecondMs?: number;
   /** Temps de réflexion des bots, pour que les humains voient leurs coups passer. */
   botDelayMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
@@ -49,6 +55,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   });
   const rooms = new RoomManager();
   const history = new GameHistory(options.historyFile);
+  const errors = new ErrorLog(options.errorsFile);
   const saved = new SavedRooms(options.roomsFile, () => rooms.all());
   rooms.restore(saved.load());
 
@@ -71,26 +78,98 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       code,
       setTimeout(() => {
         botTimers.delete(code);
-        const room = rooms.get(code);
-        const seat = rooms.botToAct(code);
-        if (!room?.game || !seat) return;
-        const index = room.seats.indexOf(seat);
-        const choice = chooseBotAction(room.game, index);
-        if (!choice) return;
-        const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
-        let result = rooms.act(code, seat.playerId, action as PlayerAction);
-        // Coup refusé (cas non prévu par la stratégie) : le bot passe, ou ouvre avec sa plus petite carte.
-        if (!result.ok && room.game.phase === 'playing') {
-          const hand = room.game.players[index]!.hand;
-          result = rooms.act(code, seat.playerId, room.game.table ? { type: 'pass' } : { type: 'play', cardIds: [hand[0]!.id] });
+        try {
+          playBot(code);
+        } catch (error) {
+          errors.record('bot', error);
         }
-        if (!result.ok) console.error(`Bot bloqué dans le salon ${code} :`, result.error);
-        recordIfFinished(code);
-        void broadcast(code);
-        scheduleBots(code);
       }, botDelay),
     );
   }
+
+  /** Le bot dont c'est le tour joue (s'il est toujours de mise), puis on regarde si le suivant est aussi un bot. */
+  function playBot(code: string) {
+    const room = rooms.get(code);
+    const seat = rooms.botToAct(code);
+    if (!room?.game || !seat) return;
+    const index = room.seats.indexOf(seat);
+    const choice = chooseBotAction(room.game, index);
+    if (!choice) return;
+    const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
+    let result = rooms.act(code, seat.playerId, action as PlayerAction);
+    // Coup refusé (cas non prévu par la stratégie) : le bot passe, ou ouvre avec sa plus petite carte.
+    if (!result.ok && room.game.phase === 'playing') {
+      const hand = room.game.players[index]!.hand;
+      result = rooms.act(code, seat.playerId, room.game.table ? { type: 'pass' } : { type: 'play', cardIds: [hand[0]!.id] });
+    }
+    if (!result.ok) errors.record('bot', new Error(`Bot bloqué dans le salon ${code} : ${result.error}`));
+    recordIfFinished(code);
+    void broadcast(code);
+    scheduleBots(code);
+  }
+  const turnTimers = new Map<string, { turn: string; endsAt: number; timer: NodeJS.Timeout }>();
+
+  /**
+   * Minuteur de tour : quand un humain doit agir, il a `turnSeconds` secondes ; ensuite le serveur agit pour lui
+   * (il passe, ou joue comme un bot s'il doit ouvrir, couper ou rendre une carte). Renvoie le temps restant.
+   */
+  function updateTurnTimer(code: string): number | null {
+    const room = rooms.get(code);
+    const game = room?.game;
+    const seat = rooms.seatToAct(code);
+    const current = turnTimers.get(code);
+    // Le tour est identifié par la manche, la phase, le pli et le joueur : tant qu'il ne change pas, le temps court.
+    const turn = game && seat ? `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` : '';
+    const active = !!room?.turnSeconds && !!seat && !seat.bot && !rooms.isAbandoned(code);
+    if (!active) {
+      clearTimeout(current?.timer);
+      turnTimers.delete(code);
+      return null;
+    }
+    if (current?.turn === turn) return Math.max(0, current.endsAt - Date.now());
+    clearTimeout(current?.timer);
+    const delay = room.turnSeconds! * (options.turnSecondMs ?? 1000);
+    const timer = setTimeout(() => {
+      turnTimers.delete(code);
+      try {
+        timeUp(code, turn);
+      } catch (error) {
+        errors.record('minuteur', error);
+      }
+    }, delay);
+    turnTimers.set(code, { turn, endsAt: Date.now() + delay, timer });
+    return delay;
+  }
+
+  /** Temps écoulé : le serveur joue à la place du joueur, au plus simple. */
+  function timeUp(code: string, turn: string) {
+    const room = rooms.get(code);
+    const seat = rooms.seatToAct(code);
+    const game = room?.game;
+    if (!room || !game || !seat) return;
+    if (`${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` !== turn) return;
+    const index = room.seats.indexOf(seat);
+    let action: PlayerAction | null = null;
+    if (game.phase === 'playing' && game.table) {
+      action = { type: 'pass' };
+    } else {
+      const choice = chooseBotAction(game, index);
+      if (choice && choice.type !== 'nextRound') {
+        const { playerIndex: _index, ...rest } = choice;
+        action = rest as PlayerAction;
+      }
+    }
+    if (!action) return;
+    const result = rooms.act(code, seat.playerId, action);
+    if (!result.ok) {
+      errors.record('minuteur', new Error(`Coup refusé dans le salon ${code} : ${result.error}`));
+      return;
+    }
+    recordIfFinished(code);
+    void broadcast(code);
+    scheduleBots(code);
+  }
+
   const cleanupTimers = new Map<string, NodeJS.Timeout>();
   const abandonDelay = options.abandonDelayMs ?? ABANDONED_ROOM_DELAY_MS;
 
@@ -99,7 +178,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     saved.schedule();
     const room = rooms.get(code);
     if (!room) return;
-    const roomView = rooms.roomView(room);
+    const turnRemainingMs = updateTurnTimer(code);
+    const roomView = { ...rooms.roomView(room), turnRemainingMs };
     for (const socket of await io.in(room.code).fetchSockets()) {
       socket.emit('room:state', roomView);
       const gameView = rooms.gameView(room, socket.data.playerId!);
@@ -132,7 +212,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         const first = args[0];
         const payload: Payload = first && typeof first === 'object' && !Array.isArray(first) ? (first as Payload) : {};
         const fail = (error: unknown) => {
-          console.error(`Erreur sur l'événement ${event} :`, error);
+          errors.record(`événement ${event}`, error);
           try {
             ack({ ok: false, error: 'serverError' });
           } catch {
@@ -199,7 +279,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
-      handle(ack, (code, playerId) => rooms.start(code, playerId, { targetScore: Number(payload.targetScore) })),
+      handle(ack, (code, playerId) =>
+        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
+      ),
     );
     on('game:play', (payload, ack) =>
       act({ type: 'play', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
@@ -209,6 +291,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     on('stats:get', (_payload, ack) => ack({ ok: true, leaderboard: history.leaderboard(), recent: history.recent() }));
+    on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 
     socket.on('disconnect', () => {
       const { code, playerId } = socket.data;
@@ -226,6 +309,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     scheduleBots(room.code);
   });
 
-  io.engine.on('close', () => cleanupTimers.forEach(clearTimeout));
-  return { http, io, rooms, history, saveRooms: () => saved.saveNow() };
+  io.engine.on('close', () => {
+    cleanupTimers.forEach(clearTimeout);
+    botTimers.forEach(clearTimeout);
+    turnTimers.forEach((t) => clearTimeout(t.timer));
+  });
+  return { http, io, rooms, history, errors, saveRooms: () => saved.saveNow() };
 }

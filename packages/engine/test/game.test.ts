@@ -319,3 +319,14 @@ describe('partie complète simulée', () => {
     expect(state.winners.length).toBeGreaterThan(0);
   });
 });
+
+describe('statistiques de la partie', () => {
+  it('compte les manches gagnées, les gangs posés et la pire manche', () => {
+    let state = withHands([['g5', 'y5', 'r5', 'g5'], ['g2', 'g3'], ['y2', 'y3']]);
+    const result = applyAction(state, { type: 'play', playerIndex: 0, cardIds: state.players[0]!.hand.map((c) => c.id) });
+    if (!result.ok) throw new Error(result.error);
+    state = result.state;
+    expect(state.stats![0]).toEqual({ roundsWon: 1, gangs: 1, worstRound: 0 });
+    expect(state.stats![1]!.worstRound).toBe(2);
+  });
+});

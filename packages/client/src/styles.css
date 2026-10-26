@@ -339,6 +339,78 @@ input {
 .ranking .stat {
   font-size: 0.85rem;
 }
+.ranking button.who {
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.leaderboard .small,
+.profile .small {
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem;
+}
+
+/* Fiche d'un joueur */
+.profile {
+  position: relative;
+  text-align: left;
+}
+.profile h2 {
+  text-align: center;
+}
+.profile h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0.3rem 0 0;
+}
+.profile .close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  min-height: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.1rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.5rem;
+}
+.profile-stat {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: 10px;
+  background: #f4eedf;
+  text-align: center;
+}
+.profile-stat strong {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+.profile-stat span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.profile-game {
+  grid-template-columns: auto 1fr;
+  column-gap: 0.8rem;
+}
 .recent li {
   display: grid;
   gap: 0.1rem;
@@ -660,6 +732,41 @@ input {
   padding: 0.6rem clamp(0.6rem, 1.5vw, 1.1rem) 0.75rem;
   border: 2px solid transparent;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.my-area {
+  position: relative;
+}
+/* Minuteur de tour : barre qui se vide en haut de la zone du joueur */
+.turn-timer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.turn-timer-fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.25s linear, background-color 0.3s ease;
+}
+.turn-timer-fill.urgent {
+  background: #e5533d;
+}
+.countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.countdown.urgent {
+  background: #e5533d;
+  color: #fff;
+  animation: blink 1s ease-in-out infinite;
 }
 .my-area.active {
   border-color: var(--gold);
@@ -1050,5 +1157,45 @@ input {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Animations : les cartes posées glissent depuis le joueur vers le centre, la main arrive carte par carte. */
+.fly-in {
+  animation: fly-in 0.38s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.fly-in.from-bottom {
+  --from: 0 32vh;
+}
+.fly-in.from-top {
+  --from: 0 -28vh;
+}
+.fly-in.from-left {
+  --from: -34vw 0;
+}
+.fly-in.from-right {
+  --from: 34vw 0;
+}
+@keyframes fly-in {
+  from {
+    translate: var(--from);
+    scale: 0.7;
+    opacity: 0.4;
+  }
+}
+.hand.dealing .card {
+  animation: deal 0.32s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes deal {
+  from {
+    translate: 0 -45vh;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fly-in,
+  .hand.dealing .card {
+    animation: none;
   }
 }

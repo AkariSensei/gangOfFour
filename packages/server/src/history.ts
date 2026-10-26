@@ -5,7 +5,32 @@ import type { GameState } from '@gof/engine';
 export interface GameRecord {
   finishedAt: string;
   rounds: number;
-  players: { name: string; score: number; winner: boolean; bot?: boolean }[];
+  players: {
+    name: string;
+    score: number;
+    winner: boolean;
+    bot?: boolean;
+    /** Statistiques de la partie (absentes des parties enregistrées avant leur ajout). */
+    roundsWon?: number;
+    gangs?: number;
+    worstRound?: number;
+  }[];
+}
+
+/** Fiche d'un joueur : ses chiffres sur toutes ses parties. */
+export interface PlayerProfile {
+  name: string;
+  games: number;
+  wins: number;
+  averageScore: number;
+  /** Meilleur score final (le plus bas). */
+  bestScore: number;
+  roundsPlayed: number;
+  roundsWon: number;
+  gangs: number;
+  worstRound: number;
+  /** Dernières parties, de la plus récente à la plus ancienne. */
+  recent: { finishedAt: string; score: number; winner: boolean; rank: number; players: number }[];
 }
 
 export interface LeaderboardEntry {
@@ -40,6 +65,7 @@ export class GameHistory {
         score: p.score,
         winner: game.winners.includes(i),
         ...(bots.includes(i) ? { bot: true } : {}),
+        ...(game.stats?.[i] ?? {}),
       })),
     };
     this.records.push(record);
@@ -82,5 +108,36 @@ export class GameHistory {
       .map(({ total, ...e }) => ({ ...e, averageScore: Math.round(total / e.games) }))
       .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || a.averageScore - b.averageScore)
       .slice(0, limit);
+  }
+
+  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
+  profile(name: string): PlayerProfile | null {
+    const games = this.records.flatMap((record) => {
+      const me = record.players.find((p) => !p.bot && key(p.name) === key(name));
+      return me ? [{ record, me }] : [];
+    });
+    if (games.length === 0) return null;
+    const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
+    return {
+      name: games[games.length - 1]!.me.name,
+      games: games.length,
+      wins: games.filter((g) => g.me.winner).length,
+      averageScore: Math.round(sum((g) => g.me.score) / games.length),
+      bestScore: Math.min(...games.map((g) => g.me.score)),
+      roundsPlayed: sum((g) => g.record.rounds),
+      roundsWon: sum((g) => g.me.roundsWon ?? 0),
+      gangs: sum((g) => g.me.gangs ?? 0),
+      worstRound: Math.max(0, ...games.map((g) => g.me.worstRound ?? 0)),
+      recent: games
+        .slice(-8)
+        .reverse()
+        .map(({ record, me }) => ({
+          finishedAt: record.finishedAt,
+          score: me.score,
+          winner: me.winner,
+          rank: 1 + record.players.filter((p) => p.score < me.score).length,
+          players: record.players.length,
+        })),
+    };
   }
 }
