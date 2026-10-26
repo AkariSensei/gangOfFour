@@ -54,7 +54,8 @@ export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomEr
 
 function cleanName(name: unknown): string | null {
   if (typeof name !== 'string') return null;
-  const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
+  // Pas de caractères invisibles ou de contrôle, qui permettraient des pseudos vides ou trompeurs.
+  const trimmed = name.replace(/[\p{C}]/gu, '').trim().slice(0, MAX_NAME_LENGTH);
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -182,6 +183,10 @@ export class RoomManager {
 
   delete(code: string): void {
     this.rooms.delete(code.toUpperCase());
+  }
+
+  count(): number {
+    return this.rooms.size;
   }
 
   /** Tous les salons, pour les enregistrer sur disque. */
