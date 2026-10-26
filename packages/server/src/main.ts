@@ -7,12 +7,16 @@ const port = Number(process.env.PORT ?? 3001);
 const host = process.env.IP ?? '0.0.0.0';
 const corsOrigin = process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:5173'];
 
-// En production, le serveur sert aussi l'interface compilée par « npm run build ».
-const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url));
+const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+
+// Le serveur tourne soit compilé (dist/serveur/index.js, en production), soit depuis les sources
+// (packages/server/src/main.ts). Dans les deux cas, l'interface compilée est dans dist/client à la racine.
+const compiled = existsSync(here('../client/index.html'));
+const clientDist = compiled ? here('../client') : here('../../../dist/client');
 const staticDir = existsSync(clientDist) ? clientDist : undefined;
 
 // L'historique des parties est gardé hors du code, dans data/ à la racine du projet (modifiable via DATA_FILE).
-const historyFile = process.env.DATA_FILE ?? fileURLToPath(new URL('../../../data/parties.json', import.meta.url));
+const historyFile = process.env.DATA_FILE ?? here(compiled ? '../../data/parties.json' : '../../../data/parties.json');
 
 const { http } = createGameServer({ corsOrigin, staticDir, historyFile });
 http.listen(port, host, () => {
