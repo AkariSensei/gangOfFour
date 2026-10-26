@@ -1,0 +1,160 @@
+import { randomInt, randomUUID } from 'node:crypto';
+import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView } from '@gof/engine';
+import type { RoomError, RoomView, Session } from './protocol';
+
+export const MAX_PLAYERS = 4;
+export const MIN_PLAYERS = 3;
+const MAX_NAME_LENGTH = 20;
+/** Lettres sans ambiguïté à l'oral ou à l'écrit (pas de I, O, 0, 1). */
+const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+export interface Seat {
+  playerId: string;
+  token: string;
+  name: string;
+  connected: boolean;
+}
+
+export interface Room {
+  code: string;
+  hostId: string;
+  seats: Seat[];
+  game: GameState | null;
+}
+
+/** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
+export type PlayerAction =
+  | { type: 'play'; cardIds: string[] }
+  | { type: 'pass' }
+  | { type: 'giveCard'; cardId: string }
+  | { type: 'nextRound' };
+
+export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError };
+
+function cleanName(name: unknown): string | null {
+  if (typeof name !== 'string') return null;
+  const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Gère les salons en mémoire, sans rien savoir des sockets. */
+export class RoomManager {
+  private rooms = new Map<string, Room>();
+
+  get(code: string): Room | undefined {
+    return this.rooms.get(code.toUpperCase());
+  }
+
+  private newCode(): string {
+    let code: string;
+    do {
+      code = Array.from({ length: 4 }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join('');
+    } while (this.rooms.has(code));
+    return code;
+  }
+
+  private seat(room: Room, name: string): Session {
+    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true };
+    room.seats.push(seat);
+    return { code: room.code, playerId: seat.playerId, token: seat.token };
+  }
+
+  create(rawName: unknown): Result<Session> {
+    const name = cleanName(rawName);
+    if (!name) return { ok: false, error: 'invalidName' };
+    const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null };
+    const session = this.seat(room, name);
+    room.hostId = session.playerId;
+    this.rooms.set(room.code, room);
+    return { ok: true, ...session };
+  }
+
+  join(code: string, rawName: unknown): Result<Session> {
+    const name = cleanName(rawName);
+    if (!name) return { ok: false, error: 'invalidName' };
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
+    if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
+    return { ok: true, ...this.seat(room, name) };
+  }
+
+  rejoin(code: string, token: string): Result<Session> {
+    const room = this.get(code);
+    const seat = room?.seats.find((s) => s.token === token);
+    if (!room || !seat) return { ok: false, error: 'roomNotFound' };
+    seat.connected = true;
+    return { ok: true, code: room.code, playerId: seat.playerId, token };
+  }
+
+  /** Quitter le salon avant la partie libère le siège ; pendant la partie, le siège reste réservé. */
+  leave(code: string, playerId: string): void {
+    const room = this.get(code);
+    if (!room) return;
+    if (room.game) {
+      this.setConnected(code, playerId, false);
+      return;
+    }
+    room.seats = room.seats.filter((s) => s.playerId !== playerId);
+    if (room.seats.length === 0) {
+      this.rooms.delete(room.code);
+    } else if (room.hostId === playerId) {
+      room.hostId = room.seats[0]!.playerId;
+    }
+  }
+
+  setConnected(code: string, playerId: string, connected: boolean): void {
+    const seat = this.get(code)?.seats.find((s) => s.playerId === playerId);
+    if (seat) seat.connected = connected;
+  }
+
+  isAbandoned(code: string): boolean {
+    const room = this.get(code);
+    return !!room && room.seats.every((s) => !s.connected);
+  }
+
+  delete(code: string): void {
+    this.rooms.delete(code.toUpperCase());
+  }
+
+  start(code: string, playerId: string, seed = randomInt(2 ** 31)): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
+    if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
+    if (room.seats.length < MIN_PLAYERS) return { ok: false, error: 'notEnoughPlayers' };
+    room.game = createGame(
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      seed,
+    );
+    return { ok: true };
+  }
+
+  act(code: string, playerId: string, action: PlayerAction): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!room.game) return { ok: false, error: 'gameNotStarted' };
+    const playerIndex = room.seats.findIndex((s) => s.playerId === playerId);
+    if (playerIndex < 0) return { ok: false, error: 'notInRoom' };
+
+    const engineAction: Action = action.type === 'nextRound' ? action : { ...action, playerIndex };
+    const result = applyAction(room.game, engineAction);
+    if (!result.ok) return result;
+    room.game = result.state;
+    return { ok: true };
+  }
+
+  roomView(room: Room): RoomView {
+    return {
+      code: room.code,
+      hostId: room.hostId,
+      players: room.seats.map((s) => ({ id: s.playerId, name: s.name, connected: s.connected })),
+      started: room.game !== null,
+    };
+  }
+
+  gameView(room: Room, playerId: string) {
+    const index = room.seats.findIndex((s) => s.playerId === playerId);
+    return room.game && index >= 0 ? getPlayerView(room.game, index) : null;
+  }
+}

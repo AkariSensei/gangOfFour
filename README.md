@@ -7,7 +7,7 @@ Version web du jeu de cartes Gang of Four, jouable en ligne entre collègues (4 
 Un seul dépôt, en plusieurs paquets npm (workspaces) :
 
 - `packages/engine` : le moteur de jeu en TypeScript pur (cartes, combinaisons, tours, scores), sans interface.
-- `packages/server` *(à venir)* : serveur Node.js + Socket.IO qui fait autorité sur la partie.
+- `packages/server` : serveur Node.js + Socket.IO qui fait autorité sur la partie (salons, actions, reconnexion).
 - `packages/client` *(à venir)* : interface React + TypeScript.
 
 ## Commandes
@@ -16,7 +16,19 @@ Un seul dépôt, en plusieurs paquets npm (workspaces) :
 npm install
 npm test          # tests de tous les paquets
 npm run typecheck # vérification des types
+npm run demo      # partie complète entre 4 joueurs automatiques via le serveur (npm run demo -- 3 pour 3 joueurs)
+npm run dev:server # serveur en mode développement sur http://localhost:3001
 ```
+
+## Serveur
+
+Le client se connecte en Socket.IO. Toutes les commandes répondent par un accusé `{ ok: true }` ou `{ ok: false, error }`, et le serveur diffuse ensuite `room:state` (le salon) et `game:state` (la vue de la partie propre à chaque joueur, sans les mains des autres). Les types sont dans `packages/server/src/protocol.ts`.
+
+- `room:create { name }`, `room:join { code, name }` : renvoient `{ code, playerId, token }`. Le salon a un code de 4 lettres et accueille 3 ou 4 joueurs.
+- `room:rejoin { code, token }` : reprendre son siège après une déconnexion (le client garde le jeton).
+- `room:leave`, `game:start` (hôte uniquement), `game:play { cardIds }`, `game:pass`, `game:giveCard { cardId }`, `game:nextRound`.
+
+Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minutes. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules).
 
 ## Règles implémentées dans le moteur
 

@@ -1,0 +1,26 @@
+{
+  "name": "@gof/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/protocol.ts",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "demo": "tsx scripts/demo.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "socket.io-client": "^4.8.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@gof/engine": "*",
+    "socket.io": "^4.8.4",
+    "tsx": "^4.23.15"
+  }
+}
