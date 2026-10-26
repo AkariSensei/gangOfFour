@@ -309,9 +309,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
     on('room:create', (payload, ack) => {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      return allowed.ok ? enter(rooms.create(payload.name), ack) : ack(allowed);
+      return allowed.ok ? enter(rooms.create(payload.name, payload), ack) : ack(allowed);
     });
-    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name), ack));
+    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload), ack));
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();

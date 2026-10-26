@@ -1,6 +1,7 @@
 import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomView } from '../../server/src/protocol';
+import type { Look, RoomView } from '../../server/src/protocol';
+import { Avatar } from './Avatar';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
@@ -12,15 +13,6 @@ type SortMode = 'value' | 'color';
 /** Place les adversaires autour de la table : le suivant (sens antihoraire) à droite, puis en face, puis à gauche. */
 function seatsFor(count: number): Seat[] {
   return count === 3 ? ['right', 'left'] : ['right', 'top', 'left'];
-}
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 /** Dernier geste de chaque joueur dans le pli en cours, pour afficher « Passe » à côté de lui. */
@@ -36,6 +28,7 @@ function Opponent({
   seat,
   connected,
   bot,
+  look,
   move,
 }: {
   game: PlayerView;
@@ -43,6 +36,7 @@ function Opponent({
   seat: Seat;
   connected: boolean;
   bot: boolean;
+  look?: Look;
   move?: TrickEntry;
 }) {
   const p = game.players[index]!;
@@ -50,9 +44,7 @@ function Opponent({
   const giving = game.phase === 'exchange' && game.exchange?.winnerIndex === index;
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
-      <div className="avatar" aria-hidden>
-        {bot ? '🤖' : initials(p.name)}
-      </div>
+      <Avatar name={p.name} look={look} bot={bot} />
       <div className="opponent-info">
         <div className="opponent-name">
           {p.name}
@@ -631,6 +623,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             seat={seat}
             connected={room.players[index]?.connected ?? true}
             bot={room.players[index]?.bot ?? false}
+            look={room.players[index]}
             move={moves.get(index)}
           />
         ))}

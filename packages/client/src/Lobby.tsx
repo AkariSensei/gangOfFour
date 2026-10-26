@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RoomView, Session } from '../../server/src/protocol';
+import { Avatar } from './Avatar';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -57,9 +58,7 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
         <ul className="player-list">
           {room.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
-              <span className="avatar" aria-hidden>
-                {p.bot ? '🤖' : p.name.slice(0, 2).toUpperCase()}
-              </span>
+              <Avatar name={p.name} look={p} bot={p.bot} />
               {p.name}
               {p.bot && <span className="tag">bot</span>}
               {p.id === room.hostId && <span className="tag">hôte</span>}

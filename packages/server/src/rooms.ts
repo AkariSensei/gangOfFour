@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView } from '@gof/engine';
-import type { RoomError, RoomView, Session } from './protocol';
+import { AVATARS, COLORS, type Look, type RoomError, type RoomView, type Session } from './protocol';
 
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 3;
@@ -26,6 +26,8 @@ export interface Seat {
   connected: boolean;
   /** Siège tenu par l'ordinateur, ajouté par l'hôte pour compléter la table. */
   bot?: boolean;
+  avatar?: string;
+  color?: string;
 }
 
 /** Noms donnés aux bots, dans l'ordre. */
@@ -59,6 +61,15 @@ function cleanName(name: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** Garde seulement un avatar et une couleur de la liste proposée. */
+function cleanLook(look: unknown): Look {
+  const { avatar, color } = (look && typeof look === 'object' ? look : {}) as Record<string, unknown>;
+  return {
+    ...(typeof avatar === 'string' && AVATARS.includes(avatar) ? { avatar } : {}),
+    ...(typeof color === 'string' && COLORS.includes(color) ? { color } : {}),
+  };
+}
+
 /** Gère les salons en mémoire, sans rien savoir des sockets. */
 export class RoomManager {
   private rooms = new Map<string, Room>();
@@ -75,30 +86,30 @@ export class RoomManager {
     return code;
   }
 
-  private seat(room: Room, name: string): Session {
-    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true };
+  private seat(room: Room, name: string, look: unknown): Session {
+    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look) };
     room.seats.push(seat);
     return { code: room.code, playerId: seat.playerId, token: seat.token };
   }
 
-  create(rawName: unknown): Result<Session> {
+  create(rawName: unknown, look?: unknown): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null };
-    const session = this.seat(room, name);
+    const session = this.seat(room, name, look);
     room.hostId = session.playerId;
     this.rooms.set(room.code, room);
     return { ok: true, ...session };
   }
 
-  join(code: string, rawName: unknown): Result<Session> {
+  join(code: string, rawName: unknown, look?: unknown): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
     if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
-    return { ok: true, ...this.seat(room, name) };
+    return { ok: true, ...this.seat(room, name, look) };
   }
 
   rejoin(code: string, token: string): Result<Session> {
@@ -235,7 +246,13 @@ export class RoomManager {
     return {
       code: room.code,
       hostId: room.hostId,
-      players: room.seats.map((s) => ({ id: s.playerId, name: s.name, connected: s.connected, bot: s.bot ?? false })),
+      players: room.seats.map((s) => ({
+        id: s.playerId,
+        name: s.name,
+        connected: s.connected,
+        bot: s.bot ?? false,
+        ...cleanLook(s),
+      })),
       started: room.game !== null,
       turnSeconds: room.turnSeconds ?? 0,
       turnRemainingMs: null,
