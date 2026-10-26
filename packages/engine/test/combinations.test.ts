@@ -70,6 +70,22 @@ describe('canBeat', () => {
     expect(canBeat(combo('gP', 'yP'), combo('r10', 'y10'))).toBe(true);
   });
 
+  it('à couleur la plus forte égale, départage par la couleur suivante', () => {
+    // Le cas signalé en partie : 10 rouge + jaune sur 10 vert + rouge.
+    expect(canBeat(combo('r10', 'y10'), combo('g10', 'r10'))).toBe(true);
+    expect(canBeat(combo('g10', 'r10'), combo('r10', 'y10'))).toBe(false);
+    expect(canBeat(combo('r4', 'y4', 'y4'), combo('r4', 'y4', 'g4'))).toBe(true);
+    expect(canBeat(combo('r4', 'r4', 'g4'), combo('r4', 'y4', 'y4'))).toBe(true);
+    // Mêmes valeurs et mêmes couleurs : ce n'est pas plus fort.
+    expect(canBeat(combo('g10', 'r10'), combo('r10', 'g10'))).toBe(false);
+  });
+
+  it('départage les suites de même hauteur par la couleur de la plus haute carte, puis des suivantes', () => {
+    expect(canBeat(combo('g3', 'g4', 'y5', 'g6', 'r7'), combo('r3', 'r4', 'r5', 'r6', 'y7'))).toBe(true);
+    expect(canBeat(combo('g3', 'g4', 'g5', 'y6', 'r7'), combo('r3', 'r4', 'r5', 'g6', 'r7'))).toBe(true);
+    expect(canBeat(combo('r3', 'r4', 'r5', 'g6', 'r7'), combo('g3', 'g4', 'g5', 'y6', 'r7'))).toBe(false);
+  });
+
   it('suit la hiérarchie des combinaisons de cinq cartes', () => {
     const straight = combo('g6', 'y7', 'r8', 'g9', 'g10');
     const flush = combo('g1', 'g3', 'g5', 'g7', 'g9');
