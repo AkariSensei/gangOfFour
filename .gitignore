@@ -3,5 +3,4 @@ dist/
 coverage/
 *.log
 .DS_Store
-packages/client/dist
 data/

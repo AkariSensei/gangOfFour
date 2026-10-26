@@ -19,7 +19,7 @@ npm test          # tests de tous les paquets
 npm run typecheck # vérification des types
 npm run demo      # partie complète entre 4 joueurs automatiques via le serveur (npm run demo -- 3 pour 3 joueurs)
 npm run dev:server # serveur en mode développement sur http://localhost:3001
-npm run build && npm start # version de production : le serveur sert aussi l'interface sur http://localhost:3001
+npm run build && npm start # version de production (dossier dist) : le serveur sert aussi l'interface sur http://localhost:3001
 ```
 
 Mise en ligne : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).

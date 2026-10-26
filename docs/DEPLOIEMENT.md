@@ -1,59 +1,68 @@
 # Mettre le jeu en ligne sur alwaysData
 
-Le serveur Node sert à la fois le jeu (Socket.IO) et l'interface compilée : il n'y a qu'une seule application à déployer.
+Le serveur Node sert à la fois le jeu (Socket.IO) et l'interface : il n'y a qu'une seule application à déployer.
+`npm run build` produit tout dans le dossier `dist` (environ 1 Mo) :
 
-## 1. Préparer le site
+- `dist/client` : l'interface compilée ;
+- `dist/serveur/main.js` : le serveur en un seul fichier, qui emporte ses bibliothèques.
 
-Dans l'administration alwaysData :
+L'hébergement n'a donc besoin ni de `node_modules` ni du code source : l'offre gratuite d'alwaysData suffit largement.
 
-1. **Environnement → Node.js** (ou dans le formulaire du site) : choisis une version **Node.js 20 ou plus récente**.
-2. **Web → Sites → Ajouter un site** :
-   - **Adresses** : `ton-compte.alwaysdata.net` (ou ton domaine).
-   - **Type** : **Node.js**.
-   - **Commande** : `npm start`
-   - **Répertoire de travail** : `gangOfFour` (le dossier cloné à l'étape 2).
-   - **Environnement** (variables, une par ligne) : `NODE_ENV=production`
-   - Laisse alwaysData fournir `IP` et `PORT` : le serveur les lit déjà.
-3. Enregistre. Le site ne démarrera correctement qu'après l'étape 2.
+Une fois réglé, **chaque fusion sur `main` met le jeu en ligne toute seule** (comme pour le blackjack).
 
-## 2. Récupérer et compiler le code (en SSH)
+## 1. Le compte alwaysData
 
-Les accès SSH sont dans **Accès distant → SSH** (active la connexion par mot de passe si besoin). Puis :
+Un compte alwaysData par jeu : depuis ton profil, ajoute un compte (offre **Free**) nommé par exemple `gangoffour`.
+Son nom donne l'adresse du jeu : `https://gangoffour.alwaysdata.net`. Dans la suite, remplace `gangoffour` par le nom choisi.
 
-```bash
-ssh ton-compte@ssh-ton-compte.alwaysdata.net
+Règle le mot de passe SSH dans **Accès distant → SSH** si ce n'est pas déjà fait.
 
-# Le dépôt est privé : utilise un jeton GitHub (Settings → Developer settings →
-# Personal access tokens → Fine-grained, accès « Contents: Read » au dépôt gangOfFour).
-git clone https://<jeton>@github.com/AkariSensei/gangOfFour.git
-cd gangOfFour
-npm ci --include=dev
-npm run build
-```
+## 2. Créer le site
 
-`npm run build` crée `packages/client/dist`, que le serveur sert automatiquement.
+Menu **Web → Sites → Ajouter un site** :
 
-## 3. Démarrer et vérifier
+| Champ | Valeur |
+| --- | --- |
+| Adresses | `gangoffour.alwaysdata.net` |
+| Type | **Node.js** |
+| Commande | `node dist/serveur/main.js` |
+| Répertoire de travail | `gangoffour` |
+| Version de Node.js | 22 (ou plus récente) |
 
-1. Dans **Web → Sites**, redémarre le site (icône de redémarrage).
-2. Ouvre `https://ton-compte.alwaysdata.net` : l'accueil du jeu doit s'afficher.
-3. En cas de souci, les journaux sont dans `~/admin/logs/sites/` (ou via **Web → Sites → Journaux**). Le serveur écrit au démarrage « Interface servie depuis … » si la compilation a bien été trouvée.
+alwaysData donne lui-même l'adresse et le port d'écoute (variables `IP` et `PORT`) : rien d'autre à régler.
+Le site ne répondra qu'après le premier envoi du jeu (étape 4).
 
-## Mettre à jour après une modification
+## 3. Brancher GitHub (une seule fois)
 
-```bash
-ssh ton-compte@ssh-ton-compte.alwaysdata.net
-cd gangOfFour
-git pull
-npm ci --include=dev
-npm run build
-```
+Sur GitHub, dépôt gangOfFour → **Settings → Secrets and variables → Actions** :
 
-Puis redémarre le site dans l'administration.
+- onglet **Variables** → **New repository variable** :
+  - `ALWAYSDATA_COMPTE` : le nom du compte alwaysData (par exemple `gangoffour`).
+- onglet **Secrets** → **New repository secret** :
+  - `ALWAYSDATA_SSH_PASSWORD` : le mot de passe SSH du compte ;
+  - `ALWAYSDATA_API_KEY` : une clé d'API alwaysData, créée dans **Profil → Gestion des tokens** (sans restriction
+    d'adresse IP). La clé déjà utilisée pour le blackjack marche aussi si les deux comptes sont dans le même profil.
+
+## 4. Premier envoi
+
+Onglet **Actions → CI → Run workflow** sur `main`. Le job `deploiement` construit le jeu, l'envoie dans
+`~/gangoffour/dist` sur alwaysData et redémarre le site. Ouvre ensuite `https://gangoffour.alwaysdata.net`.
+
+## Mettre à jour
+
+Rien à faire : à chaque fusion sur `main`, les tests tournent, puis le job `deploiement` remet le jeu en ligne.
+Sans la variable et les deux secrets, le job affiche juste un avertissement et ne met rien en ligne.
+
+**À la main** (si GitHub est en panne) : `npm ci && npm run build` sur ton PC, envoie le dossier `dist` par SFTP
+dans `gangoffour/` (en remplaçant l'ancien), puis **Web → Sites → Redémarrer**.
 
 ## Bon à savoir
 
-- Les parties en cours sont gardées en mémoire : un redémarrage du site les coupe.
-- Les parties terminées sont enregistrées dans `~/gangOfFour/data/parties.json` (le classement du bureau). Ce fichier n'est pas suivi par Git : `git pull` ne l'écrase pas.
+- Les parties en cours sont gardées en mémoire : une mise à jour (redémarrage du site) les coupe.
+- Les parties terminées sont enregistrées dans `~/gangoffour/data/parties.json` (le classement du bureau).
+  Une mise à jour ne remplace que `dist` : le classement est conservé.
 - Un salon dont tous les joueurs sont partis est supprimé au bout de 10 minutes.
-- Si l'interface et le serveur sont un jour séparés sur deux adresses, ajoute `CORS_ORIGIN=https://adresse-de-l-interface` dans l'environnement du site.
+- **Journaux** : dossier `admin/logs/sites` (en SFTP) ou **Web → Sites → Journaux**. Au démarrage, le serveur écrit
+  « Interface servie depuis … » si l'interface a bien été trouvée.
+- Si l'interface et le serveur sont un jour séparés sur deux adresses, ajoute `CORS_ORIGIN=https://adresse-de-l-interface`
+  dans l'environnement du site.

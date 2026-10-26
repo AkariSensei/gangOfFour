@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,3 +16,62 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run build
+
+  # Mise en ligne automatique : après chaque fusion sur main (tests verts), on construit le jeu,
+  # on l'envoie sur alwaysData et on redémarre le site. Aussi à la main : onglet Actions → CI → Run workflow.
+  # Il faut une variable ALWAYSDATA_COMPTE et deux secrets, ALWAYSDATA_SSH_PASSWORD et ALWAYSDATA_API_KEY
+  # (voir docs/DEPLOIEMENT.md).
+  deploiement:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploiement
+    env:
+      COMPTE: ${{ vars.ALWAYSDATA_COMPTE }}
+      SSHPASS: ${{ secrets.ALWAYSDATA_SSH_PASSWORD }}
+      CLE_API: ${{ secrets.ALWAYSDATA_API_KEY }}
+    steps:
+      - name: Réglages présents ?
+        id: reglages
+        run: |
+          if [ -z "$COMPTE" ] || [ -z "$SSHPASS" ] || [ -z "$CLE_API" ]; then
+            echo "::warning::Mise en ligne sautée : ajoute la variable ALWAYSDATA_COMPTE et les secrets ALWAYSDATA_SSH_PASSWORD et ALWAYSDATA_API_KEY (docs/DEPLOIEMENT.md)"
+            echo "ok=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=oui" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.reglages.outputs.ok == 'oui'
+        uses: actions/checkout@v4
+      - if: steps.reglages.outputs.ok == 'oui'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.reglages.outputs.ok == 'oui'
+        run: npm ci && npm run build
+      - name: Envoi sur alwaysData
+        if: steps.reglages.outputs.ok == 'oui'
+        run: |
+          sudo apt-get install -y -qq sshpass > /dev/null
+          # Seul gangoffour/dist est remplacé : l'historique des parties (gangoffour/data) n'est pas touché.
+          sshpass -e rsync -az --delete --rsync-path="mkdir -p gangoffour && rsync" \
+            -e "ssh -o StrictHostKeyChecking=accept-new" \
+            dist/ "$COMPTE@ssh-$COMPTE.alwaysdata.net:gangoffour/dist/"
+      - name: Redémarrage du site
+        if: steps.reglages.outputs.ok == 'oui'
+        run: |
+          API=https://api.alwaysdata.com/v1
+          AUTH="$CLE_API account=$COMPTE:"
+          SITE="$COMPTE.alwaysdata.net"
+          # Le site dont l'adresse est $SITE (sinon le premier site du compte).
+          ID=$(curl -fsS -u "$AUTH" "$API/site/" | jq -r --arg s "$SITE" 'map(select((.addresses // []) | index($s))) + . | .[0].id')
+          echo "Site n°$ID"
+          curl -fsS -X POST -u "$AUTH" "$API/site/$ID/restart/"
+          # On attend que le jeu réponde à nouveau.
+          for i in $(seq 1 20); do
+            if curl -fsS -o /dev/null "https://$SITE/"; then echo "Le site répond"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::Le site ne répond pas après le redémarrage"
+          exit 1

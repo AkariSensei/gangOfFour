@@ -22,7 +22,7 @@ function cacheControl(path: string): string {
   return 'no-cache';
 }
 
-/** Sert l'interface compilée (packages/client/dist), avec index.html pour toute route inconnue. */
+/** Sert l'interface compilée (dist/client), avec index.html pour toute route inconnue. */
 export function createStaticHandler(rootDir: string) {
   const root = resolve(rootDir);
 
