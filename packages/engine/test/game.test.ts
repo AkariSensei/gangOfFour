@@ -21,7 +21,7 @@ function apply(state: GameState, action: Action): GameState {
   return result.state;
 }
 
-/** Partie avec des mains choisies, le joueur 0 ayant la main ; les autres cartes sont déjà jouées. */
+/** Partie avec des mains choisies, le joueur 0 ayant la main et le tour allant de 0 à 1, 2… ; les autres cartes sont déjà jouées. */
 function withHands(hands: string[][], overrides: Partial<GameState> = {}): GameState {
   const state = createGame(players.slice(0, hands.length), 1);
   state.players.forEach((p, i) => (p.hand = cards(...hands[i]!)));
@@ -29,7 +29,7 @@ function withHands(hands: string[][], overrides: Partial<GameState> = {}): GameS
   for (const card of state.players.flatMap((p) => p.hand)) {
     pile.splice(pile.findIndex((c) => c.color === card.color && c.value === card.value), 1);
   }
-  return { ...state, pile, dummy: [], currentPlayer: 0, mustPlayMultiOne: false, ...overrides };
+  return { ...state, pile, dummy: [], direction: 1, currentPlayer: 0, mustPlayMultiOne: false, ...overrides };
 }
 
 const ids = (state: GameState, player: number, ...positions: number[]) =>
@@ -39,6 +39,8 @@ describe('createGame', () => {
   it('distribue 16 cartes à chacun et donne la main au détenteur du 1 multicolore', () => {
     const state = createGame(players, 42);
     expect(state.players.map((p) => p.hand.length)).toEqual([16, 16, 16, 16]);
+    // Première manche en sens horaire.
+    expect(state.direction).toBe(-1);
     expect(state.players[state.currentPlayer]!.hand.some((c) => c.id === MULTI_ONE_ID)).toBe(true);
   });
 
@@ -62,7 +64,7 @@ describe('createGame', () => {
       const state = createGame(players.slice(0, 3), seed);
       expect(state.players.map((p) => p.hand.length)).toEqual([16, 16, 16]);
       const holder = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
-      expect(state.currentPlayer).toBe(holder >= 0 ? holder : 1);
+      expect(state.currentPlayer).toBe(holder >= 0 ? holder : 2);
       expect(state.mustPlayMultiOne).toBe(holder >= 0);
     }
   });
@@ -119,13 +121,29 @@ describe('déroulement des plis', () => {
     ]);
     state = apply(state, { type: 'pass', playerIndex: 3 });
     state = apply(state, { type: 'pass', playerIndex: 0 });
-    state = apply(state, { type: 'pass', playerIndex: 1 });
+    // Le joueur 1 a déjà passé : il ne rejoue pas, le pli est fini.
     // Le pli terminé reste visible jusqu'à ce que le suivant soit ouvert.
     expect(state.table).toBeNull();
-    expect(state.trick).toHaveLength(6);
+    expect(state.currentPlayer).toBe(2);
+    expect(state.trick).toHaveLength(5);
     state = apply(state, { type: 'play', playerIndex: 2, cardIds: ids(state, 2, 0) });
     expect(state.trick).toHaveLength(1);
     expect(getPlayerView(state, 1).trick).toEqual(state.trick);
+  });
+
+  it("saute jusqu'à la fin du pli un joueur qui a passé", () => {
+    let state = withHands(hands);
+    state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });
+    state = apply(state, { type: 'pass', playerIndex: 1 });
+    state = apply(state, { type: 'play', playerIndex: 2, cardIds: ids(state, 2, 0) });
+    state = apply(state, { type: 'play', playerIndex: 3, cardIds: ids(state, 3, 0) });
+    state = apply(state, { type: 'pass', playerIndex: 0 });
+    expect(state.currentPlayer).toBe(2);
+    expect(applyAction(state, { type: 'pass', playerIndex: 1 })).toEqual({ ok: false, error: 'notYourTurn' });
+    state = apply(state, { type: 'pass', playerIndex: 2 });
+    // Tous les autres ont passé : le joueur 3 remporte le pli et rouvre.
+    expect(state.table).toBeNull();
+    expect(state.currentPlayer).toBe(3);
   });
 
   it('tourne dans l\'autre sens quand la direction est inversée', () => {
@@ -145,7 +163,7 @@ describe('déroulement des plis', () => {
 describe('règle « Carte ! »', () => {
   it("oblige à jouer sa plus forte carte seule si le joueur suivant n'a plus qu'une carte", () => {
     const table = { playerIndex: 3, combination: analyzeCombination(cards('y2'))! };
-    const state = withHands([['g5', 'g9', 'r9'], ['r3'], ['g6'], ['y7', 'y8']], { table, passes: 0 });
+    const state = withHands([['g5', 'g9', 'r9'], ['r3'], ['g6'], ['y7', 'y8']], { table });
     expect(applyAction(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) })).toEqual({
       ok: false,
       error: 'mustPlayHighestSingle',
@@ -185,7 +203,7 @@ describe('fin de manche', () => {
     state = apply(state, { type: 'nextRound' });
     state = apply(state, { type: 'cut', playerIndex: 0, position: 30 });
     expect(state.phase).toBe('exchange');
-    expect(state.direction).toBe(-1);
+    expect(state.direction).toBe(1);
     expect(state.players[0]!.hand).toHaveLength(17);
     expect(state.players[2]!.hand).toHaveLength(15);
 

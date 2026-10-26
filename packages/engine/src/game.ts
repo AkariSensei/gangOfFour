@@ -63,13 +63,13 @@ export interface GameState {
   dummy: Card[];
   /** Paquet ramassé en fin de manche (le dessus en premier), en attente de la coupe. Jamais montré aux joueurs. */
   deck: Card[];
-  /** Sens de jeu de la manche : +1 (antihoraire, première manche) ou -1, alterné à chaque manche. */
+  /** Sens de jeu de la manche : -1 (horaire, vers la gauche, première manche) ou +1, alterné à chaque manche. */
   direction: 1 | -1;
   currentPlayer: number;
   /** Dernière combinaison posée sur la table dans le pli en cours. */
   table: TablePlay | null;
-  /** Nombre de passes consécutives depuis la dernière combinaison posée. */
-  passes: number;
+  /** Joueurs qui ont passé dans le pli en cours : ils n'y rejouent plus jusqu'à sa fin. */
+  passed: boolean[];
   /** Coups du pli en cours (ou du dernier pli terminé, jusqu'à l'ouverture du suivant). */
   trick: TrickEntry[];
   /** Le prochain coup doit contenir le 1 multicolore (ouverture de la première manche). */
@@ -162,10 +162,10 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     pile: [],
     dummy: [],
     deck: [],
-    direction: 1,
+    direction: -1,
     currentPlayer: 0,
     table: null,
-    passes: 0,
+    passed: players.map(() => false),
     trick: [],
     mustPlayMultiOne: false,
     exchange: null,
@@ -177,7 +177,7 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
   // Le détenteur du 1 multicolore ouvre avec ce 1. À trois, s'il est dans la main morte, le voisin du donneur ouvre.
   const holder = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
   state.mustPlayMultiOne = holder >= 0;
-  state.currentPlayer = holder >= 0 ? holder : step(state, 0);
+  state.currentPlayer = holder >= 0 ? holder : leftOf(state, 0);
   return state;
 }
 
@@ -211,30 +211,36 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
   if (!state.table) state.trick = [];
   state.trick.push({ playerIndex, combination });
   state.table = { playerIndex, combination };
-  state.passes = 0;
   state.mustPlayMultiOne = false;
 
   if (player.hand.length === 0) {
     endRound(state, playerIndex);
   } else {
-    state.currentPlayer = step(state, playerIndex);
+    nextTurn(state, playerIndex);
   }
   return { ok: true, state };
 }
 
 function pass(state: GameState, playerIndex: number): ActionResult {
   if (!state.table) return { ok: false, error: 'cannotPassWhenLeading' };
-  state.passes += 1;
+  state.passed[playerIndex] = true;
   state.trick.push({ playerIndex, combination: null });
-  if (state.passes >= state.players.length - 1) {
-    // Tout le monde a passé : celui qui a posé la dernière combinaison ouvre un nouveau pli.
-    state.currentPlayer = state.table.playerIndex;
-    state.table = null;
-    state.passes = 0;
-  } else {
-    state.currentPlayer = step(state, playerIndex);
-  }
+  nextTurn(state, playerIndex);
   return { ok: true, state };
+}
+
+/**
+ * Donne la main au joueur suivant qui n'a pas passé dans ce pli. Si c'est celui qui a posé la dernière
+ * combinaison, tous les autres ont passé : il remporte le pli et en ouvre un nouveau.
+ */
+function nextTurn(state: GameState, from: number): void {
+  let next = step(state, from);
+  while (state.passed[next] && next !== from) next = step(state, next);
+  if (next === state.table!.playerIndex) {
+    state.table = null;
+    state.passed = state.players.map(() => false);
+  }
+  state.currentPlayer = next;
 }
 
 /**
@@ -260,7 +266,7 @@ function endRound(state: GameState, winnerIndex: number): void {
 
   state.lastRound = { winnerIndex, loserIndex: findLoser(state, winnerIndex), penalties };
   state.table = null;
-  state.passes = 0;
+  state.passed = state.players.map(() => false);
 
   if (state.players.some((p) => p.score >= state.config.targetScore)) {
     const best = Math.min(...state.players.map((p) => p.score));
@@ -292,7 +298,7 @@ function cut(state: GameState, position: number): ActionResult {
   const deck = [...state.deck.slice(position), ...state.deck.slice(0, position)];
   state.deck = [];
   state.round += 1;
-  state.direction = state.round % 2 === 1 ? 1 : -1;
+  state.direction = state.round % 2 === 1 ? -1 : 1;
   state.dealer = leftOf(state, state.dealer);
   deal(state, deck);
 
