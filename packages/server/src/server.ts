@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { ErrorLog } from './errors';
@@ -13,11 +14,17 @@ import { type PlayerAction, RoomManager, type Result } from './rooms';
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
 export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
+/** Chat : longueur maximale d'un message, et nombre de messages par connexion sur la fenêtre donnée. */
+const CHAT_MAX_LENGTH = 200;
+const CHAT_MESSAGES = 6;
+const CHAT_WINDOW_MS = 10 * 1000;
 
 interface SocketData {
   code?: string;
   playerId?: string;
   ip?: string;
+  /** Regarde la partie de `code` sans y jouer. */
+  spectator?: boolean;
 }
 
 export interface GameServer {
@@ -188,10 +195,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (!room) return;
     const turnRemainingMs = updateTurnTimer(code);
-    const roomView = { ...rooms.roomView(room), turnRemainingMs };
-    for (const socket of await io.in(room.code).fetchSockets()) {
+    const sockets = await io.in(room.code).fetchSockets();
+    const spectators = sockets.filter((s) => s.data.spectator).length;
+    const roomView = { ...rooms.roomView(room), turnRemainingMs, spectators };
+    for (const socket of sockets) {
       socket.emit('room:state', roomView);
-      const gameView = rooms.gameView(room, socket.data.playerId!);
+      const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
       if (gameView) socket.emit('game:state', gameView);
     }
   }
@@ -214,6 +223,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const roomsPerIp = new RateLimiter(limits.roomsPerIp, limits.windowMs);
   const roomsPerSocket = new RateLimiter(limits.roomsPerSocket, limits.windowMs);
   const openSockets = new Map<string, number>();
+  const chatPerSocket = new RateLimiter(CHAT_MESSAGES, CHAT_WINDOW_MS);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
   io.use((socket, next) => {
@@ -279,7 +289,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     }
 
     function leaveCurrent() {
-      const { code, playerId } = socket.data;
+      const { code, playerId, spectator } = socket.data;
+      if (code && spectator) {
+        void socket.leave(code);
+        socket.data = { ip: socket.data.ip };
+        void broadcast(code);
+        return;
+      }
       if (!code || !playerId) return;
       rooms.leave(code, playerId);
       void socket.leave(code);
@@ -309,12 +325,42 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
     on('room:create', (payload, ack) => {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      return allowed.ok ? enter(rooms.create(payload.name), ack) : ack(allowed);
+      return allowed.ok ? enter(rooms.create(payload.name, payload), ack) : ack(allowed);
     });
-    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name), ack));
+    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload), ack));
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
+      ack({ ok: true });
+    });
+    on('room:watch', async (payload, ack) => {
+      const room = rooms.get(text(payload.code));
+      if (!room) return ack({ ok: false, error: 'roomNotFound' });
+      if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
+      if (socket.data.code) leaveCurrent();
+      socket.data = { ip: socket.data.ip, code: room.code, spectator: true };
+      await socket.join(room.code);
+      ack({ ok: true, code: room.code, playerId: '', token: '', spectator: true });
+      await broadcast(room.code);
+    });
+    on('rooms:live', async (_payload, ack) => {
+      const live = await Promise.all(
+        rooms.live().map(async (room) => {
+          const sockets = await io.in(room.code).fetchSockets();
+          return { ...room, spectators: sockets.filter((s) => s.data.spectator).length };
+        }),
+      );
+      ack({ ok: true, rooms: live });
+    });
+    // Le chat n'est que relayé : rien n'est gardé sur le serveur, ni en mémoire ni sur disque.
+    on('chat:send', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      const seat = code && playerId ? rooms.get(code)?.seats.find((s) => s.playerId === playerId) : undefined;
+      if (!code || !seat) return ack({ ok: false, error: 'notInRoom' });
+      const message = text(payload.text).replace(/[\p{Cc}]/gu, ' ').trim().slice(0, CHAT_MAX_LENGTH);
+      if (!message) return ack({ ok: false, error: 'emptyMessage' });
+      if (!chatPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
+      io.to(code).emit('chat:message', { id: randomUUID(), playerId: seat.playerId, name: seat.name, text: message, at: Date.now() });
       ack({ ok: true });
     });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
@@ -335,7 +381,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 
     socket.on('disconnect', () => {
-      const { code, playerId } = socket.data;
+      const { code, playerId, spectator } = socket.data;
+      if (code && spectator) return void broadcast(code);
       if (!code || !playerId) return;
       rooms.setConnected(code, playerId, false);
       scheduleCleanup(code);

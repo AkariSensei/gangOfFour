@@ -27,6 +27,20 @@ describe('RoomManager', () => {
     expect(s.ok && rooms.get(s.code)!.seats[0]!.name).toBe('Alice');
   });
 
+  it("garde l'avatar et la couleur choisis seulement s'ils sont dans la liste", () => {
+    const rooms = new RoomManager();
+    const host = rooms.create('Alice', { avatar: '🦊', color: '#3b82c4' });
+    if (!host.ok) throw new Error(host.error);
+    rooms.join(host.code, 'Bruno', { avatar: '<script>', color: 'red' });
+    rooms.join(host.code, 'Chloé');
+    const players = rooms.roomView(rooms.get(host.code)!).players;
+    expect(players.map(({ avatar, color }) => ({ avatar, color }))).toEqual([
+      { avatar: '🦊', color: '#3b82c4' },
+      { avatar: undefined, color: undefined },
+      { avatar: undefined, color: undefined },
+    ]);
+  });
+
   it('accepte le code en minuscules et refuse un cinquième joueur', () => {
     const { rooms, host } = roomWith(4);
     expect(rooms.join(host.code.toLowerCase(), 'Emma')).toEqual({ ok: false, error: 'roomFull' });

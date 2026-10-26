@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import type { RoomView, Session } from '../../server/src/protocol';
+import type { ChatMessage, RoomView, Session } from '../../server/src/protocol';
+import { Avatar } from './Avatar';
+import { ChatPanel } from './Chat';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -8,7 +10,17 @@ const TARGET_SCORES = [50, 100, 200];
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];
 
-export function Lobby({ room, session, onLeave }: { room: RoomView; session: Session; onLeave: () => void }) {
+export function Lobby({
+  room,
+  session,
+  messages,
+  onLeave,
+}: {
+  room: RoomView;
+  session: Session;
+  messages: ChatMessage[];
+  onLeave: () => void;
+}) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [targetScore, setTargetScore] = useState(100);
@@ -57,9 +69,7 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
         <ul className="player-list">
           {room.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
-              <span className="avatar" aria-hidden>
-                {p.bot ? '🤖' : p.name.slice(0, 2).toUpperCase()}
-              </span>
+              <Avatar name={p.name} look={p} bot={p.bot} />
               {p.name}
               {p.bot && <span className="tag">bot</span>}
               {p.id === room.hostId && <span className="tag">hôte</span>}
@@ -128,6 +138,10 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
         <button className="link" onClick={leave}>
           Quitter le salon
         </button>
+      </div>
+      <div className="panel lobby-chat">
+        <h2>Chat</h2>
+        <ChatPanel messages={messages} me={session.playerId} />
       </div>
     </main>
   );

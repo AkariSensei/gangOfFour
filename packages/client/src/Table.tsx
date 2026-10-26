@@ -1,12 +1,14 @@
 import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomView } from '../../server/src/protocol';
+import type { ChatMessage, Look, RoomView } from '../../server/src/protocol';
+import { Avatar } from './Avatar';
+import { ChatButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert } from './turnAlert';
 
-type Seat = 'right' | 'top' | 'left';
+type Seat = 'right' | 'top' | 'left' | 'bottom';
 type SortMode = 'value' | 'color';
 
 /** Place les adversaires autour de la table : le suivant (sens antihoraire) à droite, puis en face, puis à gauche. */
@@ -14,13 +16,9 @@ function seatsFor(count: number): Seat[] {
   return count === 3 ? ['right', 'left'] : ['right', 'top', 'left'];
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+/** Places de tous les joueurs pour un spectateur, qui n'a pas de siège : le premier joueur en bas. */
+function spectatorSeats(count: number): Seat[] {
+  return ['bottom', ...seatsFor(count)];
 }
 
 /** Dernier geste de chaque joueur dans le pli en cours, pour afficher « Passe » à côté de lui. */
@@ -36,6 +34,7 @@ function Opponent({
   seat,
   connected,
   bot,
+  look,
   move,
 }: {
   game: PlayerView;
@@ -43,6 +42,7 @@ function Opponent({
   seat: Seat;
   connected: boolean;
   bot: boolean;
+  look?: Look;
   move?: TrickEntry;
 }) {
   const p = game.players[index]!;
@@ -50,9 +50,7 @@ function Opponent({
   const giving = game.phase === 'exchange' && game.exchange?.winnerIndex === index;
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
-      <div className="avatar" aria-hidden>
-        {bot ? '🤖' : initials(p.name)}
-      </div>
+      <Avatar name={p.name} look={look} bot={bot} />
       <div className="opponent-info">
         <div className="opponent-name">
           {p.name}
@@ -145,9 +143,13 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             <p className="muted">
               {game.players[r.loserIndex]!.name} donnera sa meilleure carte à {game.players[r.winnerIndex]!.name}.
             </p>
-            <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
-              Manche suivante
-            </button>
+            {game.you < 0 ? (
+              <p className="muted">La manche suivante commence quand un joueur la lance.</p>
+            ) : (
+              <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
+                Manche suivante
+              </button>
+            )}
           </>
         )}
       </div>
@@ -319,6 +321,7 @@ function CenterPile({ game }: { game: PlayerView }) {
 /** Côté de la table d'où arrivent les cartes d'un joueur : le bas pour soi, sinon la place de l'adversaire. */
 function sideOf(game: PlayerView, index: number): Seat | 'bottom' {
   const n = game.players.length;
+  if (game.you < 0) return spectatorSeats(n)[index]!;
   return index === game.you ? 'bottom' : seatsFor(n)[(index - game.you - 1 + n) % n]!;
 }
 
@@ -327,13 +330,22 @@ function sortHand(hand: Card[], mode: SortMode): Card[] {
   return [...hand].sort((a, b) => COLOR_RANK[a.color] - COLOR_RANK[b.color] || a.value - b.value);
 }
 
-/** Applique l'ordre choisi à la main par glisser-déposer ; les cartes nouvelles (échange, nouvelle manche) viennent après, triées. */
+/**
+ * Applique l'ordre choisi à la main par glisser-déposer. Une carte reçue en cours de manche (échange) se glisse
+ * juste avant la première carte rangée qui la suit dans le tri, plutôt qu'en bout de main.
+ */
 function orderHand(sorted: Card[], order: string[] | null): Card[] {
   if (!order) return sorted;
   const byId = new Map(sorted.map((c) => [c.id, c]));
-  const known = order.flatMap((id) => byId.get(id) ?? []);
-  const placed = new Set(known.map((c) => c.id));
-  return [...known, ...sorted.filter((c) => !placed.has(c.id))];
+  const result = order.flatMap((id) => byId.get(id) ?? []);
+  const placed = new Set(result.map((c) => c.id));
+  const rank = new Map(sorted.map((c, i) => [c.id, i]));
+  for (const card of sorted) {
+    if (placed.has(card.id)) continue;
+    const at = result.findIndex((c) => rank.get(c.id)! > rank.get(card.id)!);
+    result.splice(at < 0 ? result.length : at, 0, card);
+  }
+  return result;
 }
 
 /** Distance (en pixels) au-delà de laquelle un appui sur une carte devient un glisser plutôt qu'un clic. */
@@ -367,10 +379,35 @@ function useDelayed(on: boolean, delay: number): boolean {
   return ready;
 }
 
+/** Durée de l'effet Gang (la même que son animation CSS). */
+const GANG_BURST_MS = 1800;
+
+/** Grand effet à l'écran quand un Gang est posé : flash, secousse de la table et nom du Gang. */
+function GangBurst({ label, player }: { label: string; player: string }) {
+  return (
+    <div className="gang-burst" aria-hidden>
+      <div className="gang-burst-text">
+        <span className="gang-burst-name">{label}</span>
+        <span className="gang-burst-player">{player}</span>
+      </div>
+    </div>
+  );
+}
+
 /** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
 type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
 
-export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomView; onLeave: () => void }) {
+export function Table({
+  game,
+  room,
+  messages,
+  onLeave,
+}: {
+  game: PlayerView;
+  room: RoomView;
+  messages: ChatMessage[];
+  onLeave: () => void;
+}) {
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('value');
@@ -381,6 +418,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const [planned, setPlanned] = useState<Planned | null>(null);
 
   const me = game.you;
+  const spectator = me < 0;
   const n = game.players.length;
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
@@ -435,11 +473,35 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     return () => clearTimeout(t);
   }, [handSize]);
 
+  // Nouvelle manche, nouvelle main : l'ordre rangé à la main pour la manche d'avant ne veut plus rien dire
+  // (les cartes gardent le même identifiant d'une manche à l'autre, il mélangerait la nouvelle main).
+  useEffect(() => setOrder(null), [game.round]);
+
+  // Un Gang vient d'être posé : on le fête (une fois par Gang, grâce à sa clé).
+  const top = game.table;
+  const gang =
+    top?.combination.type === 'gang'
+      ? {
+          key: top.combination.cards.map((c) => c.id).join(),
+          label: combinationLabel('gang', top.combination.cards.length),
+          player: game.players[top.playerIndex]!.name,
+        }
+      : null;
+  // Pendant l'effet, l'annonce « À toi » attend : les deux se superposeraient.
+  const [celebrating, setCelebrating] = useState(false);
+  useEffect(() => {
+    if (!gang) return;
+    setCelebrating(true);
+    const t = setTimeout(() => setCelebrating(false), GANG_BURST_MS);
+    return () => clearTimeout(t);
+  }, [gang?.key]);
+
   const hand = useMemo(() => orderHand(sortHand(game.hand, sortMode), order), [game.hand, sortMode, order]);
 
   // Glisser-déposer : la carte saisie prend la place de la carte la plus proche du doigt (ou de la souris).
   function onPointerDown(e: PointerEvent<HTMLButtonElement>, card: Card) {
     if (e.button !== 0) return;
+    suppressClick.current = false;
     drag.current = { id: card.id, x: e.clientX, y: e.clientY, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -561,10 +623,13 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   }
 
   function leave() {
-    if (confirm('Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.')) void exit();
+    if (spectator || confirm('Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.')) void exit();
   }
 
-  const opponents = seatsFor(n).map((seat, k) => ({ seat, index: (me + k + 1) % n }));
+  // Le spectateur voit tous les joueurs autour de la table ; un joueur voit les autres à partir de sa place.
+  const opponents = spectator
+    ? spectatorSeats(n).map((seat, index) => ({ seat, index }))
+    : seatsFor(n).map((seat, k) => ({ seat, index: (me + k + 1) % n }));
   const moves = lastMoves(game.trick);
   const current = game.players[game.currentPlayer]!;
 
@@ -610,9 +675,15 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
               Tu es donneur
             </span>
           )}
+          {room.spectators > 0 && (
+            <span className="direction" title="Personnes qui regardent la partie">
+              👀 {room.spectators}
+            </span>
+          )}
         </div>
         <Scores game={game} />
         <div className="header-right">
+          <ChatButton messages={messages} me={game.players[me]?.id ?? ''} />
           <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
             {sound ? '🔔' : '🔕'}
           </button>
@@ -622,7 +693,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
         </div>
       </header>
 
-      <div className="felt">
+      <div className={`felt ${celebrating ? 'shake' : ''}`}>
         {opponents.map(({ seat, index }) => (
           <Opponent
             key={index}
@@ -631,130 +702,145 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             seat={seat}
             connected={room.players[index]?.connected ?? true}
             bot={room.players[index]?.bot ?? false}
+            look={room.players[index]}
             move={moves.get(index)}
           />
         ))}
         <CenterPile game={game} />
       </div>
 
-      <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
-        {myAction && secondsLeft !== null && (
-          <div className="turn-timer" aria-hidden>
-            <div
-              className={`turn-timer-fill ${secondsLeft <= 10 ? 'urgent' : ''}`}
-              style={{ width: `${(100 * secondsLeft) / room.turnSeconds}%` }}
-            />
+      {spectator ? (
+        <section className="my-area spectating">
+          <div className="my-bar">
+            <div className="status">👀 Tu regardes la partie · {status}</div>
           </div>
-        )}
-        <div className="my-bar">
-          <div className="status">
-            {(myTurn || mustGive) && <span className="dot" aria-hidden />}
-            {status}
-            {secondsLeft !== null && (
-              <span
-                className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
-                title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
-              >
-                ⏱ {secondsLeft} s
-              </span>
-            )}
-            {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
-          </div>
-          <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
-            Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
-          </button>
-        </div>
-
-        <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
-          {hand.map((c, i) => (
-            <CardView
-              key={c.id}
-              card={c}
-              selected={selected.includes(c.id)}
-              dimmed={playable !== null && !playable.has(c.id)}
-              dragging={dragging === c.id}
-              onClick={() => toggle(c)}
-              style={{ '--offset': i - mid, '--i': i } as CSSProperties}
-              handlers={{
-                onPointerDown: (e) => onPointerDown(e, c),
-                onPointerMove,
-                onPointerUp,
-                onPointerCancel: onPointerUp,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="controls" hidden={roundFinished}>
-          <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
-            {typeof hint === 'object' ? hint.text : hint}
-          </span>
-          {mustGive ? (
-            <button
-              className="primary"
-              disabled={selected.length !== 1}
-              onClick={() => send(socket.emitWithAck('game:giveCard', { cardId: selected[0]! }))}
-            >
-              Donner
-            </button>
-          ) : (
-            <>
-              {selected.length > 0 && !planned && (
-                <button className="ghost" onClick={() => setSelected([])}>
-                  Annuler
-                </button>
-              )}
-              {myTurn ? (
-                <>
-                  <button disabled={!game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
-                    Passer
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={selected.length === 0}
-                    onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
-                  >
-                    Jouer
-                  </button>
-                </>
-              ) : planned ? (
-                <button className="ghost" onClick={() => setPlanned(null)}>
-                  Annuler {planned.type === 'pass' ? 'la passe prévue' : 'le coup prévu'}
-                </button>
-              ) : (
-                // Pas encore son tour : on prépare son coup (ou sa passe), joué dès que le tour arrive.
-                <>
-                  <button
-                    disabled={!canPlan}
-                    onClick={() => {
-                      setSelected([]);
-                      setPlanned({ type: 'pass', round: game.round, trickLength: game.trick.length });
-                    }}
-                    title="Passer automatiquement quand ce sera ton tour"
-                  >
-                    Passer à mon tour
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={!canPlan || typeof hint !== 'object' || !hint.ok}
-                    onClick={() => setPlanned({ type: 'play', cardIds: selected, round: game.round, trickLength: game.trick.length })}
-                    title="Jouer ces cartes automatiquement quand ce sera ton tour"
-                  >
-                    Jouer à mon tour
-                  </button>
-                </>
-              )}
-            </>
+        </section>
+      ) : (
+        <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
+          {myAction && secondsLeft !== null && (
+            <div className="turn-timer" aria-hidden>
+              <div
+                className={`turn-timer-fill ${secondsLeft <= 10 ? 'urgent' : ''}`}
+                style={{ width: `${(100 * secondsLeft) / room.turnSeconds}%` }}
+              />
+            </div>
           )}
-        </div>
-      </section>
+          <div className="my-bar">
+            <div className="status">
+              {(myTurn || mustGive) && <span className="dot" aria-hidden />}
+              {status}
+              {secondsLeft !== null && (
+                <span
+                  className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
+                  title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
+                >
+                  ⏱ {secondsLeft} s
+                </span>
+              )}
+              {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
+            </div>
+            <div className="my-tools">
+              <span className="my-count">
+                <strong>{hand.length}</strong> carte{hand.length > 1 ? 's' : ''}
+              </span>
+              <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
+                Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
+              </button>
+            </div>
+          </div>
+
+          <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
+            {hand.map((c, i) => (
+              <CardView
+                key={c.id}
+                card={c}
+                selected={selected.includes(c.id)}
+                dimmed={playable !== null && !playable.has(c.id)}
+                dragging={dragging === c.id}
+                onClick={() => toggle(c)}
+                style={{ '--offset': i - mid, '--i': i } as CSSProperties}
+                handlers={{
+                  onPointerDown: (e) => onPointerDown(e, c),
+                  onPointerMove,
+                  onPointerUp,
+                  onPointerCancel: onPointerUp,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="controls" hidden={roundFinished}>
+            <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
+              {typeof hint === 'object' ? hint.text : hint}
+            </span>
+            {mustGive ? (
+              <button
+                className="primary"
+                disabled={selected.length !== 1}
+                onClick={() => send(socket.emitWithAck('game:giveCard', { cardId: selected[0]! }))}
+              >
+                Donner
+              </button>
+            ) : (
+              <>
+                {selected.length > 0 && !planned && (
+                  <button className="ghost" onClick={() => setSelected([])}>
+                    Annuler
+                  </button>
+                )}
+                {myTurn ? (
+                  <>
+                    <button disabled={!game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
+                      Passer
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={selected.length === 0}
+                      onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
+                    >
+                      Jouer
+                    </button>
+                  </>
+                ) : planned ? (
+                  <button className="ghost" onClick={() => setPlanned(null)}>
+                    Annuler {planned.type === 'pass' ? 'la passe prévue' : 'le coup prévu'}
+                  </button>
+                ) : (
+                  // Pas encore son tour : on prépare son coup (ou sa passe), joué dès que le tour arrive.
+                  <>
+                    <button
+                      disabled={!canPlan}
+                      onClick={() => {
+                        setSelected([]);
+                        setPlanned({ type: 'pass', round: game.round, trickLength: game.trick.length });
+                      }}
+                      title="Passer automatiquement quand ce sera ton tour"
+                    >
+                      Passer à mon tour
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={!canPlan || typeof hint !== 'object' || !hint.ok}
+                      onClick={() => setPlanned({ type: 'play', cardIds: selected, round: game.round, trickLength: game.trick.length })}
+                      title="Jouer ces cartes automatiquement quand ce sera ton tour"
+                    >
+                      Jouer à mon tour
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {error && (
         <div className="toast" role="alert">
           {error}
         </div>
       )}
-      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned ? null : bannerText} />
+      {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
+      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating ? null : bannerText} />
       {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );

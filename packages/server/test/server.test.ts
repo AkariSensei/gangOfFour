@@ -133,6 +133,52 @@ describe('serveur de jeu', () => {
     expect((await connect().emitWithAck('room:join', { code, name: 'Chloé' })).ok).toBe(true);
   });
 
+  it('laisse regarder une partie en cours sans voir aucune main ni pouvoir jouer', async () => {
+    await start();
+    const { code, players } = await lobby(3);
+    const watcher = connect();
+    expect(await watcher.emitWithAck('room:watch', { code })).toEqual({ ok: false, error: 'gameNotStarted' });
+    await players[0]!.emitWithAck('game:start', {});
+    await waitFor(() => players.every((p) => p.game));
+
+    const live = await watcher.emitWithAck('rooms:live');
+    expect(live.ok && live.rooms.map((r) => r.code)).toEqual([code]);
+
+    const watched = await watcher.emitWithAck('room:watch', { code });
+    expect(watched).toMatchObject({ ok: true, code, spectator: true });
+    await waitFor(() => !!watcher.game && players.every((p) => p.room?.spectators === 1));
+    expect(watcher.game!.you).toBe(-1);
+    expect(watcher.game!.hand).toEqual([]);
+    expect(watcher.game!.players.map((p) => p.cardCount)).toEqual(players.map((p) => p.game!.hand.length));
+    expect(await watcher.emitWithAck('game:pass')).toEqual({ ok: false, error: 'notInRoom' });
+
+    watcher.disconnect();
+    await waitFor(() => players.every((p) => p.room?.spectators === 0));
+    expect(server.rooms.get(code)!.seats).toHaveLength(3);
+  });
+
+  it('relaie le chat aux joueurs du salon seulement, sans rien garder', async () => {
+    await start();
+    const { players } = await lobby(3);
+    const outsider = connect();
+    await outsider.emitWithAck('room:create', { name: 'Zoé' });
+    const received: { name: string; text: string }[][] = [[], [], [], []];
+    [...players, outsider].forEach((c, i) => c.on('chat:message', (m) => received[i]!.push({ name: m.name, text: m.text })));
+
+    expect(await players[1]!.emitWithAck('chat:send', { text: '  Salut\u0007 tout le monde  ' })).toEqual({ ok: true });
+    await waitFor(() => received.slice(0, 3).every((r) => r.length === 1));
+    expect(received[0]).toEqual([{ name: 'Bruno', text: 'Salut  tout le monde' }]);
+    expect(received[3]).toEqual([]);
+
+    expect(await players[0]!.emitWithAck('chat:send', { text: '   ' })).toEqual({ ok: false, error: 'emptyMessage' });
+    expect(await connect().emitWithAck('chat:send', { text: 'coucou' })).toEqual({ ok: false, error: 'notInRoom' });
+    const results = [];
+    for (let i = 0; i < 7; i++) results.push(await players[2]!.emitWithAck('chat:send', { text: `spam ${i}` }));
+    expect(results.filter((r) => r.ok)).toHaveLength(6);
+    expect(results[6]).toEqual({ ok: false, error: 'slowDown' });
+    expect(JSON.stringify(server.rooms.all())).not.toContain('Salut');
+  });
+
   it('refuse de nouveaux salons au-delà du maximum', async () => {
     await start({ limits: { maxRooms: 2 } });
     expect((await connect().emitWithAck('room:create', { name: 'A' })).ok).toBe(true);

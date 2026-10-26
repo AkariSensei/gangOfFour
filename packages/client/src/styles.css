@@ -778,6 +778,27 @@ input {
   align-items: center;
   gap: 0.5rem;
 }
+.my-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .my-tools {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+  }
+}
+.my-count {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
 .status {
   font-weight: 700;
   display: flex;
@@ -1212,4 +1233,333 @@ input {
 }
 .controls[hidden] {
   display: none;
+}
+
+/* Gang posé : flash rouge, table secouée et nom du Gang en grand, sans bloquer les clics. */
+.gang-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(209, 69, 59, 0.45), rgba(209, 69, 59, 0) 65%);
+  animation: gang-flash 1.8s ease-out forwards;
+}
+.gang-burst-text {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  animation: gang-slam 1.8s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+.gang-burst-name {
+  font-family: var(--font-title);
+  font-size: clamp(2.4rem, 9vw, 6rem);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 0 24px var(--danger),
+    0 4px 0 #7a1f19,
+    0 8px 30px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+.gang-burst-player {
+  font-weight: 700;
+  background: var(--danger);
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+}
+@keyframes gang-flash {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes gang-slam {
+  0% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  15% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+  22% {
+    transform: scale(1);
+  }
+  80% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+.felt.shake {
+  animation: shake 0.5s ease-in-out 0.15s;
+}
+@keyframes shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -10px 4px;
+  }
+  40% {
+    translate: 8px -4px;
+  }
+  60% {
+    translate: -6px 2px;
+  }
+  80% {
+    translate: 4px -2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .felt.shake,
+  .gang-burst-text {
+    animation: none;
+  }
+}
+
+/* Spectateur : le premier joueur prend la place du bas, et l'accueil liste les parties à regarder. */
+.seat-bottom {
+  bottom: clamp(8px, 2vh, 18px);
+  left: 50%;
+  translate: -50% 0;
+}
+.my-area.spectating {
+  min-height: 0;
+}
+.live-rooms {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.live-rooms h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+.live-rooms ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.live-rooms li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.live-info {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.live-players {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px), (max-height: 560px) {
+  .seat-bottom {
+    order: 5;
+    grid-column: 1 / -1;
+    inset: auto;
+    translate: none;
+  }
+}
+
+/* Chat du salon : dans le salon d'attente sous les réglages, pendant la partie dans une bulle sous l'en-tête. */
+.lobby-chat {
+  margin-top: 1rem;
+}
+.lobby-chat h2 {
+  margin-top: 0;
+}
+.chat {
+  display: grid;
+  gap: 0.5rem;
+}
+.chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  max-height: 220px;
+  min-height: 60px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.chat-list li {
+  padding: 0.3rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  justify-self: start;
+  max-width: 90%;
+}
+.chat-list li.mine {
+  justify-self: end;
+  background: rgba(232, 185, 49, 0.25);
+}
+.chat-list .chat-empty {
+  background: none;
+  color: var(--muted);
+  font-style: italic;
+}
+.chat-name {
+  font-weight: 700;
+  margin-right: 0.2rem;
+}
+.chat-form {
+  display: flex;
+  gap: 0.4rem;
+}
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+}
+.chat-anchor {
+  position: relative;
+}
+.chat-anchor > button.icon {
+  position: relative;
+}
+.chat-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+}
+.chat-popover {
+  color: var(--text);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(330px, calc(100vw - 32px));
+  padding: 0.8rem;
+}
+.chat-preview {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  text-align: left;
+  font-weight: 400;
+  background: rgba(10, 30, 20, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 0.45rem 0.7rem;
+  overflow-wrap: anywhere;
+  animation: pop-in 0.2s ease;
+}
+@media (max-width: 560px) {
+  .chat-popover,
+  .chat-preview {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* Profil : avatar et couleur choisis à l'accueil, affichés partout où le joueur apparaît. */
+.avatar.colored {
+  background: var(--avatar-color);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.avatar.emoji {
+  font-size: 1.35rem;
+  text-shadow: none;
+}
+.player-list li .avatar.emoji,
+.opponent .avatar.emoji {
+  font-size: 1.1rem;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.identity input {
+  flex: 1;
+  min-width: 0;
+}
+.avatar-button {
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 50%;
+}
+.avatar-button .avatar {
+  width: 46px;
+  height: 46px;
+}
+.look-picker {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  padding: 0.7rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.05);
+}
+.look-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 0.35rem;
+}
+.look-grid button {
+  padding: 0.25rem 0;
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+.look-grid button:first-child {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.look-grid button.on,
+.look-colors .swatch.on {
+  box-shadow: 0 0 0 3px var(--gold);
+}
+.look-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.look-colors .swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
 }
