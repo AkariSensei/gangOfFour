@@ -260,15 +260,18 @@ function CenterPile({ game }: { game: PlayerView }) {
   if (!top) {
     const current = game.players[game.currentPlayer]!;
     const lastPlay = plays[plays.length - 1];
+    // Manche finie : la table est vidée, mais on garde en évidence la dernière carte posée le temps que chacun la voie.
+    const finished = game.phase === 'roundOver' || game.phase === 'gameOver';
     return (
       <div className="center-pile">
-        {lastPlay && game.phase === 'playing' && (
-          <div className="pile-cards faded">
+        {lastPlay && (game.phase === 'playing' || finished) && (
+          <div className={finished ? 'pile-cards final pop-in' : 'pile-cards faded'}>
             {lastPlay.combination!.cards.map((c) => (
               <CardView key={c.id} card={c} />
             ))}
           </div>
         )}
+        {lastPlay && finished && <div className="pile-label">{game.players[lastPlay.playerIndex]!.name} termine la manche</div>}
         {game.phase === 'playing' && (
           <div className="pile-empty">
             {game.currentPlayer === game.you ? 'À toi d’ouvrir un nouveau pli' : `${current.name} ouvre un nouveau pli`}
@@ -347,6 +350,23 @@ function useCountdown(endsAt: number | null): number | null {
   return endsAt === null ? null : Math.max(0, Math.ceil((endsAt - now) / 1000));
 }
 
+/** Temps d'affichage de la dernière carte posée avant le résumé de fin de manche. */
+const SUMMARY_DELAY_MS = 2200;
+
+/** Vrai seulement `delay` ms après que `on` est devenu vrai ; repasse à faux dès que `on` retombe. */
+function useDelayed(on: boolean, delay: number): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setReady(false);
+      return;
+    }
+    const t = setTimeout(() => setReady(true), delay);
+    return () => clearTimeout(t);
+  }, [on, delay]);
+  return ready;
+}
+
 /** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
 type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
 
@@ -373,6 +393,9 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     setTurnEndsAt(room.turnRemainingMs === null ? null : Date.now() + room.turnRemainingMs);
   }, [room]);
   const countdown = useCountdown(turnEndsAt);
+  // Fin de manche : on laisse voir la dernière carte posée avant d'ouvrir le résumé.
+  const roundFinished = game.phase === 'roundOver' || game.phase === 'gameOver';
+  const showSummary = useDelayed(roundFinished, SUMMARY_DELAY_MS);
   const secondsLeft = countdown === null ? null : Math.min(countdown, room.turnSeconds);
   const myAction = myTurn || mustGive || mustCut;
   // L'annonce change de texte à chaque nouveau tour (le compteur de cartes jouées la relance).
@@ -662,7 +685,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           ))}
         </div>
 
-        <div className="controls">
+        <div className="controls" hidden={roundFinished}>
           <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
             {typeof hint === 'object' ? hint.text : hint}
           </span>
@@ -732,7 +755,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
         </div>
       )}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned ? null : bannerText} />
-      {(game.phase === 'roundOver' || game.phase === 'gameOver') && game.lastRound && <RoundOver game={game} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );
 }
