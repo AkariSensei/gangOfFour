@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { ErrorLog } from './errors';
@@ -13,6 +14,10 @@ import { type PlayerAction, RoomManager, type Result } from './rooms';
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
 export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
+/** Chat : longueur maximale d'un message, et nombre de messages par connexion sur la fenêtre donnée. */
+const CHAT_MAX_LENGTH = 200;
+const CHAT_MESSAGES = 6;
+const CHAT_WINDOW_MS = 10 * 1000;
 
 interface SocketData {
   code?: string;
@@ -214,6 +219,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const roomsPerIp = new RateLimiter(limits.roomsPerIp, limits.windowMs);
   const roomsPerSocket = new RateLimiter(limits.roomsPerSocket, limits.windowMs);
   const openSockets = new Map<string, number>();
+  const chatPerSocket = new RateLimiter(CHAT_MESSAGES, CHAT_WINDOW_MS);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
   io.use((socket, next) => {
@@ -315,6 +321,17 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
+      ack({ ok: true });
+    });
+    // Le chat n'est que relayé : rien n'est gardé sur le serveur, ni en mémoire ni sur disque.
+    on('chat:send', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      const seat = code && playerId ? rooms.get(code)?.seats.find((s) => s.playerId === playerId) : undefined;
+      if (!code || !seat) return ack({ ok: false, error: 'notInRoom' });
+      const message = text(payload.text).replace(/[\p{Cc}]/gu, ' ').trim().slice(0, CHAT_MAX_LENGTH);
+      if (!message) return ack({ ok: false, error: 'emptyMessage' });
+      if (!chatPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
+      io.to(code).emit('chat:message', { id: randomUUID(), playerId: seat.playerId, name: seat.name, text: message, at: Date.now() });
       ack({ ok: true });
     });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));

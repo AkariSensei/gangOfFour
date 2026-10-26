@@ -25,6 +25,7 @@ export type RoomError =
   | 'notEnoughPlayers'
   | 'gameNotStarted'
   | 'serverError'
+  | 'emptyMessage'
   | 'tooManyRooms'
   | 'slowDown';
 
@@ -42,6 +43,7 @@ export interface ClientToServerEvents {
   'room:join': (payload: { code: string; name: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
+  'chat:send': (payload: { text: string }, ack: Ack) => void;
   'room:addBot': (ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
@@ -54,7 +56,17 @@ export interface ClientToServerEvents {
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
 }
 
+/** Message du chat d'un salon : relayé aux joueurs présents, jamais enregistré. */
+export interface ChatMessage {
+  id: string;
+  playerId: string;
+  name: string;
+  text: string;
+  at: number;
+}
+
 export interface ServerToClientEvents {
   'room:state': (room: RoomView) => void;
   'game:state': (game: PlayerView) => void;
+  'chat:message': (message: ChatMessage) => void;
 }

@@ -1,6 +1,7 @@
 import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomView } from '../../server/src/protocol';
+import type { ChatMessage, RoomView } from '../../server/src/protocol';
+import { ChatButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
@@ -370,7 +371,17 @@ function useDelayed(on: boolean, delay: number): boolean {
 /** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
 type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
 
-export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomView; onLeave: () => void }) {
+export function Table({
+  game,
+  room,
+  messages,
+  onLeave,
+}: {
+  game: PlayerView;
+  room: RoomView;
+  messages: ChatMessage[];
+  onLeave: () => void;
+}) {
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('value');
@@ -613,6 +624,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
         </div>
         <Scores game={game} />
         <div className="header-right">
+          <ChatButton messages={messages} me={game.players[me]?.id ?? ''} />
           <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
             {sound ? '🔔' : '🔕'}
           </button>

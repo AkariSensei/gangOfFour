@@ -21,7 +21,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   roomNotFound: 'Salon introuvable. Vérifie le code.',
   roomFull: 'Ce salon est complet (4 joueurs).',
   tooManyRooms: 'Trop de salons sont ouverts en ce moment. Rejoins-en un ou réessaie plus tard.',
-  slowDown: 'Trop de salons créés d’un coup. Réessaie dans quelques minutes.',
+  slowDown: 'Trop de demandes d’un coup. Réessaie dans un moment.',
   gameAlreadyStarted: 'La partie a déjà commencé dans ce salon.',
   invalidName: 'Choisis un pseudo.',
   notInRoom: "Tu n'es pas dans un salon.",
@@ -39,6 +39,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   mustLeadCombination: 'Le joueur suivant n\'a plus qu\'une carte : ouvre avec une combinaison.',
   invalidCut: 'Coupe le paquet entre deux cartes.',
   serverError: 'Le serveur a eu un problème, réessaie.',
+  emptyMessage: 'Message vide.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 
