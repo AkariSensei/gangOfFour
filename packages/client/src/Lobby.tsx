@@ -1,0 +1,69 @@
+import { useState } from 'react';
+import type { RoomView, Session } from '../../server/src/protocol';
+import { errorLabel } from './labels';
+import { socket } from './socket';
+
+export function Lobby({ room, session, onLeave }: { room: RoomView; session: Session; onLeave: () => void }) {
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const isHost = room.hostId === session.playerId;
+  const link = `${location.origin}${location.pathname}?salon=${room.code}`;
+
+  async function start() {
+    const result = await socket.emitWithAck('game:start');
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
+  async function leave() {
+    await socket.emitWithAck('room:leave');
+    onLeave();
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Copie impossible, partage le code à la main.');
+    }
+  }
+
+  return (
+    <main className="lobby">
+      <div className="panel">
+        <p className="muted">Code du salon</p>
+        <div className="room-code">{room.code}</div>
+        <button onClick={copy}>{copied ? 'Lien copié !' : 'Copier le lien d\'invitation'}</button>
+
+        <h2>Joueurs ({room.players.length}/4)</h2>
+        <ul className="player-list">
+          {room.players.map((p) => (
+            <li key={p.id} className={p.connected ? '' : 'offline'}>
+              {p.name}
+              {p.id === room.hostId && <span className="tag">hôte</span>}
+              {p.id === session.playerId && <span className="tag you">toi</span>}
+            </li>
+          ))}
+          {Array.from({ length: 4 - room.players.length }, (_, i) => (
+            <li key={`empty-${i}`} className="empty">
+              En attente…
+            </li>
+          ))}
+        </ul>
+
+        {isHost ? (
+          <button className="primary" disabled={room.players.length < 3} onClick={start}>
+            {room.players.length < 3 ? 'Il faut au moins 3 joueurs' : 'Lancer la partie'}
+          </button>
+        ) : (
+          <p className="muted">L'hôte lancera la partie dès que tout le monde est là.</p>
+        )}
+        {error && <p className="error">{error}</p>}
+        <button className="link" onClick={leave}>
+          Quitter le salon
+        </button>
+      </div>
+    </main>
+  );
+}
