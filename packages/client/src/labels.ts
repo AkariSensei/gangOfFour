@@ -36,6 +36,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   mustPlayHighestSingle: 'Le joueur suivant n\'a plus qu\'une carte : joue ta carte la plus forte.',
   mustLeadCombination: 'Le joueur suivant n\'a plus qu\'une carte : ouvre avec une combinaison.',
   invalidCut: 'Coupe le paquet entre deux cartes.',
+  serverError: 'Le serveur a eu un problème, réessaie.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 

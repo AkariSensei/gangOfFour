@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGameServer } from './server';
 
@@ -18,7 +19,23 @@ const staticDir = existsSync(clientDist) ? clientDist : undefined;
 // L'historique des parties est gardé hors du code, dans data/ à la racine du projet (modifiable via DATA_FILE).
 const historyFile = process.env.DATA_FILE ?? here(compiled ? '../../data/parties.json' : '../../../data/parties.json');
 
-const { http } = createGameServer({ corsOrigin, staticDir, historyFile });
+// Les salons en cours sont enregistrés à côté, pour survivre à un redémarrage (mise à jour du site par exemple).
+const roomsFile = process.env.ROOMS_FILE ?? join(dirname(historyFile), 'salons.json');
+
+const { http, saveRooms } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile });
+
+// Filet de sécurité : une erreur imprévue est écrite dans le journal mais n'arrête plus le serveur (et les parties).
+process.on('uncaughtException', (error) => console.error('Erreur non rattrapée :', error));
+process.on('unhandledRejection', (error) => console.error('Promesse rejetée non rattrapée :', error));
+
+// alwaysData arrête le serveur avec SIGTERM avant de le relancer : on enregistre les salons juste avant.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    saveRooms();
+    process.exit(0);
+  });
+}
+
 http.listen(port, host, () => {
   console.log(`Serveur Gang of Four sur http://${host}:${port}`);
   console.log(staticDir ? `Interface servie depuis ${staticDir}` : 'Interface non compilée : utilise « npm run dev » pour le développement.');

@@ -174,6 +174,19 @@ export class RoomManager {
     this.rooms.delete(code.toUpperCase());
   }
 
+  /** Tous les salons, pour les enregistrer sur disque. */
+  all(): Room[] {
+    return [...this.rooms.values()];
+  }
+
+  /** Recharge des salons enregistrés (après un redémarrage) : personne n'est encore reconnecté. */
+  restore(saved: Room[]): void {
+    for (const room of saved) {
+      room.seats.forEach((s) => (s.connected = !!s.bot));
+      this.rooms.set(room.code, room);
+    }
+  }
+
   start(code: string, playerId: string, options: StartOptions = {}): Result {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
