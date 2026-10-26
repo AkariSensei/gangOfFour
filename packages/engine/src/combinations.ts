@@ -25,8 +25,12 @@ const FIVE_CARD_ORDER: Partial<Record<CombinationType, number>> = {
   straightFlush: 4,
 };
 
-function maxColor(cards: Card[]): number {
-  return Math.max(...cards.map((c) => COLOR_RANK[c.color]));
+/**
+ * Couleurs des cartes, de la plus forte à la plus faible : à valeur égale, on compare la couleur la plus forte,
+ * puis la suivante en cas d'égalité (une paire rouge + jaune bat une paire rouge + vert).
+ */
+function colorsDesc(cards: Card[]): number[] {
+  return cards.map((c) => COLOR_RANK[c.color]).sort((a, b) => b - a);
 }
 
 function allSameValue(cards: Card[]): boolean {
@@ -58,10 +62,10 @@ export function analyzeCombination(cards: Card[]): Combination | null {
   if (allSameValue(cards)) {
     const value = cards[0]!.value;
     if (n === 2 && (value <= 10 || value === PHOENIX_VALUE)) {
-      return { type: 'pair', cards, rank: [value, maxColor(cards)] };
+      return { type: 'pair', cards, rank: [value, ...colorsDesc(cards)] };
     }
     if (value > 10) return null;
-    if (n === 3) return { type: 'trio', cards, rank: [value, maxColor(cards)] };
+    if (n === 3) return { type: 'trio', cards, rank: [value, ...colorsDesc(cards)] };
     if (n >= 4) return { type: 'gang', cards, rank: [n, value] };
   }
 
@@ -73,7 +77,7 @@ export function analyzeCombination(cards: Card[]): Combination | null {
     const numbers = cards.filter((c) => !isSpecial(c));
     const phoenixPair = specials.length === 2 && specials.every((c) => c.value === PHOENIX_VALUE);
     if (!phoenixPair || !allSameValue(numbers)) return null;
-    return { type: 'fullHouse', cards, rank: [numbers[0]!.value, maxColor(numbers)] };
+    return { type: 'fullHouse', cards, rank: [numbers[0]!.value, ...colorsDesc(numbers)] };
   }
 
   const values = cards.map((c) => c.value);
@@ -92,7 +96,7 @@ export function analyzeCombination(cards: Card[]): Combination | null {
   const groups = [...counts.values()].sort((a, b) => b.length - a.length);
   if (groups.length === 2 && groups[0]!.length === 3) {
     const trio = groups[0]!;
-    return { type: 'fullHouse', cards, rank: [trio[0]!.value, maxColor(trio)] };
+    return { type: 'fullHouse', cards, rank: [trio[0]!.value, ...colorsDesc(trio)] };
   }
 
   if (color) {
@@ -100,7 +104,8 @@ export function analyzeCombination(cards: Card[]): Combination | null {
   }
 
   if (straight) {
-    return { type: 'straight', cards, rank: [top.value, COLOR_RANK[top.color]] };
+    // À hauteur égale, la couleur de la plus haute carte décide, puis celle de la suivante, etc.
+    return { type: 'straight', cards, rank: [top.value, ...sortedDesc.map((c) => COLOR_RANK[c.color])] };
   }
 
   return null;
