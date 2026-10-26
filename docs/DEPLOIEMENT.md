@@ -53,6 +53,7 @@ Puis redémarre le site dans l'administration.
 
 ## Bon à savoir
 
-- Les parties sont gardées en mémoire : un redémarrage du site coupe les parties en cours.
+- Les parties en cours sont gardées en mémoire : un redémarrage du site les coupe.
+- Les parties terminées sont enregistrées dans `~/gangOfFour/data/parties.json` (le classement du bureau). Ce fichier n'est pas suivi par Git : `git pull` ne l'écrase pas.
 - Un salon dont tous les joueurs sont partis est supprimé au bout de 10 minutes.
 - Si l'interface et le serveur sont un jour séparés sur deux adresses, ajoute `CORS_ORIGIN=https://adresse-de-l-interface` dans l'environnement du site.

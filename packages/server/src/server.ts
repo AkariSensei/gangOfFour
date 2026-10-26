@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
+import { GameHistory } from './history';
 import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
 import { type PlayerAction, RoomManager, type Result } from './rooms';
@@ -16,6 +17,7 @@ export interface GameServer {
   http: HttpServer;
   io: Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
   rooms: RoomManager;
+  history: GameHistory;
 }
 
 export interface GameServerOptions {
@@ -23,6 +25,8 @@ export interface GameServerOptions {
   abandonDelayMs?: number;
   /** Dossier de l'interface compilée à servir sur la même adresse que le jeu. */
   staticDir?: string;
+  /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
+  historyFile?: string;
 }
 
 export function createGameServer(options: GameServerOptions = {}): GameServer {
@@ -31,6 +35,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     cors: options.corsOrigin ? { origin: options.corsOrigin } : undefined,
   });
   const rooms = new RoomManager();
+  const history = new GameHistory(options.historyFile);
+
+  /** Ajoute la partie à l'historique dès qu'elle est terminée, une seule fois. */
+  function recordIfFinished(code: string) {
+    const room = rooms.get(code);
+    if (room?.game?.phase !== 'gameOver' || room.recorded) return;
+    room.recorded = true;
+    history.record(room.game);
+  }
   const cleanupTimers = new Map<string, NodeJS.Timeout>();
   const abandonDelay = options.abandonDelayMs ?? ABANDONED_ROOM_DELAY_MS;
 
@@ -91,7 +104,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     }
 
     const act = (action: PlayerAction) => (ack: (r: Result) => void) =>
-      handle(ack, (code, playerId) => rooms.act(code, playerId, action));
+      handle(ack, (code, playerId) => {
+        const result = rooms.act(code, playerId, action);
+        if (result.ok) recordIfFinished(code);
+        return result;
+      });
 
     socket.on('room:create', (payload, ack) => void enter(rooms.create(payload?.name), ack));
     socket.on('room:join', (payload, ack) => void enter(rooms.join(String(payload?.code ?? ''), payload?.name), ack));
@@ -109,6 +126,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     socket.on('game:pass', (ack) => act({ type: 'pass' })(ack));
     socket.on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: String(payload?.cardId ?? '') })(ack));
     socket.on('game:nextRound', (ack) => act({ type: 'nextRound' })(ack));
+    socket.on('stats:get', (ack) => ack?.({ ok: true, leaderboard: history.leaderboard(), recent: history.recent() }));
 
     socket.on('disconnect', () => {
       const { code, playerId } = socket.data;
@@ -120,5 +138,5 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   });
 
   io.engine.on('close', () => cleanupTimers.forEach(clearTimeout));
-  return { http, io, rooms };
+  return { http, io, rooms, history };
 }

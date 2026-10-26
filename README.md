@@ -24,6 +24,8 @@ npm run build && npm start # version de production : le serveur sert aussi l'int
 
 Mise en ligne : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
+Les parties terminées sont enregistrées dans `data/parties.json` (chemin modifiable avec `DATA_FILE`) et alimentent le classement du bureau affiché sur l'accueil.
+
 ## Serveur
 
 Le client se connecte en Socket.IO. Toutes les commandes répondent par un accusé `{ ok: true }` ou `{ ok: false, error }`, et le serveur diffuse ensuite `room:state` (le salon) et `game:state` (la vue de la partie propre à chaque joueur, sans les mains des autres). Les types sont dans `packages/server/src/protocol.ts`.

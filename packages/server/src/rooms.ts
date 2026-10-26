@@ -20,6 +20,8 @@ export interface Room {
   hostId: string;
   seats: Seat[];
   game: GameState | null;
+  /** La partie terminée a déjà été ajoutée à l'historique. */
+  recorded?: boolean;
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */

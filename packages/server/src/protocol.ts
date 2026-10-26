@@ -1,4 +1,7 @@
 import type { ActionError, PlayerView } from '@gof/engine';
+import type { GameRecord, LeaderboardEntry } from './history';
+
+export type { GameRecord, LeaderboardEntry };
 
 /** Ce que chacun voit du salon, avant et pendant la partie. */
 export interface RoomView {
@@ -37,6 +40,7 @@ export interface ClientToServerEvents {
   'game:pass': (ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
+  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; recent: GameRecord[] }>) => void;
 }
 
 export interface ServerToClientEvents {
