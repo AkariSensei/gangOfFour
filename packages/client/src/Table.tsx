@@ -1,4 +1,4 @@
-import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
+import { type Card, type CombinationType, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomView } from '../../server/src/protocol';
 import { CardView, cardImage } from './CardView';
@@ -156,21 +156,37 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
 }
 
 /** Grosse annonce au centre de l'écran quand le tour du joueur arrive, qui s'efface d'elle-même. */
-function TurnBanner({ text }: { text: string | null }) {
-  const [shown, setShown] = useState<string | null>(null);
+/**
+ * Grosse annonce au centre quand c'est à soi d'agir. Elle reste affichée jusqu'à ce que le joueur l'ait vue
+ * (clic n'importe où, ou touche Entrée / Échap), et dit ce qu'il y a à faire.
+ */
+function TurnBanner({ text, detail, cards }: { text: string | null; detail: string; cards?: Card[] }) {
+  const [seen, setSeen] = useState(false);
   useEffect(() => {
-    if (!text) {
-      setShown(null);
-      return;
-    }
-    setShown(text);
-    const timer = setTimeout(() => setShown(null), 1600);
-    return () => clearTimeout(timer);
-  }, [text]);
-  if (!shown) return null;
+    if (!text || seen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') setSeen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [text, seen]);
+  if (!text || seen) return null;
   return (
-    <div className="turn-banner" role="status">
-      <div className="turn-banner-box">{shown}</div>
+    <div className="turn-banner" role="alertdialog" aria-label={text} onClick={() => setSeen(true)}>
+      <div className="turn-banner-box">
+        <div className="turn-banner-title">{text}</div>
+        {cards && cards.length > 0 && (
+          <div className="turn-banner-cards">
+            {cards.map((c) => (
+              <CardView key={c.id} card={c} />
+            ))}
+          </div>
+        )}
+        {detail && <p className="turn-banner-detail">{detail}</p>}
+        <button className="turn-banner-ok" autoFocus>
+          J'ai vu
+        </button>
+      </div>
     </div>
   );
 }
@@ -304,6 +320,18 @@ function CenterPile({ game }: { game: PlayerView }) {
     </div>
   );
 }
+
+/** Nom d'une combinaison avec son article, pour les phrases de l'annonce du tour. */
+const THE_COMBINATION: Record<CombinationType, string> = {
+  single: 'la carte',
+  pair: 'la paire',
+  trio: 'le brelan',
+  straight: 'la suite',
+  flush: 'la couleur',
+  fullHouse: 'le full',
+  straightFlush: 'la quinte flush',
+  gang: 'le gang',
+};
 
 /** Côté de la table d'où arrivent les cartes d'un joueur : le bas pour soi, sinon la place de l'adversaire. */
 function sideOf(game: PlayerView, index: number): Seat | 'bottom' {
@@ -553,6 +581,29 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   }
 
   const myMove = moves.get(me);
+
+  // Ce qu'il y a à faire, écrit dans l'annonce du tour.
+  const nextPlayer = game.players[(me + game.direction + n) % n]!;
+  let bannerDetail = '';
+  if (mustCut) bannerDetail = 'Clique entre deux cartes du paquet pour le couper.';
+  else if (mustGive && exchange) {
+    bannerDetail = `${game.players[exchange.loserIndex]!.name} t'a donné ${cardLabel(exchange.loserCard)}. Choisis une carte de ta main à lui rendre.`;
+  } else if (myTurn && game.mustPlayMultiOne) {
+    bannerDetail = 'Ouvre la partie avec le 1 multicolore, seul ou dans une combinaison.';
+  } else if (myTurn && !game.table) {
+    bannerDetail = 'Tu as remporté le pli : pose la carte ou la combinaison de ton choix.';
+  } else if (myTurn && game.table) {
+    const what = `${THE_COMBINATION[game.table.combination.type]} de ${game.players[game.table.playerIndex]!.name}`;
+    bannerDetail =
+      playable?.size === 0
+        ? `Rien dans ta main ne bat ${what} : tu peux seulement passer.`
+        : game.table.combination.type === 'gang'
+          ? `Bats ${what} avec un gang plus fort, ou passe.`
+          : game.table.combination.cards.length === 1
+            ? `Bats ${what} avec une carte plus forte (ou un Gang), ou passe.`
+            : `Bats ${what} avec ${game.table.combination.cards.length} cartes plus fortes (ou un Gang), ou passe.`;
+  }
+  if (myTurn && nextPlayer.cardCount === 1) bannerDetail += ` Attention : ${nextPlayer.name} n'a plus qu'une carte !`;
   // On peut préparer son coup pendant le tour des autres, sauf si on a déjà passé ce pli.
   const canPlan = game.phase === 'playing' && !myTurn && !game.mustPlayMultiOne && myMove?.combination !== null;
   const mid = (hand.length - 1) / 2;
@@ -722,7 +773,12 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           {error}
         </div>
       )}
-      <TurnBanner key={bannerText ? turnKey : 'none'} text={bannerText} />
+      <TurnBanner
+        key={bannerText ? turnKey : 'none'}
+        text={planned ? null : bannerText}
+        detail={bannerDetail}
+        cards={myTurn ? game.table?.combination.cards : mustGive ? [exchange!.loserCard] : undefined}
+      />
       {(game.phase === 'roundOver' || game.phase === 'gameOver') && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );

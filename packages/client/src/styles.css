@@ -873,8 +873,8 @@ input {
   z-index: 18;
   display: grid;
   place-items: center;
-  pointer-events: none;
-  animation: banner-fade 1.6s ease forwards;
+  padding: 1rem;
+  cursor: pointer;
 }
 .turn-banner-box {
   font-family: var(--font-title);
@@ -884,9 +884,13 @@ input {
   background: linear-gradient(180deg, #f6d567, var(--gold));
   border: 3px solid var(--gold-dark);
   border-radius: 20px;
-  padding: 0.6em 1.2em;
+  padding: 0.5em 1.1em 0.6em;
+  max-width: min(640px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
   text-align: center;
-  box-shadow: 0 0 0 9999px rgba(5, 12, 8, 0.35), 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 9999px rgba(5, 12, 8, 0.45), 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: banner-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
 }
 @keyframes banner-pop {
@@ -897,14 +901,30 @@ input {
     transform: scale(1);
   }
 }
-@keyframes banner-fade {
-  0%,
-  70% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
+.turn-banner-cards {
+  display: flex;
+  gap: 4px;
+}
+.turn-banner-cards .card {
+  --card-w: clamp(38px, 7vw, 58px);
+}
+.turn-banner-detail {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: clamp(0.95rem, 2.2vw, 1.1rem);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.turn-banner-ok {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.5rem 1.6rem;
+  border-radius: 999px;
+  border: 2px solid var(--gold-dark);
+  background: #2a1d02;
+  color: #f6d567;
+  cursor: pointer;
 }
 @media (prefers-reduced-motion: reduce) {
   .turn-banner-box {
