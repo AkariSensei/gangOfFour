@@ -22,11 +22,14 @@ const historyFile = process.env.DATA_FILE ?? here(compiled ? '../../data/parties
 // Les salons en cours sont enregistrés à côté, pour survivre à un redémarrage (mise à jour du site par exemple).
 const roomsFile = process.env.ROOMS_FILE ?? join(dirname(historyFile), 'salons.json');
 
-const { http, saveRooms } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile });
+// Les erreurs sont notées à côté, une par ligne : la surveillance GitHub les relève et ouvre une issue.
+const errorsFile = process.env.ERRORS_FILE ?? join(dirname(historyFile), 'erreurs.jsonl');
 
-// Filet de sécurité : une erreur imprévue est écrite dans le journal mais n'arrête plus le serveur (et les parties).
-process.on('uncaughtException', (error) => console.error('Erreur non rattrapée :', error));
-process.on('unhandledRejection', (error) => console.error('Promesse rejetée non rattrapée :', error));
+const { http, saveRooms, errors } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile, errorsFile });
+
+// Filet de sécurité : une erreur imprévue est notée dans le journal mais n'arrête plus le serveur (et les parties).
+process.on('uncaughtException', (error) => errors.record('erreur non rattrapée', error));
+process.on('unhandledRejection', (error) => errors.record('promesse rejetée', error));
 
 // alwaysData arrête le serveur avec SIGTERM avant de le relancer : on enregistre les salons juste avant.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

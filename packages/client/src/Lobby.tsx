@@ -5,16 +5,19 @@ import { socket } from './socket';
 
 /** Scores de fin de partie proposés à l'hôte (le serveur accepte les mêmes). */
 const TARGET_SCORES = [50, 100, 200];
+/** Temps par tour proposés (0 : pas de minuteur). */
+const TURN_SECONDS = [0, 30, 60];
 
 export function Lobby({ room, session, onLeave }: { room: RoomView; session: Session; onLeave: () => void }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [targetScore, setTargetScore] = useState(100);
+  const [turnSeconds, setTurnSeconds] = useState(0);
   const isHost = room.hostId === session.playerId;
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
-    const result = await socket.emitWithAck('game:start', { targetScore });
+    const result = await socket.emitWithAck('game:start', { targetScore, turnSeconds });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -91,6 +94,24 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
                   onClick={() => setTargetScore(score)}
                 >
                   {score} pts
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isHost && (
+          <div className="target-score">
+            <span className="muted">Temps par tour</span>
+            <div className="segmented" role="radiogroup" aria-label="Temps par tour">
+              {TURN_SECONDS.map((seconds) => (
+                <button
+                  key={seconds}
+                  role="radio"
+                  aria-checked={turnSeconds === seconds}
+                  className={turnSeconds === seconds ? 'on' : ''}
+                  onClick={() => setTurnSeconds(seconds)}
+                >
+                  {seconds === 0 ? 'Illimité' : `${seconds} s`}
                 </button>
               ))}
             </div>

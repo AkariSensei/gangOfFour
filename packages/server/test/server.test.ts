@@ -208,4 +208,34 @@ describe('serveur de jeu', () => {
     expect(back.game!.you).toBe(1);
     expect(back.game!.hand).toEqual(before.players[1]!.hand);
   });
+
+  it('joue à la place d\'un joueur trop lent quand le minuteur est choisi', async () => {
+    await start({ turnSecondMs: 10 });
+    const { players } = await lobby(3);
+    expect((await players[0]!.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => players.every((p) => p.game && p.room?.turnRemainingMs !== null));
+    expect(players[0]!.room!.turnSeconds).toBe(30);
+    expect(players[0]!.room!.turnRemainingMs).toBeGreaterThan(250);
+    // Une « seconde » du minuteur dure ici 10 ms : au bout de 300 ms, le serveur joue pour le joueur qui doit ouvrir.
+    const code = players[0]!.room!.code;
+    const before = server.rooms.get(code)!.game!.trick.length;
+    await waitFor(() => server.rooms.get(code)!.game!.trick.length > before, 2000);
+    // Et un nouveau tour relance le minuteur pour le joueur suivant.
+    await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
+  });
+
+  it('ne lance pas de minuteur par défaut', async () => {
+    await start();
+    const { players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
+    await waitFor(() => players.every((p) => p.game));
+    expect(players[0]!.room).toMatchObject({ turnSeconds: 0, turnRemainingMs: null });
+  });
+
+  it('donne la fiche d\'un joueur', async () => {
+    await start();
+    const client = connect();
+    const result = await client.emitWithAck('stats:player', { name: 'Personne' });
+    expect(result).toEqual({ ok: true, profile: null });
+  });
 });

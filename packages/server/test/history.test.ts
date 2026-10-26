@@ -50,4 +50,31 @@ describe('GameHistory', () => {
     expect(history.recent(1)[0]!.players.filter((p) => p.bot).map((p) => p.name)).toEqual(['Robot Ada', 'Robot Alan']);
     expect(history.leaderboard().map((e) => e.name)).toEqual(['Alice']);
   });
+
+  it('construit la fiche d\'un joueur à partir de ses parties', () => {
+    const history = new GameHistory();
+    const first = finished({ Alice: 20, Bruno: 104, Chloé: 60 });
+    first.stats = [
+      { roundsWon: 3, gangs: 1, worstRound: 10 },
+      { roundsWon: 0, gangs: 0, worstRound: 32 },
+      { roundsWon: 1, gangs: 2, worstRound: 18 },
+    ];
+    history.record(first, new Date('2026-10-26T10:00:00Z'));
+    history.record(finished({ alice: 101, Bruno: 30, Chloé: 50 }), new Date('2026-10-26T11:00:00Z'));
+    expect(history.profile('ALICE')).toMatchObject({
+      name: 'alice',
+      games: 2,
+      wins: 1,
+      averageScore: 61,
+      bestScore: 20,
+      roundsWon: 3,
+      gangs: 1,
+      worstRound: 10,
+      recent: [
+        { score: 101, winner: false, rank: 3, players: 3 },
+        { score: 20, winner: true, rank: 1, players: 3 },
+      ],
+    });
+    expect(history.profile('David')).toBeNull();
+  });
 });

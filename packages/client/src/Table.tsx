@@ -292,7 +292,7 @@ function CenterPile({ game }: { game: PlayerView }) {
             ))}
           </div>
         ))}
-        <div className="pile-cards top pop-in" key={top.combination.cards.map((c) => c.id).join()}>
+        <div className={`pile-cards top fly-in from-${sideOf(game, top.playerIndex)}`} key={top.combination.cards.map((c) => c.id).join()}>
           {top.combination.cards.map((c) => (
             <CardView key={c.id} card={c} />
           ))}
@@ -303,6 +303,12 @@ function CenterPile({ game }: { game: PlayerView }) {
       </div>
     </div>
   );
+}
+
+/** Côté de la table d'où arrivent les cartes d'un joueur : le bas pour soi, sinon la place de l'adversaire. */
+function sideOf(game: PlayerView, index: number): Seat | 'bottom' {
+  const n = game.players.length;
+  return index === game.you ? 'bottom' : seatsFor(n)[(index - game.you - 1 + n) % n]!;
 }
 
 function sortHand(hand: Card[], mode: SortMode): Card[] {
@@ -321,6 +327,17 @@ function orderHand(sorted: Card[], order: string[] | null): Card[] {
 
 /** Distance (en pixels) au-delà de laquelle un appui sur une carte devient un glisser plutôt qu'un clic. */
 const DRAG_THRESHOLD = 8;
+
+/** Secondes restantes avant `endsAt` (horloge locale), recalculées quatre fois par seconde. */
+function useCountdown(endsAt: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (endsAt === null) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [endsAt]);
+  return endsAt === null ? null : Math.max(0, Math.ceil((endsAt - now) / 1000));
+}
 
 /** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
 type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
@@ -342,6 +359,14 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
   const mustCut = game.phase === 'cut' && game.dealer === me;
   const { sound, toggleSound } = useTurnAlert(myTurn || mustGive || mustCut);
+  // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
+  const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
+  useEffect(() => {
+    setTurnEndsAt(room.turnRemainingMs === null ? null : Date.now() + room.turnRemainingMs);
+  }, [room]);
+  const countdown = useCountdown(turnEndsAt);
+  const secondsLeft = countdown === null ? null : Math.min(countdown, room.turnSeconds);
+  const myAction = myTurn || mustGive || mustCut;
   // L'annonce change de texte à chaque nouveau tour (le compteur de cartes jouées la relance).
   const bannerText = myTurn
     ? game.table
@@ -364,6 +389,20 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     const t = setTimeout(() => setError(''), 4000);
     return () => clearTimeout(t);
   }, [error]);
+
+  // Nouvelle main : les cartes arrivent une à une, comme une distribution (seulement pendant ce court moment,
+  // pour ne pas rejouer l'animation quand on range sa main).
+  const [dealing, setDealing] = useState(() => game.hand.length >= 10);
+  const handSize = game.hand.length;
+  const previousHandSize = useRef(0);
+  useEffect(() => {
+    const grew = handSize >= 10 && previousHandSize.current < 10;
+    previousHandSize.current = handSize;
+    if (!grew) return;
+    setDealing(true);
+    const t = setTimeout(() => setDealing(false), 1500);
+    return () => clearTimeout(t);
+  }, [handSize]);
 
   const hand = useMemo(() => orderHand(sortHand(game.hand, sortMode), order), [game.hand, sortMode, order]);
 
@@ -529,6 +568,11 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           <span className="direction" title="Sens de jeu de la manche">
             {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
           </span>
+          {room.turnSeconds > 0 && (
+            <span className="direction" title="Temps pour jouer : après, tu passes automatiquement">
+              ⏱ {room.turnSeconds} s par tour
+            </span>
+          )}
           {game.dealer === me && (
             <span className="direction" title="Tu as distribué les cartes de cette manche">
               Tu es donneur
@@ -562,10 +606,26 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
       </div>
 
       <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
+        {myAction && secondsLeft !== null && (
+          <div className="turn-timer" aria-hidden>
+            <div
+              className={`turn-timer-fill ${secondsLeft <= 10 ? 'urgent' : ''}`}
+              style={{ width: `${(100 * secondsLeft) / room.turnSeconds}%` }}
+            />
+          </div>
+        )}
         <div className="my-bar">
           <div className="status">
             {(myTurn || mustGive) && <span className="dot" aria-hidden />}
             {status}
+            {secondsLeft !== null && (
+              <span
+                className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
+                title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
+              >
+                ⏱ {secondsLeft} s
+              </span>
+            )}
             {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
           </div>
           <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
@@ -573,7 +633,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           </button>
         </div>
 
-        <div className="hand" style={{ '--count': hand.length } as CSSProperties}>
+        <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
           {hand.map((c, i) => (
             <CardView
               key={c.id}
@@ -582,7 +642,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
               dimmed={playable !== null && !playable.has(c.id)}
               dragging={dragging === c.id}
               onClick={() => toggle(c)}
-              style={{ '--offset': i - mid } as CSSProperties}
+              style={{ '--offset': i - mid, '--i': i } as CSSProperties}
               handlers={{
                 onPointerDown: (e) => onPointerDown(e, c),
                 onPointerMove,

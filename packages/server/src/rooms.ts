@@ -8,10 +8,13 @@ const MAX_NAME_LENGTH = 20;
 /** Scores de fin de partie que l'hôte peut choisir. */
 export const TARGET_SCORES = [50, 100, 200];
 const DEFAULT_TARGET_SCORE = 100;
+/** Temps par tour que l'hôte peut choisir, en secondes (0 : pas de minuteur). */
+export const TURN_SECONDS = [0, 30, 60];
 
 export interface StartOptions {
   seed?: number;
   targetScore?: number;
+  turnSeconds?: number;
 }
 /** Lettres sans ambiguïté à l'oral ou à l'écrit (pas de I, O, 0, 1). */
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -35,6 +38,8 @@ export interface Room {
   game: GameState | null;
   /** La partie terminée a déjà été ajoutée à l'historique. */
   recorded?: boolean;
+  /** Temps laissé à chaque joueur pour agir, en secondes ; 0 ou absent : pas de minuteur. */
+  turnSeconds?: number;
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -153,8 +158,8 @@ export class RoomManager {
     return { ok: true };
   }
 
-  /** Le bot qui doit agir maintenant dans ce salon (jouer, rendre une carte ou couper), s'il y en a un. */
-  botToAct(code: string): Seat | null {
+  /** Le joueur qui doit agir maintenant (jouer, rendre une carte ou couper), s'il y en a un. */
+  seatToAct(code: string): Seat | null {
     const room = this.get(code);
     const game = room?.game;
     if (!room || !game) return null;
@@ -166,7 +171,12 @@ export class RoomManager {
           : game.phase === 'cut'
             ? game.dealer
             : -1;
-    const seat = room.seats[index];
+    return room.seats[index] ?? null;
+  }
+
+  /** Le bot qui doit agir maintenant dans ce salon, s'il y en a un. */
+  botToAct(code: string): Seat | null {
+    const seat = this.seatToAct(code);
     return seat?.bot ? seat : null;
   }
 
@@ -198,6 +208,7 @@ export class RoomManager {
       options.seed ?? randomInt(2 ** 31),
       { targetScore: TARGET_SCORES.includes(options.targetScore!) ? options.targetScore! : DEFAULT_TARGET_SCORE },
     );
+    room.turnSeconds = TURN_SECONDS.includes(options.turnSeconds!) ? options.turnSeconds : 0;
     return { ok: true };
   }
 
@@ -221,6 +232,8 @@ export class RoomManager {
       hostId: room.hostId,
       players: room.seats.map((s) => ({ id: s.playerId, name: s.name, connected: s.connected, bot: s.bot ?? false })),
       started: room.game !== null,
+      turnSeconds: room.turnSeconds ?? 0,
+      turnRemainingMs: null,
     };
   }
 

@@ -1,0 +1,89 @@
+name: Surveillance
+# Toutes les 15 minutes : vérifie que le site répond et relève les erreurs notées par le serveur
+# (gangoffour/data/erreurs.jsonl sur alwaysData). S'il y a un problème, ouvre une issue GitHub
+# (ou commente celle déjà ouverte) : le propriétaire du dépôt est prévenu par e-mail.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  issues: write
+  contents: read
+concurrency: surveillance
+jobs:
+  surveiller:
+    runs-on: ubuntu-latest
+    env:
+      COMPTE: ${{ vars.ALWAYSDATA_COMPTE }}
+      SSHPASS: ${{ secrets.ALWAYSDATA_SSH_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Réglages présents ?
+        id: reglages
+        run: |
+          if [ -z "$COMPTE" ] || [ -z "$SSHPASS" ]; then
+            echo "::warning::Surveillance sautée : il manque ALWAYSDATA_COMPTE ou ALWAYSDATA_SSH_PASSWORD"
+            echo "ok=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Le site répond ?
+        if: steps.reglages.outputs.ok == 'oui'
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS -m 20 -o /dev/null "https://$COMPTE.alwaysdata.net/"; then exit 0; fi
+            sleep 20
+          done
+          echo "Le site https://$COMPTE.alwaysdata.net/ ne répond pas (3 essais à 20 s d'intervalle)." > probleme-site.txt
+
+      - name: Relever les erreurs
+        if: steps.reglages.outputs.ok == 'oui'
+        run: |
+          sudo apt-get install -y -qq sshpass > /dev/null
+          # Le fichier est déplacé avant lecture : le serveur en recommence un nouveau, rien n'est relevé deux fois.
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "$COMPTE@ssh-$COMPTE.alwaysdata.net" '
+            cd gangoffour/data 2>/dev/null || exit 0
+            [ -s erreurs.jsonl ] || exit 0
+            mv erreurs.jsonl erreurs-releve.tmp
+            cat erreurs-releve.tmp
+            cat erreurs-releve.tmp >> erreurs-archive.jsonl
+            rm erreurs-releve.tmp
+          ' > erreurs.jsonl
+          echo "$(wc -l < erreurs.jsonl) erreur(s) relevée(s)"
+
+      - name: Ouvrir ou compléter une issue
+        if: steps.reglages.outputs.ok == 'oui'
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const parts = [];
+          if (fs.existsSync('probleme-site.txt')) parts.push(`## 🔴 Site injoignable\n\n${fs.readFileSync('probleme-site.txt', 'utf8')}`);
+          const lines = fs.readFileSync('erreurs.jsonl', 'utf8').split('\n').filter(Boolean);
+          if (lines.length > 0) {
+            // Regroupe les erreurs identiques : nombre, première et dernière fois, une pile d'appels.
+            const groups = new Map();
+            for (const line of lines) {
+              let e;
+              try { e = JSON.parse(line); } catch { continue; }
+              const key = `${e.context} | ${e.message}`;
+              const g = groups.get(key) ?? { ...e, count: 0, first: e.at };
+              g.count += 1;
+              g.last = e.at;
+              groups.set(key, g);
+            }
+            const blocks = [...groups.entries()].map(([key, g]) =>
+              `### ${key}\n\n${g.count} fois, du ${g.first} au ${g.last}\n\n\`\`\`\n${(g.stack ?? g.message).slice(0, 3000)}\n\`\`\``);
+            parts.push(`## ⚠️ ${lines.length} erreur(s) sur le serveur\n\n${blocks.join('\n\n')}`);
+          }
+          if (parts.length > 0) fs.writeFileSync('rapport.md', `${parts.join('\n\n')}\n\n_Relevé automatique (workflow Surveillance)._\n`);
+          JS
+          [ -f rapport.md ] || { echo "Rien à signaler"; exit 0; }
+          gh label create erreur-serveur --color d73a4a --description "Relevé automatique de la surveillance" 2>/dev/null || true
+          numero=$(gh issue list --label erreur-serveur --state open --json number --jq '.[0].number')
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --body-file rapport.md
+          else
+            gh issue create --title "Problème détecté sur le site" --label erreur-serveur --body-file rapport.md
+          fi

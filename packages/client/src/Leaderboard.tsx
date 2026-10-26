@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GameRecord, LeaderboardEntry } from '../../server/src/protocol';
+import { Profile } from './Profile';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -7,6 +8,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'sh
 /** Classement du bureau et dernières parties, affichés sur l'accueil. */
 export function Leaderboard() {
   const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; recent: GameRecord[] } | null>(null);
+  const [shown, setShown] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -25,13 +27,17 @@ export function Leaderboard() {
   return (
     <section className="panel leaderboard">
       <h2>Classement du bureau</h2>
+      {shown && <Profile name={shown} onClose={() => setShown(null)} />}
+      <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>
       <ol className="ranking">
         {stats.leaderboard.map((e, i) => (
           <li key={e.name}>
             <span className="medal" aria-hidden>
               {['🥇', '🥈', '🥉'][i] ?? i + 1}
             </span>
-            <span className="who">{e.name}</span>
+            <button className="who" onClick={() => setShown(e.name)} title="Voir ses statistiques">
+              {e.name}
+            </button>
             <span className="stat" title="Victoires / parties">
               <strong>{e.wins}</strong> / {e.games}
             </span>

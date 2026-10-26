@@ -80,6 +80,22 @@ export interface GameState {
   lastRound: RoundResult | null;
   /** Indices des joueurs avec le score le plus bas en fin de partie. */
   winners: number[];
+  /** Statistiques de la partie, dans l'ordre des joueurs (absentes des parties créées avant leur ajout). */
+  stats?: PlayerStats[];
+}
+
+/** Ce que chaque joueur a fait pendant la partie, pour ses statistiques personnelles. */
+export interface PlayerStats {
+  /** Manches où il est sorti en premier. */
+  roundsWon: number;
+  /** Gangs posés. */
+  gangs: number;
+  /** Plus grosse pénalité prise en une manche. */
+  worstRound: number;
+}
+
+function statsOf(state: GameState): PlayerStats[] {
+  return (state.stats ??= state.players.map(() => ({ roundsWon: 0, gangs: 0, worstRound: 0 })));
 }
 
 export type Action =
@@ -173,6 +189,7 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     exchange: null,
     lastRound: null,
     winners: [],
+    stats: players.map(() => ({ roundsWon: 0, gangs: 0, worstRound: 0 })),
   };
   // Seul le tout premier paquet est mélangé.
   deal(state, shuffle(createDeck(), createRng(state.seed)));
@@ -214,6 +231,7 @@ function play(state: GameState, playerIndex: number, cardIds: string[]): ActionR
   state.trick.push({ playerIndex, combination });
   state.table = { playerIndex, combination };
   state.mustPlayMultiOne = false;
+  if (combination.type === 'gang') statsOf(state)[playerIndex]!.gangs += 1;
 
   if (player.hand.length === 0) {
     endRound(state, playerIndex);
@@ -265,6 +283,9 @@ function findLoser(state: GameState, winnerIndex: number): number {
 function endRound(state: GameState, winnerIndex: number): void {
   const penalties = state.players.map((p) => penaltyForCards(p.hand.length));
   state.players.forEach((p, i) => (p.score += penalties[i]!));
+  const stats = statsOf(state);
+  stats[winnerIndex]!.roundsWon += 1;
+  penalties.forEach((penalty, i) => (stats[i]!.worstRound = Math.max(stats[i]!.worstRound, penalty)));
 
   state.lastRound = {
     winnerIndex,
