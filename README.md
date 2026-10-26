@@ -1,3 +1,35 @@
 # Gang of Four
 
-Version web du jeu de cartes Gang of Four, jouable en ligne entre collègues.
+Version web du jeu de cartes Gang of Four, jouable en ligne entre collègues (4 joueurs, chacun sur son poste).
+
+## Organisation
+
+Un seul dépôt, en plusieurs paquets npm (workspaces) :
+
+- `packages/engine` : le moteur de jeu en TypeScript pur (cartes, combinaisons, tours, scores), sans interface.
+- `packages/server` *(à venir)* : serveur Node.js + Socket.IO qui fait autorité sur la partie.
+- `packages/client` *(à venir)* : interface React + TypeScript.
+
+## Commandes
+
+```bash
+npm install
+npm test          # tests de tous les paquets
+npm run typecheck # vérification des types
+```
+
+## Règles implémentées dans le moteur
+
+Conformes au livret officiel (Days of Wonder).
+
+- 64 cartes : 1 à 10 en vert, jaune et rouge (deux exemplaires de chaque), le 1 multicolore, le phénix vert, le phénix jaune et le dragon rouge. Ordre des couleurs : vert < jaune < rouge ; le 1 multicolore est le plus fort des 1.
+- 3 ou 4 joueurs, 16 cartes chacun. À 3, les 16 cartes restantes forment une main morte qui n'est pas jouée.
+- Première manche : le détenteur du 1 multicolore ouvre avec une combinaison qui le contient. À 3, si ce 1 est dans la main morte, le voisin du donneur ouvre. Manches suivantes : le gagnant de la manche précédente ouvre.
+- Le sens de jeu s'inverse à chaque manche (antihoraire pour la première).
+- Combinaisons : carte seule, paire (dont la paire de phénix), brelan, et cinq cartes (suite < couleur < full < quinte flush). Le 1 multicolore prend la couleur voulue dans une couleur ou une quinte flush. Les phénix peuvent servir de paire dans un full, mais jamais dans une suite, une couleur ou une quinte flush. Le dragon se joue seul.
+- Un « gang » (4 à 7 cartes de même valeur) bat toute autre combinaison ; un gang plus long bat un gang plus court, à longueur égale la valeur décide.
+- On ne peut pas poser une combinaison identique à celle sur la table. Passer est toujours permis, et un joueur qui a passé peut rejouer quand son tour revient. Quand tous les autres ont passé, le dernier à avoir posé ouvre un nouveau pli.
+- « Carte ! » : annoncé automatiquement par l'application. Le joueur qui précède un joueur n'ayant plus qu'une carte doit ouvrir avec une combinaison s'il le peut, et toute carte seule qu'il joue doit être sa plus forte.
+- Fin de manche : chaque carte restante coûte 1 point (1 à 7 cartes), x2 (8 à 10), x3 (11 à 13), x4 (14 à 15), et 16 cartes valent 80 points.
+- Échange entre manches : le perdant (le plus de cartes restantes ; à égalité le plus gros score total, puis le plus proche du gagnant dans le sens antihoraire) donne sa meilleure carte au gagnant, qui lui rend une carte de son choix. Les deux cartes sont montrées à tous.
+- La partie s'arrête quand un joueur atteint 100 points ; le score le plus bas gagne.
