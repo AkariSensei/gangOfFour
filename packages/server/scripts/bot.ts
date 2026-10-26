@@ -4,10 +4,20 @@ import type { ClientToServerEvents, ServerToClientEvents } from '../src';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { game?: PlayerView };
 
-function firstPair(hand: Card[]): string[] | null {
-  for (let i = 0; i < hand.length; i++)
-    for (let j = i + 1; j < hand.length; j++)
-      if (analyzeCombination([hand[i]!, hand[j]!])) return [hand[i]!.id, hand[j]!.id];
+/** Première combinaison de plusieurs cartes trouvée dans la main (paire, suite, couleur…), ou null. */
+function firstCombination(hand: Card[]): string[] | null {
+  const pick = (start: number, chosen: Card[], size: number): Card[] | null => {
+    if (chosen.length === size) return analyzeCombination(chosen) ? chosen : null;
+    for (let i = start; i < hand.length; i++) {
+      const found = pick(i + 1, [...chosen, hand[i]!], size);
+      if (found) return found;
+    }
+    return null;
+  };
+  for (let size = 2; size <= Math.min(hand.length, 5); size++) {
+    const found = pick(0, [], size);
+    if (found) return found.map((c) => c.id);
+  }
   return null;
 }
 
@@ -31,8 +41,9 @@ export async function playBotTurn(players: Client[]): Promise<void> {
   const n = view.players.length;
   const lastCard = view.players[(view.currentPlayer + direction + n) % n]!.cardCount === 1;
   if (!table) {
-    const ids = (lastCard && firstPair(hand)) || [hand[lastCard ? hand.length - 1 : 0]!.id];
-    await client.emitWithAck('game:play', { cardIds: ids });
+    const ids = (lastCard && firstCombination(hand)) || [hand[lastCard ? hand.length - 1 : 0]!.id];
+    const result = await client.emitWithAck('game:play', { cardIds: ids });
+    if (!result.ok) throw new Error(result.error);
     return;
   }
   const candidates = lastCard ? [hand[hand.length - 1]!] : hand;

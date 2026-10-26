@@ -7,6 +7,7 @@ import {
   analyzeCombination,
   applyAction,
   canBeat,
+  createDeck,
   createGame,
   getPlayerView,
 } from '../src';
@@ -20,11 +21,15 @@ function apply(state: GameState, action: Action): GameState {
   return result.state;
 }
 
-/** Partie avec des mains choisies, le joueur 0 ayant la main. */
+/** Partie avec des mains choisies, le joueur 0 ayant la main ; les autres cartes sont déjà jouées. */
 function withHands(hands: string[][], overrides: Partial<GameState> = {}): GameState {
   const state = createGame(players.slice(0, hands.length), 1);
   state.players.forEach((p, i) => (p.hand = cards(...hands[i]!)));
-  return { ...state, currentPlayer: 0, mustPlayMultiOne: false, ...overrides };
+  const pile = createDeck();
+  for (const card of state.players.flatMap((p) => p.hand)) {
+    pile.splice(pile.findIndex((c) => c.color === card.color && c.value === card.value), 1);
+  }
+  return { ...state, pile, dummy: [], currentPlayer: 0, mustPlayMultiOne: false, ...overrides };
 }
 
 const ids = (state: GameState, player: number, ...positions: number[]) =>
@@ -211,6 +216,20 @@ describe('fin de manche', () => {
     let state = withHands([['g3', 'y4'], ['rD'], ['y7'], ['g5', 'g6']], { currentPlayer: 1 });
     state = apply(state, { type: 'play', playerIndex: 1, cardIds: ids(state, 1, 0) });
     expect(state.lastRound!.loserIndex).toBe(3);
+  });
+
+  it('ne remélange pas : redistribue les 64 cartes ramassées, et le voisin de gauche devient donneur', () => {
+    let state = createGame(players.slice(0, 3), 9);
+    expect(state.dealer).toBe(0);
+    state = withHands([['rD'], ['g3', 'y4'], ['g5', 'g6']]);
+    state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });
+    state = apply(state, { type: 'nextRound' });
+    expect(state.dealer).toBe(2);
+    const faces = (list: Card[]) => list.map((c) => `${c.color}${c.value}`).sort();
+    expect(faces([...state.players.flatMap((p) => p.hand), ...state.dummy])).toEqual(faces(createDeck()));
+    expect(state.dummy).toHaveLength(16);
+    expect(state.pile).toEqual([]);
+    expect(getPlayerView(state, 0)).not.toHaveProperty('dummy');
   });
 
   it('termine la partie quand un joueur atteint le score cible', () => {
