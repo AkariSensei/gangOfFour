@@ -1205,3 +1205,11 @@ input {
     animation: none;
   }
 }
+
+/* Dernière carte de la manche : mise en avant quelques instants avant le résumé. */
+.pile-cards.final {
+  transform: scale(1.06);
+}
+.controls[hidden] {
+  display: none;
+}
