@@ -119,5 +119,10 @@ describe('serveur de jeu', () => {
       await waitFor(() => publicState(players[0]!) !== before && players.every((p) => publicState(p) === publicState(players[0]!)));
     }
     expect(players.every((p) => p.game!.phase === 'gameOver')).toBe(true);
+
+    // La partie terminée est ajoutée une seule fois à l'historique.
+    const stats = await players[0]!.emitWithAck('stats:get');
+    expect(stats.ok && stats.recent).toHaveLength(1);
+    expect(stats.ok && stats.leaderboard).toHaveLength(count);
   }, 60000);
 });

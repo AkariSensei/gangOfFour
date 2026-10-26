@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import type { Session } from '../../server/src/protocol';
+import { Leaderboard } from './Leaderboard';
 import { errorLabel } from './labels';
 import { saveName, savedName, socket } from './socket';
 
@@ -58,6 +59,8 @@ export function Home({ onEnter }: { onEnter: (s: Session) => void }) {
         </div>
         {error && <p className="error">{error}</p>}
       </form>
+
+      <Leaderboard />
     </main>
   );
 }

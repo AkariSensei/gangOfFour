@@ -37,6 +37,7 @@ body {
     radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
     radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
   background-color: var(--bg);
+  background-attachment: fixed;
   overflow-x: hidden;
 }
 
@@ -273,6 +274,62 @@ input {
 }
 .player-list li.offline {
   opacity: 0.5;
+}
+
+/* Classement du bureau sur l'accueil */
+.leaderboard {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.leaderboard h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+.leaderboard h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 1rem 0 0.4rem;
+}
+.ranking,
+.recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.ranking li {
+  display: grid;
+  grid-template-columns: 1.8rem 1fr auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.35rem 0.4rem;
+  border-radius: 8px;
+}
+.ranking li:nth-child(odd) {
+  background: #f4eedf;
+}
+.ranking .medal {
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+.ranking .who {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ranking .stat {
+  font-size: 0.85rem;
+}
+.recent li {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.85rem;
 }
 
 /* Cartes : illustrations de 108 × 167 px */
