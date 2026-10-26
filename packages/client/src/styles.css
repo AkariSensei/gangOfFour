@@ -901,20 +901,6 @@ input {
     transform: scale(1);
   }
 }
-.turn-banner-cards {
-  display: flex;
-  gap: 4px;
-}
-.turn-banner-cards .card {
-  --card-w: clamp(38px, 7vw, 58px);
-}
-.turn-banner-detail {
-  margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: clamp(0.95rem, 2.2vw, 1.1rem);
-  font-weight: 600;
-  line-height: 1.4;
-}
 .turn-banner-ok {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 1rem;
