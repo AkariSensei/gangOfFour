@@ -327,13 +327,22 @@ function sortHand(hand: Card[], mode: SortMode): Card[] {
   return [...hand].sort((a, b) => COLOR_RANK[a.color] - COLOR_RANK[b.color] || a.value - b.value);
 }
 
-/** Applique l'ordre choisi à la main par glisser-déposer ; les cartes nouvelles (échange, nouvelle manche) viennent après, triées. */
+/**
+ * Applique l'ordre choisi à la main par glisser-déposer. Une carte reçue en cours de manche (échange) se glisse
+ * juste avant la première carte rangée qui la suit dans le tri, plutôt qu'en bout de main.
+ */
 function orderHand(sorted: Card[], order: string[] | null): Card[] {
   if (!order) return sorted;
   const byId = new Map(sorted.map((c) => [c.id, c]));
-  const known = order.flatMap((id) => byId.get(id) ?? []);
-  const placed = new Set(known.map((c) => c.id));
-  return [...known, ...sorted.filter((c) => !placed.has(c.id))];
+  const result = order.flatMap((id) => byId.get(id) ?? []);
+  const placed = new Set(result.map((c) => c.id));
+  const rank = new Map(sorted.map((c, i) => [c.id, i]));
+  for (const card of sorted) {
+    if (placed.has(card.id)) continue;
+    const at = result.findIndex((c) => rank.get(c.id)! > rank.get(card.id)!);
+    result.splice(at < 0 ? result.length : at, 0, card);
+  }
+  return result;
 }
 
 /** Distance (en pixels) au-delà de laquelle un appui sur une carte devient un glisser plutôt qu'un clic. */
@@ -435,11 +444,15 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     return () => clearTimeout(t);
   }, [handSize]);
 
+  // Nouvelle manche, nouvelle main : l'ordre rangé à la main pour la manche d'avant ne veut plus rien dire
+  // (les cartes gardent le même identifiant d'une manche à l'autre, il mélangerait la nouvelle main).
+  useEffect(() => setOrder(null), [game.round]);
   const hand = useMemo(() => orderHand(sortHand(game.hand, sortMode), order), [game.hand, sortMode, order]);
 
   // Glisser-déposer : la carte saisie prend la place de la carte la plus proche du doigt (ou de la souris).
   function onPointerDown(e: PointerEvent<HTMLButtonElement>, card: Card) {
     if (e.button !== 0) return;
+    suppressClick.current = false;
     drag.current = { id: card.id, x: e.clientX, y: e.clientY, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
