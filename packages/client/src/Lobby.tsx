@@ -40,6 +40,9 @@ export function Lobby({ room, session, onLeave }: { room: RoomView; session: Ses
         <ul className="player-list">
           {room.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
+              <span className="avatar" aria-hidden>
+                {p.name.slice(0, 2).toUpperCase()}
+              </span>
               {p.name}
               {p.id === room.hostId && <span className="tag">hôte</span>}
               {p.id === session.playerId && <span className="tag you">toi</span>}

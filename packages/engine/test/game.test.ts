@@ -102,6 +102,27 @@ describe('déroulement des plis', () => {
     expect(state.currentPlayer).toBe(1);
   });
 
+  it('garde la trace des coups et des passes du pli en cours', () => {
+    let state = withHands(hands);
+    state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });
+    state = apply(state, { type: 'pass', playerIndex: 1 });
+    state = apply(state, { type: 'play', playerIndex: 2, cardIds: ids(state, 2, 0) });
+    expect(state.trick.map((e) => [e.playerIndex, e.combination?.type ?? 'pass'])).toEqual([
+      [0, 'single'],
+      [1, 'pass'],
+      [2, 'single'],
+    ]);
+    state = apply(state, { type: 'pass', playerIndex: 3 });
+    state = apply(state, { type: 'pass', playerIndex: 0 });
+    state = apply(state, { type: 'pass', playerIndex: 1 });
+    // Le pli terminé reste visible jusqu'à ce que le suivant soit ouvert.
+    expect(state.table).toBeNull();
+    expect(state.trick).toHaveLength(6);
+    state = apply(state, { type: 'play', playerIndex: 2, cardIds: ids(state, 2, 0) });
+    expect(state.trick).toHaveLength(1);
+    expect(getPlayerView(state, 1).trick).toEqual(state.trick);
+  });
+
   it('tourne dans l\'autre sens quand la direction est inversée', () => {
     let state = withHands(hands, { direction: -1 });
     state = apply(state, { type: 'play', playerIndex: 0, cardIds: ids(state, 0, 0) });

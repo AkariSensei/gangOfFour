@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
+import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
 import { type PlayerAction, RoomManager, type Result } from './rooms';
 
@@ -17,8 +18,15 @@ export interface GameServer {
   rooms: RoomManager;
 }
 
-export function createGameServer(options: { corsOrigin?: string | string[]; abandonDelayMs?: number } = {}): GameServer {
-  const http = createHttpServer();
+export interface GameServerOptions {
+  corsOrigin?: string | string[];
+  abandonDelayMs?: number;
+  /** Dossier de l'interface compilée à servir sur la même adresse que le jeu. */
+  staticDir?: string;
+}
+
+export function createGameServer(options: GameServerOptions = {}): GameServer {
+  const http = createHttpServer(options.staticDir ? createStaticHandler(options.staticDir) : undefined);
   const io = new Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>(http, {
     cors: options.corsOrigin ? { origin: options.corsOrigin } : undefined,
   });

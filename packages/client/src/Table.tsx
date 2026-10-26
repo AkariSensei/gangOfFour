@@ -1,53 +1,87 @@
-import { type Card, type PlayerView, analyzeCombination, canBeat } from '@gof/engine';
-import { useEffect, useMemo, useState } from 'react';
+import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat } from '@gof/engine';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import type { RoomView } from '../../server/src/protocol';
 import { CardView } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
+import { useTurnAlert } from './turnAlert';
 
 type Seat = 'right' | 'top' | 'left';
+type SortMode = 'value' | 'color';
 
 /** Place les adversaires autour de la table : le suivant (sens antihoraire) à droite, puis en face, puis à gauche. */
 function seatsFor(count: number): Seat[] {
   return count === 3 ? ['right', 'left'] : ['right', 'top', 'left'];
 }
 
-function Opponent({ game, index, seat, connected }: { game: PlayerView; index: number; seat: Seat; connected: boolean }) {
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+/** Dernier geste de chaque joueur dans le pli en cours, pour afficher « Passe » à côté de lui. */
+function lastMoves(trick: TrickEntry[]): Map<number, TrickEntry> {
+  const moves = new Map<number, TrickEntry>();
+  for (const entry of trick) moves.set(entry.playerIndex, entry);
+  return moves;
+}
+
+function Opponent({
+  game,
+  index,
+  seat,
+  connected,
+  move,
+}: {
+  game: PlayerView;
+  index: number;
+  seat: Seat;
+  connected: boolean;
+  move?: TrickEntry;
+}) {
   const p = game.players[index]!;
   const active = game.phase === 'playing' && game.currentPlayer === index;
+  const giving = game.phase === 'exchange' && game.exchange?.winnerIndex === index;
   return (
-    <div className={`opponent seat-${seat} ${active ? 'active' : ''} ${connected ? '' : 'offline'}`}>
-      <div className="opponent-name">
-        {p.name}
-        {!connected && <span className="tag">déconnecté</span>}
+    <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
+      <div className="avatar" aria-hidden>
+        {initials(p.name)}
       </div>
-      <div className="card-backs" aria-label={`${p.cardCount} cartes`}>
+      <div className="opponent-info">
+        <div className="opponent-name">
+          {p.name}
+          {!connected && <span className="tag">hors ligne</span>}
+        </div>
+        <div className="opponent-meta">
+          <span className="count">{p.cardCount}</span> carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
+        </div>
+      </div>
+      <div className="mini-fan" aria-hidden>
         {Array.from({ length: Math.min(p.cardCount, 16) }, (_, i) => (
           <span key={i} className="card-back" />
         ))}
       </div>
-      <div className="opponent-meta">
-        {p.cardCount} carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
-        {p.cardCount === 1 && game.phase === 'playing' && <span className="last-card">Carte !</span>}
-      </div>
+      {p.cardCount === 1 && game.phase === 'playing' && <span className="bubble alert">Carte !</span>}
+      {move && move.combination === null && game.phase === 'playing' && !active && <span className="bubble">Passe</span>}
     </div>
   );
 }
 
-function Scoreboard({ game }: { game: PlayerView }) {
+function Scores({ game }: { game: PlayerView }) {
+  const best = Math.min(...game.players.map((p) => p.score));
+  const tied = game.players.every((p) => p.score === best);
   return (
-    <aside className="scoreboard">
-      <h3>Manche {game.round}</h3>
-      <ol>
-        {game.players.map((p, i) => (
-          <li key={p.id} className={i === game.you ? 'me' : ''}>
-            <span>{p.name}</span>
-            <strong>{p.score}</strong>
-          </li>
-        ))}
-      </ol>
-      <p className="muted small-text">Partie en 100 points, le plus petit score gagne.</p>
-    </aside>
+    <div className="scores" aria-label="Scores">
+      {game.players.map((p, i) => (
+        <span key={p.id} className={`score-pill ${i === game.you ? 'me' : ''} ${p.score === best && !tied ? 'leader' : ''}`}>
+          {p.name} <strong>{p.score}</strong>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -55,31 +89,44 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   const r = game.lastRound!;
   const over = game.phase === 'gameOver';
   const ranking = game.players.map((p, i) => ({ ...p, i })).sort((a, b) => a.score - b.score);
+  const winnerNames = game.winners.map((i) => game.players[i]!.name).join(' et ');
   return (
     <div className="overlay">
-      <div className="panel modal">
-        <h2>{over ? 'Partie terminée !' : `${game.players[r.winnerIndex]!.name} remporte la manche`}</h2>
-        {over && <p className="winner">🏆 {game.winners.map((i) => game.players[i]!.name).join(' et ')}</p>}
+      <div className="panel modal pop-in">
+        {over ? (
+          <>
+            <div className="trophy" aria-hidden>
+              🏆
+            </div>
+            <h2>{winnerNames} gagne la partie !</h2>
+          </>
+        ) : (
+          <h2>{game.players[r.winnerIndex]!.name} remporte la manche {game.round}</h2>
+        )}
         <table className="results">
           <thead>
             <tr>
+              <th />
               <th>Joueur</th>
               <th>Manche</th>
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
-            {ranking.map((p) => (
+            {ranking.map((p, rank) => (
               <tr key={p.id} className={p.i === game.you ? 'me' : ''}>
+                <td className="rank">{rank + 1}</td>
                 <td>{p.name}</td>
-                <td>+{r.penalties[p.i]}</td>
-                <td>{p.score}</td>
+                <td className={r.penalties[p.i] === 0 ? 'zero' : 'penalty'}>+{r.penalties[p.i]}</td>
+                <td>
+                  <strong>{p.score}</strong>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {over ? (
-          <button className="primary" onClick={onExit}>
+          <button className="primary big" onClick={onExit}>
             Retour à l'accueil
           </button>
         ) : (
@@ -87,7 +134,7 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             <p className="muted">
               {game.players[r.loserIndex]!.name} donnera sa meilleure carte à {game.players[r.winnerIndex]!.name}.
             </p>
-            <button className="primary" onClick={() => socket.emitWithAck('game:nextRound')}>
+            <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
               Manche suivante
             </button>
           </>
@@ -97,32 +144,126 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   );
 }
 
+/** Le centre de la table : la combinaison à battre, les coups précédents du pli en retrait, ou l'échange de cartes. */
+function CenterPile({ game }: { game: PlayerView }) {
+  const plays = game.trick.filter((e) => e.combination);
+  const top = game.table;
+  const exchange = game.exchange;
+
+  if (game.phase === 'exchange' && exchange) {
+    return (
+      <div className="center-pile">
+        <div className="pile-label">
+          {game.players[exchange.loserIndex]!.name} donne sa meilleure carte à {game.players[exchange.winnerIndex]!.name}
+        </div>
+        <div className="pile-cards pop-in">
+          <CardView card={exchange.loserCard} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!top) {
+    const current = game.players[game.currentPlayer]!;
+    const lastPlay = plays[plays.length - 1];
+    return (
+      <div className="center-pile">
+        {lastPlay && game.phase === 'playing' && (
+          <div className="pile-cards faded">
+            {lastPlay.combination!.cards.map((c) => (
+              <CardView key={c.id} card={c} />
+            ))}
+          </div>
+        )}
+        {game.phase === 'playing' && (
+          <div className="pile-empty">
+            {game.currentPlayer === game.you ? 'À toi d’ouvrir un nouveau pli' : `${current.name} ouvre un nouveau pli`}
+          </div>
+        )}
+        {exchange?.winnerCard && game.phase === 'playing' && plays.length === 0 && (
+          <div className="exchange-recap">
+            <span>
+              {game.players[exchange.loserIndex]!.name} a donné <strong>{cardLabel(exchange.loserCard)}</strong>
+            </span>
+            <span>
+              {game.players[exchange.winnerIndex]!.name} a rendu <strong>{cardLabel(exchange.winnerCard)}</strong>
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const previous = plays.slice(-3, -1);
+  const tablePlayer = game.players[top.playerIndex]!;
+  return (
+    <div className="center-pile">
+      <div className="pile-stack">
+        {previous.map((e, i) => (
+          <div key={i} className="pile-cards previous" style={{ '--depth': previous.length - i } as CSSProperties}>
+            {e.combination!.cards.map((c) => (
+              <CardView key={c.id} card={c} />
+            ))}
+          </div>
+        ))}
+        <div className="pile-cards top pop-in" key={top.combination.cards.map((c) => c.id).join()}>
+          {top.combination.cards.map((c) => (
+            <CardView key={c.id} card={c} />
+          ))}
+        </div>
+      </div>
+      <div className={`pile-label ${top.combination.type === 'gang' ? 'gang' : ''}`}>
+        {tablePlayer.name} · {combinationLabel(top.combination.type, top.combination.cards.length)}
+      </div>
+    </div>
+  );
+}
+
+function sortHand(hand: Card[], mode: SortMode): Card[] {
+  if (mode === 'value') return hand;
+  return [...hand].sort((a, b) => COLOR_RANK[a.color] - COLOR_RANK[b.color] || a.value - b.value);
+}
+
 export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomView; onLeave: () => void }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
-
-  // La main change à chaque coup : on oublie la sélection des cartes qui ne sont plus là.
-  useEffect(() => {
-    setSelected((s) => s.filter((id) => game.hand.some((c) => c.id === id)));
-  }, [game.hand]);
-  useEffect(() => setError(''), [game.currentPlayer, game.phase]);
+  const [sortMode, setSortMode] = useState<SortMode>('value');
 
   const me = game.you;
   const n = game.players.length;
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
+  const { sound, toggleSound } = useTurnAlert(myTurn || mustGive);
+
+  // La main change à chaque coup : on oublie la sélection des cartes qui ne sont plus là.
+  useEffect(() => {
+    setSelected((s) => s.filter((id) => game.hand.some((c) => c.id === id)));
+  }, [game.hand]);
+  useEffect(() => setError(''), [game.currentPlayer, game.phase]);
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(''), 4000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  const hand = useMemo(() => sortHand(game.hand, sortMode), [game.hand, sortMode]);
   const selectedCards = selected.map((id) => game.hand.find((c) => c.id === id)).filter((c): c is Card => !!c);
 
   const hint = useMemo(() => {
-    if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis une carte à donner';
-    if (selectedCards.length === 0) return myTurn ? (game.table ? 'Choisis tes cartes ou passe' : 'À toi d\'ouvrir le pli') : '';
+    if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis la carte à rendre';
+    if (selectedCards.length === 0) return '';
     const combo = analyzeCombination(selectedCards);
-    if (!combo) return 'Combinaison invalide';
+    if (!combo) return { text: 'Combinaison invalide', ok: false };
     const label = combinationLabel(combo.type, combo.cards.length);
-    if (game.table && !canBeat(combo, game.table.combination)) return `${label} : trop faible`;
-    return label;
-  }, [selectedCards, myTurn, mustGive, game.table]);
+    const target = game.table?.combination;
+    if (target && combo.type !== 'gang' && target.type !== 'gang' && combo.cards.length !== target.cards.length) {
+      const count = target.cards.length;
+      return { text: `${label} · il faut ${count} carte${count > 1 ? 's' : ''}`, ok: false };
+    }
+    if (target && !canBeat(combo, target)) return { text: `${label} · trop faible`, ok: false };
+    return { text: label, ok: true };
+  }, [selectedCards, mustGive, game.table]);
 
   function toggle(card: Card) {
     setError('');
@@ -146,14 +287,14 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   }
 
   const opponents = seatsFor(n).map((seat, k) => ({ seat, index: (me + k + 1) % n }));
+  const moves = lastMoves(game.trick);
   const current = game.players[game.currentPlayer]!;
-  const tablePlayer = game.table ? game.players[game.table.playerIndex]! : null;
 
   let status: string;
   if (game.phase === 'exchange') {
     status = mustGive
       ? `Tu as reçu ${cardLabel(exchange!.loserCard)} de ${game.players[exchange!.loserIndex]!.name}. Choisis une carte à lui rendre.`
-      : `${game.players[exchange!.loserIndex]!.name} a donné ${cardLabel(exchange!.loserCard)} à ${game.players[exchange!.winnerIndex]!.name}, qui choisit une carte à rendre…`;
+      : `${game.players[exchange!.winnerIndex]!.name} choisit une carte à rendre à ${game.players[exchange!.loserIndex]!.name}…`;
   } else if (game.phase !== 'playing') {
     status = 'Fin de la manche';
   } else if (myTurn) {
@@ -162,55 +303,71 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     status = `${current.name} réfléchit…`;
   }
 
+  const myMove = moves.get(me);
+  const mid = (hand.length - 1) / 2;
+
   return (
     <main className={`table-screen players-${n}`}>
       <header className="table-header">
-        <span>
-          Salon <strong>{room.code}</strong> · Sens {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
-        </span>
-        <button className="link" onClick={leave}>
-          Quitter
-        </button>
+        <div className="header-left">
+          <span className="round">Manche {game.round}</span>
+          <span className="direction" title="Sens de jeu de la manche">
+            {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
+          </span>
+        </div>
+        <Scores game={game} />
+        <div className="header-right">
+          <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
+            {sound ? '🔔' : '🔕'}
+          </button>
+          <button className="link" onClick={leave}>
+            Quitter
+          </button>
+        </div>
       </header>
 
       <div className="felt">
         {opponents.map(({ seat, index }) => (
-          <Opponent key={index} game={game} index={index} seat={seat} connected={room.players[index]?.connected ?? true} />
+          <Opponent
+            key={index}
+            game={game}
+            index={index}
+            seat={seat}
+            connected={room.players[index]?.connected ?? true}
+            move={moves.get(index)}
+          />
         ))}
-
-        <div className="center-pile">
-          {game.table && tablePlayer ? (
-            <>
-              <div className="pile-label">
-                {tablePlayer.name} · {combinationLabel(game.table.combination.type, game.table.combination.cards.length)}
-              </div>
-              <div className="pile-cards">
-                {game.table.combination.cards.map((c) => (
-                  <CardView key={c.id} card={c} small />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="pile-empty">{game.phase === 'playing' ? `${current.name} ouvre un nouveau pli` : ''}</div>
-          )}
-          {exchange?.winnerCard && game.phase === 'playing' && game.table === null && (
-            <p className="muted small-text">
-              Échange : {game.players[exchange.loserIndex]!.name} a donné {cardLabel(exchange.loserCard)},{' '}
-              {game.players[exchange.winnerIndex]!.name} a rendu {cardLabel(exchange.winnerCard)}.
-            </p>
-          )}
-        </div>
+        <CenterPile game={game} />
       </div>
 
       <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
-        <div className="status">{status}</div>
-        <div className="hand">
-          {game.hand.map((c) => (
-            <CardView key={c.id} card={c} selected={selected.includes(c.id)} onClick={() => toggle(c)} />
+        <div className="my-bar">
+          <div className="status">
+            {(myTurn || mustGive) && <span className="dot" aria-hidden />}
+            {status}
+            {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
+          </div>
+          <button className="link small" onClick={() => setSortMode((m) => (m === 'value' ? 'color' : 'value'))}>
+            Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
+          </button>
+        </div>
+
+        <div className="hand" style={{ '--count': hand.length } as CSSProperties}>
+          {hand.map((c, i) => (
+            <CardView
+              key={c.id}
+              card={c}
+              selected={selected.includes(c.id)}
+              onClick={() => toggle(c)}
+              style={{ '--offset': i - mid } as CSSProperties}
+            />
           ))}
         </div>
+
         <div className="controls">
-          <span className="hint">{hint}</span>
+          <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
+            {typeof hint === 'object' ? hint.text : hint}
+          </span>
           {mustGive ? (
             <button
               className="primary"
@@ -221,6 +378,11 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             </button>
           ) : (
             <>
+              {selected.length > 0 && (
+                <button className="ghost" onClick={() => setSelected([])}>
+                  Annuler
+                </button>
+              )}
               <button disabled={!myTurn || !game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
                 Passer
               </button>
@@ -234,13 +396,14 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
             </>
           )}
         </div>
-        {error && <p className="error">{error}</p>}
       </section>
 
-      <Scoreboard game={game} />
-      {(game.phase === 'roundOver' || game.phase === 'gameOver') && game.lastRound && (
-        <RoundOver game={game} onExit={exit} />
+      {error && (
+        <div className="toast" role="alert">
+          {error}
+        </div>
       )}
+      {(game.phase === 'roundOver' || game.phase === 'gameOver') && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );
 }
