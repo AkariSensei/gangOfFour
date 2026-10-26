@@ -69,7 +69,9 @@ export function useGameConnection() {
       setConnected(true);
       const saved = readSession();
       if (!saved) return;
-      const result = await socket.emitWithAck('room:rejoin', { code: saved.code, token: saved.token });
+      const result = saved.spectator
+        ? await socket.emitWithAck('room:watch', { code: saved.code })
+        : await socket.emitWithAck('room:rejoin', { code: saved.code, token: saved.token });
       remember(result.ok ? saved : null);
     };
     const onDisconnect = () => setConnected(false);

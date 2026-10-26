@@ -18,6 +18,8 @@ interface SocketData {
   code?: string;
   playerId?: string;
   ip?: string;
+  /** Regarde la partie de `code` sans y jouer. */
+  spectator?: boolean;
 }
 
 export interface GameServer {
@@ -188,10 +190,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (!room) return;
     const turnRemainingMs = updateTurnTimer(code);
-    const roomView = { ...rooms.roomView(room), turnRemainingMs };
-    for (const socket of await io.in(room.code).fetchSockets()) {
+    const sockets = await io.in(room.code).fetchSockets();
+    const spectators = sockets.filter((s) => s.data.spectator).length;
+    const roomView = { ...rooms.roomView(room), turnRemainingMs, spectators };
+    for (const socket of sockets) {
       socket.emit('room:state', roomView);
-      const gameView = rooms.gameView(room, socket.data.playerId!);
+      const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
       if (gameView) socket.emit('game:state', gameView);
     }
   }
@@ -279,7 +283,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     }
 
     function leaveCurrent() {
-      const { code, playerId } = socket.data;
+      const { code, playerId, spectator } = socket.data;
+      if (code && spectator) {
+        void socket.leave(code);
+        socket.data = { ip: socket.data.ip };
+        void broadcast(code);
+        return;
+      }
       if (!code || !playerId) return;
       rooms.leave(code, playerId);
       void socket.leave(code);
@@ -317,6 +327,25 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       leaveCurrent();
       ack({ ok: true });
     });
+    on('room:watch', async (payload, ack) => {
+      const room = rooms.get(text(payload.code));
+      if (!room) return ack({ ok: false, error: 'roomNotFound' });
+      if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
+      if (socket.data.code) leaveCurrent();
+      socket.data = { ip: socket.data.ip, code: room.code, spectator: true };
+      await socket.join(room.code);
+      ack({ ok: true, code: room.code, playerId: '', token: '', spectator: true });
+      await broadcast(room.code);
+    });
+    on('rooms:live', async (_payload, ack) => {
+      const live = await Promise.all(
+        rooms.live().map(async (room) => {
+          const sockets = await io.in(room.code).fetchSockets();
+          return { ...room, spectators: sockets.filter((s) => s.data.spectator).length };
+        }),
+      );
+      ack({ ok: true, rooms: live });
+    });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
@@ -335,7 +364,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 
     socket.on('disconnect', () => {
-      const { code, playerId } = socket.data;
+      const { code, playerId, spectator } = socket.data;
+      if (code && spectator) return void broadcast(code);
       if (!code || !playerId) return;
       rooms.setConnected(code, playerId, false);
       scheduleCleanup(code);

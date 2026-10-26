@@ -6,12 +6,17 @@ import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert } from './turnAlert';
 
-type Seat = 'right' | 'top' | 'left';
+type Seat = 'right' | 'top' | 'left' | 'bottom';
 type SortMode = 'value' | 'color';
 
 /** Place les adversaires autour de la table : le suivant (sens antihoraire) à droite, puis en face, puis à gauche. */
 function seatsFor(count: number): Seat[] {
   return count === 3 ? ['right', 'left'] : ['right', 'top', 'left'];
+}
+
+/** Places de tous les joueurs pour un spectateur, qui n'a pas de siège : le premier joueur en bas. */
+function spectatorSeats(count: number): Seat[] {
+  return ['bottom', ...seatsFor(count)];
 }
 
 function initials(name: string): string {
@@ -145,9 +150,13 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             <p className="muted">
               {game.players[r.loserIndex]!.name} donnera sa meilleure carte à {game.players[r.winnerIndex]!.name}.
             </p>
-            <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
-              Manche suivante
-            </button>
+            {game.you < 0 ? (
+              <p className="muted">La manche suivante commence quand un joueur la lance.</p>
+            ) : (
+              <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
+                Manche suivante
+              </button>
+            )}
           </>
         )}
       </div>
@@ -319,6 +328,7 @@ function CenterPile({ game }: { game: PlayerView }) {
 /** Côté de la table d'où arrivent les cartes d'un joueur : le bas pour soi, sinon la place de l'adversaire. */
 function sideOf(game: PlayerView, index: number): Seat | 'bottom' {
   const n = game.players.length;
+  if (game.you < 0) return spectatorSeats(n)[index]!;
   return index === game.you ? 'bottom' : seatsFor(n)[(index - game.you - 1 + n) % n]!;
 }
 
@@ -405,6 +415,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   const [planned, setPlanned] = useState<Planned | null>(null);
 
   const me = game.you;
+  const spectator = me < 0;
   const n = game.players.length;
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
@@ -609,10 +620,13 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
   }
 
   function leave() {
-    if (confirm('Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.')) void exit();
+    if (spectator || confirm('Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.')) void exit();
   }
 
-  const opponents = seatsFor(n).map((seat, k) => ({ seat, index: (me + k + 1) % n }));
+  // Le spectateur voit tous les joueurs autour de la table ; un joueur voit les autres à partir de sa place.
+  const opponents = spectator
+    ? spectatorSeats(n).map((seat, index) => ({ seat, index }))
+    : seatsFor(n).map((seat, k) => ({ seat, index: (me + k + 1) % n }));
   const moves = lastMoves(game.trick);
   const current = game.players[game.currentPlayer]!;
 
@@ -658,6 +672,11 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
               Tu es donneur
             </span>
           )}
+          {room.spectators > 0 && (
+            <span className="direction" title="Personnes qui regardent la partie">
+              👀 {room.spectators}
+            </span>
+          )}
         </div>
         <Scores game={game} />
         <div className="header-right">
@@ -685,122 +704,130 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
         <CenterPile game={game} />
       </div>
 
-      <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
-        {myAction && secondsLeft !== null && (
-          <div className="turn-timer" aria-hidden>
-            <div
-              className={`turn-timer-fill ${secondsLeft <= 10 ? 'urgent' : ''}`}
-              style={{ width: `${(100 * secondsLeft) / room.turnSeconds}%` }}
-            />
+      {spectator ? (
+        <section className="my-area spectating">
+          <div className="my-bar">
+            <div className="status">👀 Tu regardes la partie · {status}</div>
           </div>
-        )}
-        <div className="my-bar">
-          <div className="status">
-            {(myTurn || mustGive) && <span className="dot" aria-hidden />}
-            {status}
-            {secondsLeft !== null && (
-              <span
-                className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
-                title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
-              >
-                ⏱ {secondsLeft} s
-              </span>
-            )}
-            {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
-          </div>
-          <div className="my-tools">
-            <span className="my-count">
-              <strong>{hand.length}</strong> carte{hand.length > 1 ? 's' : ''}
-            </span>
-            <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
-              Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
-            </button>
-          </div>
-        </div>
-
-        <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
-          {hand.map((c, i) => (
-            <CardView
-              key={c.id}
-              card={c}
-              selected={selected.includes(c.id)}
-              dimmed={playable !== null && !playable.has(c.id)}
-              dragging={dragging === c.id}
-              onClick={() => toggle(c)}
-              style={{ '--offset': i - mid, '--i': i } as CSSProperties}
-              handlers={{
-                onPointerDown: (e) => onPointerDown(e, c),
-                onPointerMove,
-                onPointerUp,
-                onPointerCancel: onPointerUp,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="controls" hidden={roundFinished}>
-          <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
-            {typeof hint === 'object' ? hint.text : hint}
-          </span>
-          {mustGive ? (
-            <button
-              className="primary"
-              disabled={selected.length !== 1}
-              onClick={() => send(socket.emitWithAck('game:giveCard', { cardId: selected[0]! }))}
-            >
-              Donner
-            </button>
-          ) : (
-            <>
-              {selected.length > 0 && !planned && (
-                <button className="ghost" onClick={() => setSelected([])}>
-                  Annuler
-                </button>
-              )}
-              {myTurn ? (
-                <>
-                  <button disabled={!game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
-                    Passer
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={selected.length === 0}
-                    onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
-                  >
-                    Jouer
-                  </button>
-                </>
-              ) : planned ? (
-                <button className="ghost" onClick={() => setPlanned(null)}>
-                  Annuler {planned.type === 'pass' ? 'la passe prévue' : 'le coup prévu'}
-                </button>
-              ) : (
-                // Pas encore son tour : on prépare son coup (ou sa passe), joué dès que le tour arrive.
-                <>
-                  <button
-                    disabled={!canPlan}
-                    onClick={() => {
-                      setSelected([]);
-                      setPlanned({ type: 'pass', round: game.round, trickLength: game.trick.length });
-                    }}
-                    title="Passer automatiquement quand ce sera ton tour"
-                  >
-                    Passer à mon tour
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={!canPlan || typeof hint !== 'object' || !hint.ok}
-                    onClick={() => setPlanned({ type: 'play', cardIds: selected, round: game.round, trickLength: game.trick.length })}
-                    title="Jouer ces cartes automatiquement quand ce sera ton tour"
-                  >
-                    Jouer à mon tour
-                  </button>
-                </>
-              )}
-            </>
+        </section>
+      ) : (
+        <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
+          {myAction && secondsLeft !== null && (
+            <div className="turn-timer" aria-hidden>
+              <div
+                className={`turn-timer-fill ${secondsLeft <= 10 ? 'urgent' : ''}`}
+                style={{ width: `${(100 * secondsLeft) / room.turnSeconds}%` }}
+              />
+            </div>
           )}
-        </div>
-      </section>
+          <div className="my-bar">
+            <div className="status">
+              {(myTurn || mustGive) && <span className="dot" aria-hidden />}
+              {status}
+              {secondsLeft !== null && (
+                <span
+                  className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
+                  title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
+                >
+                  ⏱ {secondsLeft} s
+                </span>
+              )}
+              {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}
+            </div>
+            <div className="my-tools">
+              <span className="my-count">
+                <strong>{hand.length}</strong> carte{hand.length > 1 ? 's' : ''}
+              </span>
+              <button className="link small" onClick={changeSort} title="Tu peux aussi glisser les cartes pour les ranger à ta façon">
+                Trier par {sortMode === 'value' ? 'couleur' : 'valeur'}
+              </button>
+            </div>
+          </div>
+
+          <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
+            {hand.map((c, i) => (
+              <CardView
+                key={c.id}
+                card={c}
+                selected={selected.includes(c.id)}
+                dimmed={playable !== null && !playable.has(c.id)}
+                dragging={dragging === c.id}
+                onClick={() => toggle(c)}
+                style={{ '--offset': i - mid, '--i': i } as CSSProperties}
+                handlers={{
+                  onPointerDown: (e) => onPointerDown(e, c),
+                  onPointerMove,
+                  onPointerUp,
+                  onPointerCancel: onPointerUp,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="controls" hidden={roundFinished}>
+            <span className={`hint ${typeof hint === 'object' ? (hint.ok ? 'ok' : 'bad') : ''}`}>
+              {typeof hint === 'object' ? hint.text : hint}
+            </span>
+            {mustGive ? (
+              <button
+                className="primary"
+                disabled={selected.length !== 1}
+                onClick={() => send(socket.emitWithAck('game:giveCard', { cardId: selected[0]! }))}
+              >
+                Donner
+              </button>
+            ) : (
+              <>
+                {selected.length > 0 && !planned && (
+                  <button className="ghost" onClick={() => setSelected([])}>
+                    Annuler
+                  </button>
+                )}
+                {myTurn ? (
+                  <>
+                    <button disabled={!game.table} onClick={() => send(socket.emitWithAck('game:pass'))}>
+                      Passer
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={selected.length === 0}
+                      onClick={() => send(socket.emitWithAck('game:play', { cardIds: selected }))}
+                    >
+                      Jouer
+                    </button>
+                  </>
+                ) : planned ? (
+                  <button className="ghost" onClick={() => setPlanned(null)}>
+                    Annuler {planned.type === 'pass' ? 'la passe prévue' : 'le coup prévu'}
+                  </button>
+                ) : (
+                  // Pas encore son tour : on prépare son coup (ou sa passe), joué dès que le tour arrive.
+                  <>
+                    <button
+                      disabled={!canPlan}
+                      onClick={() => {
+                        setSelected([]);
+                        setPlanned({ type: 'pass', round: game.round, trickLength: game.trick.length });
+                      }}
+                      title="Passer automatiquement quand ce sera ton tour"
+                    >
+                      Passer à mon tour
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={!canPlan || typeof hint !== 'object' || !hint.ok}
+                      onClick={() => setPlanned({ type: 'play', cardIds: selected, round: game.round, trickLength: game.trick.length })}
+                      title="Jouer ces cartes automatiquement quand ce sera ton tour"
+                    >
+                      Jouer à mon tour
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {error && (
         <div className="toast" role="alert">
