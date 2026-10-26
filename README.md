@@ -8,12 +8,13 @@ Un seul dépôt, en plusieurs paquets npm (workspaces) :
 
 - `packages/engine` : le moteur de jeu en TypeScript pur (cartes, combinaisons, tours, scores), sans interface.
 - `packages/server` : serveur Node.js + Socket.IO qui fait autorité sur la partie (salons, actions, reconnexion).
-- `packages/client` *(à venir)* : interface React + TypeScript.
+- `packages/client` : interface React + TypeScript (Vite).
 
 ## Commandes
 
 ```bash
 npm install
+npm run dev       # serveur + interface : ouvre http://localhost:5173 dans plusieurs onglets ou navigateurs
 npm test          # tests de tous les paquets
 npm run typecheck # vérification des types
 npm run demo      # partie complète entre 4 joueurs automatiques via le serveur (npm run demo -- 3 pour 3 joueurs)
