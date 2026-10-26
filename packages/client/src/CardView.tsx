@@ -1,5 +1,5 @@
 import { type Card, createDeck } from '@gof/engine';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, HTMLAttributes } from 'react';
 import { cardLabel } from './labels';
 
 const COLOR_CODES: Record<Card['color'], string> = { green: 'V', yellow: 'J', red: 'R', multi: 'M' };
@@ -22,7 +22,9 @@ export function CardView({
   onClick,
   small,
   dimmed,
+  dragging,
   style,
+  handlers,
 }: {
   card: Card;
   selected?: boolean;
@@ -30,14 +32,27 @@ export function CardView({
   dimmed?: boolean;
   onClick?: () => void;
   small?: boolean;
+  /** Carte en train d'être déplacée dans la main. */
+  dragging?: boolean;
   style?: CSSProperties;
+  /** Gestionnaires du glisser-déposer (main du joueur). */
+  handlers?: HTMLAttributes<HTMLButtonElement>;
 }) {
-  const classes = ['card', selected && 'selected', small && 'small', dimmed && 'dimmed', onClick && 'clickable']
+  const classes = ['card', selected && 'selected', small && 'small', dimmed && 'dimmed', dragging && 'dragging', onClick && 'clickable']
     .filter(Boolean)
     .join(' ');
   const image = <img src={cardImage(card)} alt={cardLabel(card)} draggable={false} />;
   return onClick ? (
-    <button type="button" className={classes} onClick={onClick} title={cardLabel(card)} aria-pressed={selected} style={style}>
+    <button
+      type="button"
+      className={classes}
+      onClick={onClick}
+      title={cardLabel(card)}
+      aria-pressed={selected}
+      style={style}
+      data-card={card.id}
+      {...handlers}
+    >
       {image}
     </button>
   ) : (

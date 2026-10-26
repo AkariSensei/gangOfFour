@@ -708,6 +708,16 @@ input {
   --sel: -8px;
   z-index: 1;
 }
+.hand .card {
+  touch-action: none;
+}
+.hand .card.dragging {
+  --sel: calc(var(--card-w) * -0.18);
+  z-index: 2;
+  cursor: grabbing;
+  opacity: 0.85;
+  transition: none;
+}
 .hand .card.selected {
   --sel: calc(var(--card-w) * -0.28);
   box-shadow: 0 0 0 3px var(--gold), 0 8px 18px rgba(0, 0, 0, 0.5);
