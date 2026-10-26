@@ -6,14 +6,18 @@ import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
 import { chooseBotAction } from './bot';
+import { DEFAULT_LIMITS, type Limits, RateLimiter, clientIp } from './limits';
 import { type PlayerAction, RoomManager, type Result } from './rooms';
 
 /** Délai avant de supprimer un salon dont tous les joueurs sont partis. */
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
+/** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
+export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
 
 interface SocketData {
   code?: string;
   playerId?: string;
+  ip?: string;
 }
 
 export interface GameServer {
@@ -29,6 +33,10 @@ export interface GameServer {
 export interface GameServerOptions {
   corsOrigin?: string | string[];
   abandonDelayMs?: number;
+  /** Délai avant de supprimer un salon abandonné avant le début de la partie. */
+  lobbyAbandonDelayMs?: number;
+  /** Garde-fous contre la création de salons ou de connexions à la chaîne. */
+  limits?: Partial<Limits>;
   /** Dossier de l'interface compilée à servir sur la même adresse que le jeu. */
   staticDir?: string;
   /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
@@ -172,6 +180,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
   const cleanupTimers = new Map<string, NodeJS.Timeout>();
   const abandonDelay = options.abandonDelayMs ?? ABANDONED_ROOM_DELAY_MS;
+  const lobbyAbandonDelay = options.lobbyAbandonDelayMs ?? ABANDONED_LOBBY_DELAY_MS;
 
   /** Envoie à chaque joueur connecté l'état du salon et sa propre vue de la partie. */
   async function broadcast(code: string) {
@@ -196,8 +205,37 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         if (rooms.isAbandoned(code)) rooms.delete(code);
         cleanupTimers.delete(code);
         saved.schedule();
-      }, abandonDelay),
+      }, rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
     );
+  }
+
+  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const connectionsPerIp = new RateLimiter(limits.connectionsPerIp, limits.windowMs);
+  const roomsPerIp = new RateLimiter(limits.roomsPerIp, limits.windowMs);
+  const roomsPerSocket = new RateLimiter(limits.roomsPerSocket, limits.windowMs);
+  const openSockets = new Map<string, number>();
+
+  // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
+  io.use((socket, next) => {
+    const ip = clientIp(socket.request);
+    if ((openSockets.get(ip) ?? 0) >= limits.socketsPerIp || !connectionsPerIp.allow(ip)) {
+      return next(new Error('slowDown'));
+    }
+    socket.data.ip = ip;
+    openSockets.set(ip, (openSockets.get(ip) ?? 0) + 1);
+    socket.on('disconnect', () => {
+      const left = (openSockets.get(ip) ?? 1) - 1;
+      if (left > 0) openSockets.set(ip, left);
+      else openSockets.delete(ip);
+    });
+    next();
+  });
+
+  /** Vérifie qu'on peut encore ouvrir un salon : nombre total, et rythme par adresse et par connexion. */
+  function canCreateRoom(ip: string, socketId: string): Result {
+    if (rooms.count() >= limits.maxRooms) return { ok: false, error: 'tooManyRooms' };
+    if (!roomsPerSocket.allow(socketId) || !roomsPerIp.allow(ip)) return { ok: false, error: 'slowDown' };
+    return { ok: true };
   }
 
   io.on('connection', (socket) => {
@@ -232,7 +270,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     async function enter(result: Result<{ code: string; playerId: string; token: string }>, ack: AnyAck) {
       if (result.ok) {
         if (socket.data.code) leaveCurrent();
-        socket.data = { code: result.code, playerId: result.playerId };
+        socket.data = { ip: socket.data.ip, code: result.code, playerId: result.playerId };
         await socket.join(result.code);
         clearTimeout(cleanupTimers.get(result.code));
       }
@@ -245,7 +283,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!code || !playerId) return;
       rooms.leave(code, playerId);
       void socket.leave(code);
-      socket.data = {};
+      socket.data = { ip: socket.data.ip };
       scheduleCleanup(code);
       void broadcast(code);
     }
@@ -269,7 +307,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         return result;
       });
 
-    on('room:create', (payload, ack) => enter(rooms.create(payload.name), ack));
+    on('room:create', (payload, ack) => {
+      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
+      return allowed.ok ? enter(rooms.create(payload.name), ack) : ack(allowed);
+    });
     on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name), ack));
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
     on('room:leave', (_payload, ack) => {

@@ -100,8 +100,59 @@ describe('serveur de jeu', () => {
   it('supprime un salon abandonné après le délai', async () => {
     await start({ abandonDelayMs: 50 });
     const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
     players.forEach((p) => p.disconnect());
     await waitFor(() => server.rooms.get(code) === undefined);
+  });
+
+  it('ferme vite un salon abandonné avant la partie, mais garde une partie en cours', async () => {
+    await start({ abandonDelayMs: 60_000, lobbyAbandonDelayMs: 50 });
+    const waiting = await lobby(3);
+    const playing = await lobby(3);
+    await playing.players[0]!.emitWithAck('game:start', {});
+    [...waiting.players, ...playing.players].forEach((p) => p.disconnect());
+    await waitFor(() => server.rooms.get(waiting.code) === undefined);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(server.rooms.get(playing.code)).toBeDefined();
+  });
+
+  it('limite les salons créés à la chaîne par une même connexion et une même adresse', async () => {
+    await start({ limits: { roomsPerSocket: 2, roomsPerIp: 3 } });
+    const spammer = connect();
+    const results = [];
+    for (let i = 0; i < 3; i++) results.push(await spammer.emitWithAck('room:create', { name: 'Spam' }));
+    expect(results.map((r) => r.ok)).toEqual([true, true, false]);
+    expect(results[2]).toEqual({ ok: false, error: 'slowDown' });
+
+    // Une autre connexion de la même adresse n'a plus droit qu'à un salon.
+    const other = connect();
+    expect((await other.emitWithAck('room:create', { name: 'Bob' })).ok).toBe(true);
+    expect(await other.emitWithAck('room:create', { name: 'Bob' })).toEqual({ ok: false, error: 'slowDown' });
+    // Rejoindre un salon reste possible.
+    const code = (results[1] as { code: string }).code;
+    expect((await connect().emitWithAck('room:join', { code, name: 'Chloé' })).ok).toBe(true);
+  });
+
+  it('refuse de nouveaux salons au-delà du maximum', async () => {
+    await start({ limits: { maxRooms: 2 } });
+    expect((await connect().emitWithAck('room:create', { name: 'A' })).ok).toBe(true);
+    expect((await connect().emitWithAck('room:create', { name: 'B' })).ok).toBe(true);
+    expect(await connect().emitWithAck('room:create', { name: 'C' })).toEqual({ ok: false, error: 'tooManyRooms' });
+  });
+
+  it('refuse les connexions en trop depuis une même adresse', async () => {
+    await start({ limits: { socketsPerIp: 2 } });
+    const [a, b] = [connect(), connect()];
+    await waitFor(() => a.connected && b.connected);
+    const c = connect();
+    const refused = await new Promise<string>((resolve) => c.on('connect_error', (e) => resolve(e.message)));
+    expect(refused).toBe('slowDown');
+    c.disconnect();
+    // Une place se libère quand une connexion se ferme.
+    a.disconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    const d = connect();
+    await waitFor(() => d.connected);
   });
 
   it.each([3, 4])('joue une partie complète à %i joueurs par les sockets', async (count) => {
