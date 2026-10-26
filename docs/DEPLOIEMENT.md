@@ -58,7 +58,8 @@ dans `gangoffour/` (en remplaçant l'ancien), puis **Web → Sites → Redémarr
 
 ## Bon à savoir
 
-- Les parties en cours sont gardées en mémoire : une mise à jour (redémarrage du site) les coupe.
+- Les parties en cours sont recopiées dans `~/gangoffour/data/salons.json` : après une mise à jour ou un plantage,
+  le serveur les recharge et les joueurs reprennent leur place tout seuls (la page se reconnecte en quelques secondes).
 - Les parties terminées sont enregistrées dans `~/gangoffour/data/parties.json` (le classement du bureau).
   Une mise à jour ne remplace que `dist` : le classement est conservé.
 - Un salon dont tous les joueurs sont partis est supprimé au bout de 10 minutes.

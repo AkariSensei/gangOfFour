@@ -46,6 +46,7 @@ Conformes au livret officiel (Days of Wonder).
 - Première manche : le détenteur du 1 multicolore ouvre avec une combinaison qui le contient. À 3, si ce 1 est dans la main morte, le voisin du donneur ouvre. Manches suivantes : le gagnant de la manche précédente ouvre.
 - Le sens de jeu s'inverse à chaque manche (horaire pour la première).
 - Combinaisons : carte seule, paire (dont la paire de phénix), brelan, et cinq cartes (suite < couleur < full < quinte flush). Le 1 multicolore prend la couleur voulue dans une couleur ou une quinte flush. Les phénix peuvent servir de paire dans un full, mais jamais dans une suite, une couleur ou une quinte flush. Le dragon se joue seul.
+- À valeur égale, la couleur la plus forte décide, puis la suivante en cas d'égalité : une paire de 10 rouge + jaune bat une paire de 10 rouge + vert. Une suite se départage par la couleur de sa plus haute carte, puis des suivantes.
 - Un « gang » (4 à 7 cartes de même valeur) bat toute autre combinaison ; un gang plus long bat un gang plus court, à longueur égale la valeur décide.
 - On ne peut pas poser une combinaison identique à celle sur la table. Passer est toujours permis, mais un joueur qui a passé ne rejoue plus jusqu'à la fin du pli. Quand tous les autres ont passé, le dernier à avoir posé ouvre un nouveau pli.
 - « Carte ! » : annoncé automatiquement par l'application. Le joueur qui précède un joueur n'ayant plus qu'une carte doit ouvrir avec une combinaison s'il le peut, et toute carte seule qu'il joue doit être sa plus forte.
