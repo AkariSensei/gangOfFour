@@ -25,6 +25,7 @@ export function Home({ onEnter }: { onEnter: (s: Session) => void }) {
 
   return (
     <main className="home">
+      <img className="home-logo" src="/cards/dos.webp" alt="" />
       <h1>
         Gang <span>of</span> Four
       </h1>
