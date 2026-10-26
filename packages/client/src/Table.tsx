@@ -367,6 +367,21 @@ function useDelayed(on: boolean, delay: number): boolean {
   return ready;
 }
 
+/** Durée de l'effet Gang (la même que son animation CSS). */
+const GANG_BURST_MS = 1800;
+
+/** Grand effet à l'écran quand un Gang est posé : flash, secousse de la table et nom du Gang. */
+function GangBurst({ label, player }: { label: string; player: string }) {
+  return (
+    <div className="gang-burst" aria-hidden>
+      <div className="gang-burst-text">
+        <span className="gang-burst-name">{label}</span>
+        <span className="gang-burst-player">{player}</span>
+      </div>
+    </div>
+  );
+}
+
 /** Coup préparé avant son tour, joué automatiquement dès que le tour arrive. */
 type Planned = ({ type: 'play'; cardIds: string[] } | { type: 'pass' }) & { round: number; trickLength: number };
 
@@ -434,6 +449,25 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
     const t = setTimeout(() => setDealing(false), 1500);
     return () => clearTimeout(t);
   }, [handSize]);
+
+  // Un Gang vient d'être posé : on le fête (une fois par Gang, grâce à sa clé).
+  const top = game.table;
+  const gang =
+    top?.combination.type === 'gang'
+      ? {
+          key: top.combination.cards.map((c) => c.id).join(),
+          label: combinationLabel('gang', top.combination.cards.length),
+          player: game.players[top.playerIndex]!.name,
+        }
+      : null;
+  // Pendant l'effet, l'annonce « À toi » attend : les deux se superposeraient.
+  const [celebrating, setCelebrating] = useState(false);
+  useEffect(() => {
+    if (!gang) return;
+    setCelebrating(true);
+    const t = setTimeout(() => setCelebrating(false), GANG_BURST_MS);
+    return () => clearTimeout(t);
+  }, [gang?.key]);
 
   const hand = useMemo(() => orderHand(sortHand(game.hand, sortMode), order), [game.hand, sortMode, order]);
 
@@ -622,7 +656,7 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
         </div>
       </header>
 
-      <div className="felt">
+      <div className={`felt ${celebrating ? 'shake' : ''}`}>
         {opponents.map(({ seat, index }) => (
           <Opponent
             key={index}
@@ -754,7 +788,8 @@ export function Table({ game, room, onLeave }: { game: PlayerView; room: RoomVie
           {error}
         </div>
       )}
-      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned ? null : bannerText} />
+      {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
+      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating ? null : bannerText} />
       {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );
