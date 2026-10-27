@@ -1,7 +1,8 @@
 import type { ActionError, PlayerView } from '@gof/engine';
-import type { GameRecord, LeaderboardEntry, PlayerProfile } from './history';
+import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
-export type { GameRecord, LeaderboardEntry, PlayerProfile };
+export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
+export type { Badge } from './badges';
 
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
@@ -35,6 +36,8 @@ export interface RoomView {
   turnRemainingMs: number | null;
   /** Nombre de personnes qui regardent la partie sans jouer. */
   spectators: number;
+  /** L'hôte a mis la partie en pause : personne ne joue, le minuteur est gelé. */
+  paused: boolean;
 }
 
 /** Partie en cours, proposée sur l'accueil à ceux qui veulent la regarder. */
@@ -70,7 +73,8 @@ export type RoomError =
   | 'notAdmin'
   | 'accountNotFound'
   | 'muted'
-  | 'kicked';
+  | 'kicked'
+  | 'paused';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -123,6 +127,8 @@ export interface ClientToServerEvents {
   'room:mute': (payload: { playerId: string; muted: boolean }, ack: Ack) => void;
   /** L'hôte ou l'admin exclut un joueur du salon. */
   'room:kick': (payload: { playerId: string }, ack: Ack) => void;
+  /** L'hôte ou l'admin met la partie en pause (pour une réunion, un café) ou la relance. */
+  'room:pause': (payload: { paused: boolean }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
@@ -131,7 +137,7 @@ export interface ClientToServerEvents {
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
-  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[] }>) => void;
+  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[]; streak: WinStreak | null }>) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
 }
 

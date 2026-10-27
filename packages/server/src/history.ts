@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
+import { type Badge, badgesOf } from './badges';
 
 export interface GameRecord {
   finishedAt: string;
@@ -33,6 +34,7 @@ export interface PlayerProfile {
   worstRound: number;
   /** Dernières parties, de la plus récente à la plus ancienne. */
   recent: { finishedAt: string; score: number; winner: boolean; rank: number; players: number }[];
+  badges: Badge[];
 }
 
 export interface LeaderboardEntry {
@@ -40,6 +42,12 @@ export interface LeaderboardEntry {
   games: number;
   wins: number;
   averageScore: number;
+}
+
+/** Plus longue série de victoires d'affilée d'un compte. */
+export interface WinStreak {
+  name: string;
+  wins: number;
 }
 
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
@@ -167,6 +175,24 @@ export class GameHistory {
       .slice(0, limit);
   }
 
+  /**
+   * Record du bureau : la plus longue série de parties gagnées d'affilée par un compte (une victoire partagée compte).
+   * À égalité, le record reste à celui qui l'a atteint en premier. Null tant que personne n'a gagné deux fois de suite.
+   */
+  bestStreak(): WinStreak | null {
+    const current = new Map<string, number>();
+    let best: { player: GameRecord['players'][number]; wins: number } | null = null;
+    for (const record of this.records) {
+      for (const p of record.players) {
+        if (p.bot || !p.account) continue;
+        const wins = p.winner ? (current.get(p.account) ?? 0) + 1 : 0;
+        current.set(p.account, wins);
+        if (wins > (best?.wins ?? 1)) best = { player: p, wins };
+      }
+    }
+    return best && { name: this.displayName(best.player), wins: best.wins };
+  }
+
   /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
   profile(name: string): PlayerProfile | null {
     const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
@@ -196,6 +222,7 @@ export class GameHistory {
           rank: 1 + record.players.filter((p) => p.score < me.score).length,
           players: record.players.length,
         })),
+      badges: badgesOf(games),
     };
   }
 }

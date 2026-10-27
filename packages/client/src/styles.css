@@ -4,9 +4,9 @@
   --felt-dark: #123b29;
   --wood: #5a3519;
   --wood-light: #8a5a2e;
-  --panel: #fffaf0;
-  --text: #1f2421;
-  --muted: #6d756f;
+  --panel: #16231c;
+  --text: #ebe6da;
+  --muted: #9aa79f;
   /* Encre fixe, pour le texte posé sur l'or ou le blanc. */
   --ink: #1f2421;
   --gold: #e8b931;
@@ -21,22 +21,19 @@
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  /* Page couleur sable, panneaux crème. */
-  color-scheme: light;
-  --page-bg:
-    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.22), transparent 55%),
-    radial-gradient(ellipse at top, #fbf6ea, #e6dcc4 75%);
-  --page-color: #e6dcc4;
-  --page-title: #1d3d2c;
-  --page-sub: #4f6157;
-  --surface: #fff;
-  --surface-2: #f4eedf;
-  --line: #e3dccd;
-  --line-strong: #d6d0c2;
-  --highlight: #fbf0d0;
-  --soft: rgba(0, 0, 0, 0.05);
-  --panel-shadow: 0 14px 40px rgba(60, 45, 15, 0.16);
-  /* La table garde son tapis sombre. */
+  /* Page sur le même tapis sombre que la table, panneaux vert nuit. */
+  color-scheme: dark;
+  --page-bg: var(--table-bg);
+  --page-color: var(--bg);
+  --page-title: #fff;
+  --page-sub: #cfe3d7;
+  --surface: #213229;
+  --surface-2: #1d2d24;
+  --line: #2c3f35;
+  --line-strong: #3a5045;
+  --highlight: #3b3418;
+  --soft: rgba(255, 255, 255, 0.06);
+  --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   --table-bg:
     radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
     radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
@@ -216,6 +213,75 @@ input {
   text-align: center;
   margin: 0.5rem 0 1.75rem;
 }
+/* Sur grand écran, l'accueil s'étale en colonnes : jouer, classement, dernières parties. */
+.recent-games {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.recent-games h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+@media (min-width: 820px) {
+  .home {
+    max-width: 1240px;
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    grid-template-areas:
+      'hero hero'
+      'start rank'
+      'start recent';
+    grid-template-rows: auto auto 1fr;
+    gap: 1.25rem 1.5rem;
+    align-items: start;
+    padding-inline: 1.5rem;
+  }
+  .home-hero {
+    grid-area: hero;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .home-hero .home-logo {
+    width: 110px;
+    margin: 0;
+  }
+  .home-hero h1,
+  .home-hero .tagline {
+    text-align: left;
+  }
+  .home-hero .tagline {
+    margin-bottom: 0;
+  }
+  .home-hero .rules-link {
+    margin: 0.4rem 0 0 -0.4rem;
+  }
+  .home-start {
+    grid-area: start;
+  }
+  .home .leaderboard {
+    grid-area: rank;
+  }
+  .home .recent-games {
+    grid-area: recent;
+  }
+  .home .leaderboard,
+  .home .recent-games {
+    margin-top: 0;
+  }
+}
+@media (min-width: 1180px) {
+  .home {
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      'hero hero hero'
+      'start rank recent';
+    grid-template-rows: auto 1fr;
+  }
+}
 .home label {
   display: grid;
   gap: 0.4rem;
@@ -392,6 +458,20 @@ button.mute.on {
   padding: 0;
   display: grid;
   gap: 0.3rem;
+}
+.streak {
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+.streak .who {
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 .ranking li {
   display: grid;
@@ -1099,6 +1179,14 @@ button.mute.on {
   display: grid;
   place-items: center;
   padding: 1rem;
+}
+/* Pause : la table est voilée, mais l'en-tête (chat, quitter) reste au-dessus pour discuter en attendant. */
+.pause-overlay {
+  z-index: 25;
+}
+.table-screen.paused .table-header {
+  position: relative;
+  z-index: 26;
 }
 .modal {
   width: min(520px, 100%);
@@ -1824,6 +1912,125 @@ button.danger {
   margin: 0;
 }
 
+/* Badges : grille dans la fiche joueur, rangée d'icônes sur l'accueil */
+.modal.profile {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+.badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(0, 0, 0, 0.18);
+  text-align: left;
+}
+.badge.won {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.badge-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-bottom: 0.35rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 1.25rem;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.badge.won .badge-icon {
+  background: var(--gold);
+  filter: none;
+  opacity: 1;
+}
+.badge strong {
+  font-size: 0.9rem;
+}
+.badge-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1;
+}
+.badge-won {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #2f7d4f;
+}
+.badge-progress {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.badge-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.badge-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+.my-badges {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.my-badges-open {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 0;
+  margin-bottom: 0.6rem;
+}
+.my-badges h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0;
+}
+.badge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.badge-strip span {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 1rem;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.badge-strip span.won {
+  background: var(--gold);
+  filter: none;
+  opacity: 1;
+}
+
 /* Règles du jeu, illustrées avec les cartes */
 .rules-link {
   display: block;
@@ -1849,7 +2056,7 @@ button.danger {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--gold-dark);
+  color: var(--gold);
   margin: 0;
 }
 .rules p {

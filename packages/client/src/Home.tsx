@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
+import { MyBadges } from './Badges';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
 import { errorLabel } from './labels';
@@ -105,35 +106,42 @@ export function Home({
 
   return (
     <main className="home">
-      <img className="home-logo" src="/cards/dos.webp" alt="" />
-      <h1>
-        Gang <span>of</span> Four
-      </h1>
-      <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
-      <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
-        Règles du jeu
-      </button>
+      <header className="home-hero">
+        <img className="home-logo" src="/cards/dos.webp" alt="" />
+        <div>
+          <h1>
+            Gang <span>of</span> Four
+          </h1>
+          <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+          <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
+            Règles du jeu
+          </button>
+        </div>
+      </header>
       {rules && <Rules onClose={() => setRules(false)} />}
 
-      <section className="panel">
-        {panel}
-        {error && <p className="error">{error}</p>}
-        {account && (
-          <div className="account-links">
-            {account.admin && (
-              <button type="button" className="link small" onClick={() => setAdmin(true)}>
-                Gérer les comptes
+      <div className="home-start">
+        <section className="panel">
+          {panel}
+          {error && <p className="error">{error}</p>}
+          {account && (
+            <div className="account-links">
+              {account.admin && (
+                <button type="button" className="link small" onClick={() => setAdmin(true)}>
+                  Gérer les comptes
+                </button>
+              )}
+              <button type="button" className="link small" onClick={() => void me.signOut()}>
+                Se déconnecter
               </button>
-            )}
-            <button type="button" className="link small" onClick={() => void me.signOut()}>
-              Se déconnecter
-            </button>
-          </div>
-        )}
-      </section>
-      {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+            </div>
+          )}
+        </section>
+        {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+        {account?.name && <MyBadges name={account.name} />}
+        <LiveRooms onWatch={onEnter} />
+      </div>
 
-      <LiveRooms onWatch={onEnter} />
       <Leaderboard />
     </main>
   );
@@ -173,9 +181,7 @@ function LiveRooms({ onWatch }: { onWatch: (s: Session) => void }) {
         {rooms.map((r) => (
           <li key={r.code}>
             <div className="live-info">
-              <span className="live-players">
-                {r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}
-              </span>
+              <span className="live-players">{r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}</span>
               <span className="muted">
                 Manche {r.round}
                 {r.spectators > 0 && ` · 👀 ${r.spectators}`}

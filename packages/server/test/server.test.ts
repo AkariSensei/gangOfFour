@@ -586,6 +586,43 @@ describe('serveur de jeu', () => {
     expect(now().players[0]!.hand).toHaveLength(2);
   });
 
+  it("laisse l'hôte mettre la partie en pause : rien ne bouge, le minuteur est gelé, puis tout reprend", async () => {
+    await start({ turnSecondMs: 10, botDelayMs: 5, cutPauseMs: 0 });
+    const { code, players } = await lobby(3);
+    const [host, bruno] = players;
+    expect((await host!.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => players.every((p) => p.game && p.room?.turnRemainingMs !== null));
+
+    expect(await bruno!.emitWithAck('room:pause', { paused: true })).toEqual({ ok: false, error: 'notHost' });
+    expect(await host!.emitWithAck('room:pause', { paused: true })).toEqual({ ok: true });
+    await waitFor(() => players.every((p) => p.room!.paused));
+    const frozen = bruno!.room!.turnRemainingMs!;
+    const before = JSON.stringify(server.rooms.get(code)!.game);
+    // Bien plus que les 300 ms du minuteur : personne ne joue à la place de personne.
+    await new Promise((r) => setTimeout(r, 500));
+    expect(JSON.stringify(server.rooms.get(code)!.game)).toBe(before);
+    const toAct = server.rooms.seatToAct(code)!;
+    const actor = players[server.rooms.get(code)!.seats.indexOf(toAct)]!;
+    expect(await actor.emitWithAck('game:cut', { position: 20 })).toEqual({ ok: false, error: 'paused' });
+    expect(await actor.emitWithAck('game:pass')).toEqual({ ok: false, error: 'paused' });
+
+    // Reprise : le minuteur repart du temps qu'il restait, puis le serveur joue pour le joueur trop lent.
+    expect(await host!.emitWithAck('room:pause', { paused: false })).toEqual({ ok: true });
+    await waitFor(() => !bruno!.room!.paused);
+    expect(bruno!.room!.turnRemainingMs).toBeLessThanOrEqual(frozen);
+    await waitFor(() => JSON.stringify(server.rooms.get(code)!.game) !== before, 2000);
+  });
+
+  it("garde plus longtemps une partie en pause que tout le monde a quittée", async () => {
+    await start({ abandonDelayMs: 50 });
+    const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
+    expect(await players[0]!.emitWithAck('room:pause', { paused: true })).toEqual({ ok: true });
+    players.forEach((p) => p.disconnect());
+    await new Promise((r) => setTimeout(r, 200));
+    expect(server.rooms.get(code)).toBeDefined();
+  });
+
   it('ne lance pas de minuteur par défaut', async () => {
     await start();
     const { players } = await lobby(3);

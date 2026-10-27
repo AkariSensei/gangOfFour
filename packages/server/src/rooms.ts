@@ -54,6 +54,8 @@ export interface Room {
   muted?: string[];
   /** Comptes exclus par l'hôte ou l'admin : ils ne peuvent plus revenir dans ce salon. */
   kicked?: string[];
+  /** Partie mise en pause par l'hôte ou l'admin : personne ne joue et aucun minuteur ne tourne. */
+  paused?: boolean;
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -191,7 +193,7 @@ export class RoomManager {
   replaceByBot(code: string, playerId: string): boolean {
     const room = this.get(code);
     const seat = room?.seats.find((s) => s.playerId === playerId);
-    if (!room?.game || room.game.phase === 'gameOver' || !seat || seat.bot || seat.connected) return false;
+    if (!room?.game || room.game.phase === 'gameOver' || room.paused || !seat || seat.bot || seat.connected) return false;
     seat.away = true;
     return true;
   }
@@ -257,6 +259,23 @@ export class RoomManager {
     return { ok: true };
   }
 
+  /**
+   * L'hôte ou l'admin (même spectateur) met la partie en pause ou la relance. Si l'hôte n'est plus là, n'importe quel
+   * joueur assis peut le faire, pour qu'une pause ne bloque jamais la table.
+   */
+  setPaused(code: string, byId: string | undefined, isAdmin: boolean, paused: boolean): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!room.game) return { ok: false, error: 'gameNotStarted' };
+    if (room.game.phase === 'gameOver') return { ok: false, error: 'wrongPhase' };
+    const hostHere = !!room.seats.find((s) => s.playerId === room.hostId)?.connected;
+    const seated = room.seats.some((s) => s.playerId === byId && !s.bot && !s.vacant);
+    if (!isAdmin && !(seated && (byId === room.hostId || !hostHere))) return { ok: false, error: 'notHost' };
+    if (paused) room.paused = true;
+    else delete room.paused;
+    return { ok: true };
+  }
+
   isMuted(code: string, playerId: string): boolean {
     return !!this.get(code)?.muted?.includes(playerId);
   }
@@ -283,6 +302,7 @@ export class RoomManager {
    */
   botToAct(code: string): Seat | null {
     const seat = this.seatToAct(code);
+    if (this.get(code)?.paused) return null;
     return seat?.bot || (seat?.away && !this.isAbandoned(code)) ? seat : null;
   }
 
@@ -293,7 +313,7 @@ export class RoomManager {
   stuckToPass(code: string): Seat | null {
     const room = this.get(code);
     const game = room?.game;
-    if (!room || !game || game.phase !== 'playing' || !game.table) return null;
+    if (!room || !game || room.paused || game.phase !== 'playing' || !game.table) return null;
     const seat = room.seats[game.currentPlayer];
     if (!seat || seat.bot || seat.away || seat.manualPass) return null;
     const n = game.players.length;
@@ -360,6 +380,7 @@ export class RoomManager {
       room.game.config,
     );
     room.recorded = false;
+    delete room.paused;
     return { ok: true };
   }
 
@@ -367,6 +388,7 @@ export class RoomManager {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (!room.game) return { ok: false, error: 'gameNotStarted' };
+    if (room.paused) return { ok: false, error: 'paused' };
     const playerIndex = room.seats.findIndex((s) => s.playerId === playerId);
     if (playerIndex < 0) return { ok: false, error: 'notInRoom' };
 
@@ -396,6 +418,7 @@ export class RoomManager {
       turnSeconds: room.turnSeconds ?? 0,
       turnRemainingMs: null,
       spectators: 0,
+      paused: room.paused ?? false,
     };
   }
 
