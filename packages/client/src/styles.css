@@ -7,6 +7,8 @@
   --panel: #fffaf0;
   --text: #1f2421;
   --muted: #6d756f;
+  /* Encre fixe, pour le texte posé sur l'or ou le blanc quel que soit le thème. */
+  --ink: #1f2421;
   --gold: #e8b931;
   --gold-dark: #b98b12;
   --danger: #d1453b;
@@ -19,6 +21,44 @@
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  /* Thème clair (par défaut) : page couleur sable, panneaux crème. */
+  color-scheme: light;
+  --page-bg:
+    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.22), transparent 55%),
+    radial-gradient(ellipse at top, #fbf6ea, #e6dcc4 75%);
+  --page-color: #e6dcc4;
+  --page-title: #1d3d2c;
+  --page-sub: #4f6157;
+  --surface: #fff;
+  --surface-2: #f4eedf;
+  --line: #e3dccd;
+  --line-strong: #d6d0c2;
+  --highlight: #fbf0d0;
+  --soft: rgba(0, 0, 0, 0.05);
+  --panel-shadow: 0 14px 40px rgba(60, 45, 15, 0.16);
+  /* La table garde son tapis sombre dans les deux thèmes. */
+  --table-bg:
+    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
+    radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
+}
+
+/* Thème sombre : choisi par le bouton, ou suivi du système tant qu'aucun choix n'est mémorisé. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page-bg: var(--table-bg);
+  --page-color: var(--bg);
+  --page-title: #fff;
+  --page-sub: #cfe3d7;
+  --panel: #16231c;
+  --text: #ebe6da;
+  --muted: #9aa79f;
+  --surface: #213229;
+  --surface-2: #1d2d24;
+  --line: #2c3f35;
+  --line-strong: #3a5045;
+  --highlight: #3b3418;
+  --soft: rgba(255, 255, 255, 0.06);
+  --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -33,11 +73,10 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
-    radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
-  background-color: var(--bg);
+  background: var(--page-bg);
+  background-color: var(--page-color);
   background-attachment: fixed;
+  transition: background-color 0.2s ease;
   overflow-x: hidden;
 }
 
@@ -45,7 +84,7 @@ button {
   font: inherit;
   cursor: pointer;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   border-radius: 10px;
   padding: 0.6rem 1.1rem;
@@ -62,6 +101,7 @@ button:disabled {
 button.primary {
   background: linear-gradient(180deg, #f3cb4d, var(--gold));
   border-color: var(--gold-dark);
+  color: var(--ink);
   box-shadow: 0 2px 0 var(--gold-dark);
 }
 button.primary:not(:disabled):hover {
@@ -94,6 +134,19 @@ button.icon {
   border-color: rgba(255, 255, 255, 0.15);
   padding: 0.3rem 0.55rem;
 }
+/* Bouton du thème, en haut à droite de l'accueil et du salon. */
+button.theme-toggle {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: 0.75rem;
+  z-index: 25;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface);
+  border-color: var(--line-strong);
+  box-shadow: var(--panel-shadow);
+}
 :focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
@@ -102,10 +155,11 @@ button.icon {
 input {
   font: inherit;
   padding: 0.7rem 0.9rem;
-  border: 1px solid #d6d0c2;
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   width: 100%;
-  background: #fff;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .app {
@@ -127,7 +181,7 @@ input {
   background: var(--panel);
   border-radius: var(--radius);
   padding: 1.5rem;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--panel-shadow);
 }
 
 .muted {
@@ -140,7 +194,7 @@ input {
 .tag {
   font-size: 0.7rem;
   font-weight: 600;
-  background: #ece6d8;
+  background: var(--surface-2);
   color: var(--muted);
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
@@ -149,7 +203,7 @@ input {
 }
 .tag.you {
   background: var(--gold);
-  color: var(--text);
+  color: var(--ink);
 }
 
 /* Accueil et salon d'attente */
@@ -175,17 +229,17 @@ input {
 }
 .home h1 {
   font-family: var(--font-title);
-  color: #fff;
+  color: var(--page-title);
   font-size: clamp(2.2rem, 7vw, 3.2rem);
   margin: 0;
   text-align: center;
-  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
 }
 .home h1 span {
   color: var(--gold);
 }
 .tagline {
-  color: #cfe3d7;
+  color: var(--page-sub);
   text-align: center;
   margin: 0.5rem 0 1.75rem;
 }
@@ -211,7 +265,7 @@ input {
   content: '';
   flex: 1;
   height: 1px;
-  background: #e3dccd;
+  background: var(--line);
 }
 .join {
   display: flex;
@@ -257,7 +311,7 @@ input {
   gap: 0.6rem;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  background: #f2ecdf;
+  background: var(--surface-2);
   animation: pop-in 0.25s ease;
 }
 .player-list li .avatar {
@@ -269,7 +323,7 @@ input {
   color: var(--muted);
   font-style: italic;
   background: none;
-  border: 1px dashed #d6d0c2;
+  border: 1px dashed var(--line-strong);
   animation: none;
 }
 .player-list li.offline {
@@ -323,7 +377,7 @@ input {
   border-radius: 8px;
 }
 .ranking li:nth-child(odd) {
-  background: #f4eedf;
+  background: var(--surface-2);
 }
 .ranking .medal {
   text-align: center;
@@ -395,7 +449,7 @@ input {
   gap: 0.1rem;
   padding: 0.6rem 0.5rem;
   border-radius: 10px;
-  background: #f4eedf;
+  background: var(--surface-2);
   text-align: center;
 }
 .profile-stat strong {
@@ -447,6 +501,8 @@ input {
   padding: clamp(0.4rem, 1.2vh, 0.9rem) clamp(0.5rem, 1.5vw, 1.25rem);
   padding-bottom: max(clamp(0.4rem, 1.2vh, 0.9rem), env(safe-area-inset-bottom));
   color: #fff;
+  background: var(--table-bg);
+  background-color: var(--bg);
 }
 .table-header {
   display: flex;
@@ -516,7 +572,7 @@ input {
   border-radius: 50%;
   font-weight: 700;
   font-size: 0.9rem;
-  color: var(--text);
+  color: var(--ink);
   background: linear-gradient(135deg, #f6e7c1, #d9b871);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
 }
@@ -600,7 +656,7 @@ input {
   font-size: 0.75rem;
   font-weight: 700;
   background: #fff;
-  color: var(--text);
+  color: var(--ink);
   border-radius: 999px;
   padding: 0.15rem 0.55rem;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
@@ -989,7 +1045,7 @@ input {
 }
 .segmented {
   display: inline-flex;
-  border: 1px solid #d8ccb3;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -1018,7 +1074,7 @@ input {
 .results th,
 .results td {
   padding: 0.45rem;
-  border-bottom: 1px solid #ebe3d2;
+  border-bottom: 1px solid var(--line);
 }
 .results .rank {
   color: var(--muted);
@@ -1032,7 +1088,7 @@ input {
   font-weight: 700;
 }
 .results tr.me td {
-  background: #fbf0d0;
+  background: var(--highlight);
 }
 
 /* Tablettes et petits écrans : les adversaires passent sur une ligne en haut, la main se resserre */
@@ -1408,7 +1464,7 @@ input {
 .chat-list li {
   padding: 0.3rem 0.55rem;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--soft);
   justify-self: start;
   max-width: 90%;
 }
@@ -1531,7 +1587,7 @@ input {
   margin-top: 0.7rem;
   padding: 0.7rem;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--soft);
 }
 .look-grid {
   display: grid;
@@ -1562,4 +1618,12 @@ input {
   padding: 0;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+/* Sur téléphone, laisse la place au bouton du thème au-dessus du contenu. */
+@media (max-width: 560px) {
+  .home,
+  .lobby {
+    padding-top: 4rem;
+  }
 }
