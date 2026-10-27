@@ -71,6 +71,7 @@ export interface ClientToServerEvents {
   'room:addBot': (ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
+  'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;

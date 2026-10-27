@@ -228,6 +228,22 @@ export class RoomManager {
     return { ok: true };
   }
 
+  /** Revanche : une partie terminée repart avec les mêmes joueurs et les mêmes réglages, à la demande de n'importe quel joueur. */
+  rematch(code: string, playerId: string, seed = randomInt(2 ** 31)): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!room.game) return { ok: false, error: 'gameNotStarted' };
+    if (!room.seats.some((s) => s.playerId === playerId && !s.bot)) return { ok: false, error: 'notInRoom' };
+    if (room.game.phase !== 'gameOver') return { ok: false, error: 'wrongPhase' };
+    room.game = createGame(
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      seed,
+      room.game.config,
+    );
+    room.recorded = false;
+    return { ok: true };
+  }
+
   act(code: string, playerId: string, action: PlayerAction): Result {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };

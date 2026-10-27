@@ -290,6 +290,15 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.recent).toHaveLength(1);
     expect(stats.ok && stats.leaderboard.map((e) => e.name)).toEqual(['Alice']);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
+
+    // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
+    const target = server.rooms.get(code)!.game!.config.targetScore;
+    expect((await human.emitWithAck('game:rematch')).ok).toBe(true);
+    await waitFor(() => human.game!.phase !== 'gameOver');
+    expect(human.game!.round).toBe(1);
+    expect(human.game!.players.every((p) => p.score === 0)).toBe(true);
+    expect(server.rooms.get(code)!.game!.config.targetScore).toBe(target);
+    expect(server.rooms.get(code)!.recorded).toBe(false);
   }, 60000);
 
   it('survit aux messages bizarres : sans réponse attendue, sans données, ou avec des données invalides', async () => {

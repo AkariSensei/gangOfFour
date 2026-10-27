@@ -66,6 +66,22 @@ describe('RoomManager', () => {
     expect(b.rooms.get(b.host.code)!.game!.config.targetScore).toBe(100);
   });
 
+  it('relance une partie terminée avec les mêmes joueurs et réglages, seulement une fois finie', () => {
+    const { rooms, host, others } = roomWith(3);
+    rooms.start(host.code, host.playerId, { targetScore: 50, turnSeconds: 30 });
+    expect(rooms.rematch(host.code, others[0]!.playerId)).toEqual({ ok: false, error: 'wrongPhase' });
+    const room = rooms.get(host.code)!;
+    room.game = { ...room.game!, phase: 'gameOver' };
+    room.recorded = true;
+    expect(rooms.rematch(host.code, 'inconnu')).toEqual({ ok: false, error: 'notInRoom' });
+    expect(rooms.rematch(host.code, others[0]!.playerId)).toEqual({ ok: true });
+    expect(room.game.phase).not.toBe('gameOver');
+    expect(room.game.config.targetScore).toBe(50);
+    expect(room.turnSeconds).toBe(30);
+    expect(room.recorded).toBe(false);
+    expect(room.game.players.map((p) => p.id)).toEqual(room.seats.map((s) => s.playerId));
+  });
+
   it('transmet l\'hôte quand il quitte le salon avant la partie, et supprime le salon vide', () => {
     const { rooms, host, others } = roomWith(2);
     rooms.leave(host.code, host.playerId);

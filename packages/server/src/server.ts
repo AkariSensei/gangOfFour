@@ -382,6 +382,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
       ),
     );
+    on('game:rematch', (_payload, ack) => handle(ack, (code, playerId) => rooms.rematch(code, playerId)));
     on('game:play', (payload, ack) =>
       act({ type: 'play', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
     );
