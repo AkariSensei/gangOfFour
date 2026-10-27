@@ -17,7 +17,7 @@ export interface Look {
 export interface RoomView {
   code: string;
   hostId: string;
-  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean; muted: boolean } & Look)[];
+  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean; muted: boolean; vacant: boolean } & Look)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;
@@ -33,6 +33,8 @@ export interface LiveRoom {
   players: { name: string; score: number; bot: boolean }[];
   round: number;
   spectators: number;
+  /** Un joueur a été exclu : un bot tient sa place, que le premier humain qui rejoint peut prendre. */
+  open: boolean;
 }
 
 export type RoomError =
@@ -57,7 +59,8 @@ export type RoomError =
   | 'signInFailed'
   | 'notAdmin'
   | 'accountNotFound'
-  | 'muted';
+  | 'muted'
+  | 'kicked';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -108,6 +111,8 @@ export interface ClientToServerEvents {
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin coupe (ou rend) le chat d'un joueur du salon. */
   'room:mute': (payload: { playerId: string; muted: boolean }, ack: Ack) => void;
+  /** L'hôte ou l'admin exclut un joueur du salon. */
+  'room:kick': (payload: { playerId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
@@ -132,4 +137,6 @@ export interface ServerToClientEvents {
   'room:state': (room: RoomView) => void;
   'game:state': (game: PlayerView) => void;
   'chat:message': (message: ChatMessage) => void;
+  /** Ce joueur vient d'être exclu du salon par l'hôte ou l'admin. */
+  'room:kicked': () => void;
 }

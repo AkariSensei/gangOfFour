@@ -6,9 +6,18 @@ import { Leaderboard } from './Leaderboard';
 import { errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
 
-export function Home({ onEnter, account: me }: { onEnter: (s: Session) => void; account: ReturnType<typeof useAccount> }) {
+export function Home({
+  onEnter,
+  account: me,
+  notice = '',
+}: {
+  onEnter: (s: Session) => void;
+  account: ReturnType<typeof useAccount>;
+  /** Message à montrer en arrivant sur l'accueil (par exemple après une exclusion). */
+  notice?: string;
+}) {
   const [code, setCode] = useState(() => new URLSearchParams(location.search).get('salon')?.toUpperCase() ?? '');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(notice);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [admin, setAdmin] = useState(false);
@@ -143,9 +152,9 @@ function LiveRooms({ onWatch }: { onWatch: (s: Session) => void }) {
     };
   }, []);
 
-  async function watch(code: string) {
+  async function watch(code: string, play = false) {
     setError('');
-    const result = await socket.emitWithAck('room:watch', { code });
+    const result = play ? await socket.emitWithAck('room:join', { code }) : await socket.emitWithAck('room:watch', { code });
     if (result.ok) onWatch(result);
     else setError(errorLabel(result.error));
   }
@@ -166,7 +175,14 @@ function LiveRooms({ onWatch }: { onWatch: (s: Session) => void }) {
                 {r.spectators > 0 && ` · 👀 ${r.spectators}`}
               </span>
             </div>
-            <button onClick={() => watch(r.code)}>Regarder</button>
+            <div className="live-actions">
+              {r.open && (
+                <button className="primary" onClick={() => watch(r.code, true)} title="Prendre la place laissée libre, tenue par un bot">
+                  Jouer
+                </button>
+              )}
+              <button onClick={() => watch(r.code)}>Regarder</button>
+            </div>
           </li>
         ))}
       </ul>

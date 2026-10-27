@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
-import { ChatPanel, MuteButton } from './Chat';
+import { ChatPanel, KickButton, MuteButton } from './Chat';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -51,6 +51,11 @@ export function Lobby({
     if (!result.ok) setError(errorLabel(result.error));
   }
 
+  async function kick(playerId: string) {
+    const result = await socket.emitWithAck('room:kick', { playerId });
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
   async function leave() {
     await socket.emitWithAck('room:leave');
     onLeave();
@@ -83,7 +88,10 @@ export function Lobby({
               {p.id === room.hostId && <span className="tag">hôte</span>}
               {p.id === session.playerId && <span className="tag you">toi</span>}
               {(isHost || admin) && !p.bot && p.id !== session.playerId ? (
-                <MuteButton name={p.name} muted={p.muted} onClick={() => mute(p.id, !p.muted)} />
+                <>
+                  <MuteButton name={p.name} muted={p.muted} onClick={() => mute(p.id, !p.muted)} />
+                  <KickButton name={p.name} onKick={() => kick(p.id)} />
+                </>
               ) : (
                 p.muted && <span className="tag">🔇</span>
               )}

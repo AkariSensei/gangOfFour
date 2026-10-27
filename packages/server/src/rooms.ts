@@ -32,6 +32,8 @@ export interface Seat {
   color?: string;
   /** Compte du joueur assis : il ne peut pas prendre un second siège dans le même salon. */
   account?: string;
+  /** Joueur exclu en pleine partie : un bot tient le siège jusqu'à ce qu'un nouvel humain le prenne. */
+  vacant?: boolean;
 }
 
 /** Noms donnés aux bots, dans l'ordre. */
@@ -48,6 +50,8 @@ export interface Room {
   turnSeconds?: number;
   /** Joueurs que l'hôte ou l'admin a privés de chat dans ce salon. */
   muted?: string[];
+  /** Comptes exclus par l'hôte ou l'admin : ils ne peuvent plus revenir dans ce salon. */
+  kicked?: string[];
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -117,13 +121,28 @@ export class RoomManager {
     if (!name) return { ok: false, error: 'invalidName' };
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
-    if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
-    if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
+    if (account && room.kicked?.includes(account)) return { ok: false, error: 'kicked' };
+    const vacant = room.game ? room.seats.find((s) => s.vacant) : undefined;
+    if (room.game && !vacant) return { ok: false, error: 'gameAlreadyStarted' };
+    if (!room.game && room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
     if (account && room.seats.some((s) => s.account === account)) {
       if (!severalSeats) return { ok: false, error: 'alreadySeated' };
       account = undefined;
     }
-    return { ok: true, ...this.seat(room, name, look, account) };
+    return { ok: true, ...(vacant ? this.takeOver(room, vacant, name, look, account) : this.seat(room, name, look, account)) };
+  }
+
+  /** Un nouvel humain prend en pleine partie le siège d'un joueur exclu, avec ses cartes et ses points. */
+  private takeOver(room: Room, seat: Seat, name: string, look: unknown, account?: string): Session {
+    const index = room.seats.indexOf(seat);
+    room.seats[index] = { playerId: seat.playerId, token: randomUUID(), name, connected: true, ...cleanLook(look), ...(account ? { account } : {}) };
+    this.rename(room, index, name);
+    return { code: room.code, playerId: seat.playerId, token: room.seats[index]!.token };
+  }
+
+  /** Change le nom affiché d'un joueur dans la partie en cours. */
+  private rename(room: Room, index: number, name: string) {
+    if (room.game) room.game = { ...room.game, players: room.game.players.map((p, i) => (i === index ? { ...p, name } : p)) };
   }
 
   /** `onlyIfFree` : ne reprend pas un siège encore occupé par un autre onglet ouvert. */
@@ -205,6 +224,34 @@ export class RoomManager {
     if (!target || targetId === byId) return { ok: false, error: 'notInRoom' };
     const others = (room.muted ?? []).filter((id) => id !== targetId);
     room.muted = muted ? [...others, targetId] : others;
+    return { ok: true };
+  }
+
+  /**
+   * L'hôte ou l'admin exclut un joueur humain : son compte ne peut plus revenir dans ce salon. Avant la partie, sa place
+   * se libère ; pendant la partie, un bot la tient jusqu'à ce qu'un nouvel humain rejoigne le salon.
+   */
+  kick(code: string, byId: string | undefined, isAdmin: boolean, targetId: string): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!isAdmin && (!byId || room.hostId !== byId)) return { ok: false, error: 'notHost' };
+    const index = room.seats.findIndex((s) => s.playerId === targetId && !s.bot && !s.vacant);
+    const target = room.seats[index];
+    if (!target || targetId === byId) return { ok: false, error: 'notInRoom' };
+    if (target.account) room.kicked = [...(room.kicked ?? []), target.account];
+    room.muted = room.muted?.filter((id) => id !== targetId);
+    if (!room.game) {
+      this.leave(code, targetId);
+      return { ok: true };
+    }
+    const name = BOT_NAMES.find((n) => !room.seats.some((s) => s.name === n)) ?? 'Robot';
+    // Nouveau jeton : l'exclu ne peut pas reprendre le siège avec l'ancien.
+    room.seats[index] = { playerId: target.playerId, token: randomUUID(), name, connected: false, away: true, vacant: true };
+    this.rename(room, index, name);
+    if (room.hostId === targetId) {
+      const human = room.seats.find((s) => !s.bot && !s.vacant);
+      if (human) room.hostId = human.playerId;
+    }
     return { ok: true };
   }
 
@@ -313,6 +360,7 @@ export class RoomManager {
         connected: s.connected,
         bot: s.bot ?? false,
         away: s.away ?? false,
+        vacant: s.vacant ?? false,
         muted: room.muted?.includes(s.playerId) ?? false,
         ...cleanLook(s),
       })),
@@ -329,14 +377,15 @@ export class RoomManager {
   }
 
   /** Parties en cours (ni en attente de joueurs, ni terminées), pour les spectateurs. */
-  live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number }[] {
+  live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number; open: boolean }[] {
     return this.all().flatMap((room) =>
       room.game && room.game.phase !== 'gameOver'
         ? [
             {
               code: room.code,
               round: room.game.round,
-              players: room.game.players.map((p, i) => ({ name: p.name, score: p.score, bot: room.seats[i]?.bot ?? false })),
+              open: room.seats.some((s) => s.vacant),
+              players: room.game.players.map((p, i) => ({ name: p.name, score: p.score, bot: !!(room.seats[i]?.bot || room.seats[i]?.vacant) })),
             },
           ]
         : [],
