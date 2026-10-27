@@ -16,6 +16,8 @@ import { type PlayerAction, RoomManager, type Result } from './rooms';
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
 export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
+/** Partie en pause et sans personne : gardée plus longtemps, le temps d'une réunion ou d'un déjeuner. */
+export const PAUSED_ROOM_DELAY_MS = 3 * 60 * 60 * 1000;
 /** Temps laissé à un joueur parti en pleine partie avant qu'un bot ne joue à sa place. */
 export const AWAY_DELAY_MS = 60 * 1000;
 /** Chat : longueur maximale d'un message, et nombre de messages par connexion sur la fenêtre donnée. */
@@ -160,7 +162,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     void broadcast(code);
     scheduleBots(code);
   }
-  const turnTimers = new Map<string, { turn: string; endsAt: number; timer: NodeJS.Timeout }>();
+  /** Minuteur du tour en cours ; en pause, `timer` est arrêté et `remaining` garde le temps qu'il restait. */
+  const turnTimers = new Map<string, { turn: string; endsAt: number; timer?: NodeJS.Timeout; remaining?: number }>();
 
   /**
    * Minuteur de tour : quand un humain doit agir, il a `turnSeconds` secondes ; ensuite le serveur agit pour lui
@@ -179,9 +182,19 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       turnTimers.delete(code);
       return null;
     }
-    if (current?.turn === turn) return Math.max(0, current.endsAt - Date.now());
+    const sameTurn = current?.turn === turn;
+    if (room.paused) {
+      // Pause : le temps restant est gelé, il repartira de là à la reprise.
+      if (sameTurn && current.timer) {
+        clearTimeout(current.timer);
+        current.timer = undefined;
+        current.remaining = Math.max(0, current.endsAt - Date.now());
+      }
+      return sameTurn ? current.remaining! : null;
+    }
+    if (sameTurn && current.timer) return Math.max(0, current.endsAt - Date.now());
     clearTimeout(current?.timer);
-    const delay = room.turnSeconds! * (options.turnSecondMs ?? 1000);
+    const delay = sameTurn ? current.remaining! : room.turnSeconds! * (options.turnSecondMs ?? 1000);
     const timer = setTimeout(() => {
       turnTimers.delete(code);
       try {
@@ -199,7 +212,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     const seat = rooms.seatToAct(code);
     const game = room?.game;
-    if (!room || !game || !seat) return;
+    if (!room || !game || !seat || room.paused) return;
     if (`${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` !== turn) return;
     const index = room.seats.indexOf(seat);
     let action: PlayerAction | null = null;
@@ -270,7 +283,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         if (rooms.isAbandoned(code)) rooms.delete(code);
         cleanupTimers.delete(code);
         saved.schedule();
-      }, rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
+      }, rooms.get(code)?.paused ? PAUSED_ROOM_DELAY_MS : rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
     );
   }
 
@@ -539,6 +552,19 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       }
       scheduleCleanup(code);
       await broadcast(code);
+      scheduleBots(code);
+    });
+    on('room:pause', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      if (!code) return ack({ ok: false, error: 'notInRoom' });
+      const paused = payload.paused === true;
+      const result = rooms.setPaused(code, playerId, accounts.isAdmin(me()), paused);
+      ack(result);
+      if (!result.ok) return;
+      // Pendant la pause, aucun bot ne remplace un absent : à la reprise, chacun a de nouveau une minute pour revenir.
+      if (!paused) rooms.get(code)!.seats.forEach((s) => !s.bot && !s.away && !s.connected && scheduleAway(code, s.playerId));
+      scheduleCleanup(code);
+      void broadcast(code);
       scheduleBots(code);
     });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));

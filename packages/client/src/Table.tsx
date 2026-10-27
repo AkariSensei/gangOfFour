@@ -445,6 +445,27 @@ function useDelayed(on: boolean, delay: number): boolean {
   return ready;
 }
 
+/** Partie en pause : la table est voilée pour tous ; l'hôte (ou l'admin) la relance. */
+function PauseOverlay({ onResume }: { onResume?: () => void }) {
+  return (
+    <div className="overlay pause-overlay" role="dialog" aria-label="Partie en pause">
+      <div className="panel modal pop-in">
+        <div className="trophy" aria-hidden>
+          ⏸
+        </div>
+        <h2>Pause</h2>
+        {onResume ? (
+          <button className="primary" onClick={onResume}>
+            Reprendre
+          </button>
+        ) : (
+          <p className="muted">L'hôte relancera la partie.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Durée de l'effet Gang (la même que son animation CSS). */
 const GANG_BURST_MS = 1800;
 
@@ -489,6 +510,9 @@ export function Table({
   const me = game.you;
   const spectator = me < 0;
   const moderator = admin || (!spectator && room.hostId === game.players[me]?.id);
+  // Si l'hôte n'est plus là, n'importe quel joueur peut mettre en pause ou relancer (le serveur suit la même règle).
+  const hostGone = room.players.find((p) => p.id === room.hostId)?.connected === false;
+  const canPause = moderator || (!spectator && hostGone);
   const n = game.players.length;
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
@@ -499,9 +523,11 @@ export function Table({
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   useEffect(() => {
-    setTurnEndsAt(room.turnRemainingMs === null ? null : Date.now() + room.turnRemainingMs);
+    setTurnEndsAt(room.turnRemainingMs === null || room.paused ? null : Date.now() + room.turnRemainingMs);
   }, [room]);
-  const countdown = useCountdown(turnEndsAt);
+  // En pause, le temps restant reste figé.
+  const running = useCountdown(turnEndsAt);
+  const countdown = room.paused && room.turnRemainingMs !== null ? Math.ceil(room.turnRemainingMs / 1000) : running;
   // Fin de manche : on laisse voir la dernière carte posée avant d'ouvrir le résumé.
   const roundFinished = game.phase === 'roundOver' || game.phase === 'gameOver';
   const showSummary = useDelayed(roundFinished, SUMMARY_DELAY_MS);
@@ -698,6 +724,11 @@ export function Table({
     if (!r.ok) setError(errorLabel(r.error));
   }
 
+  async function pause(paused: boolean) {
+    const r = await socket.emitWithAck('room:pause', { paused });
+    if (!r.ok) setError(errorLabel(r.error));
+  }
+
   async function mute(playerId: string, muted: boolean) {
     const r = await socket.emitWithAck('room:mute', { playerId, muted });
     if (!r.ok) setError(errorLabel(r.error));
@@ -714,7 +745,7 @@ export function Table({
 
   // Le tour arrive : le coup préparé part tout seul, s'il est encore possible.
   useEffect(() => {
-    if (!myTurn || !planned) return;
+    if (!myTurn || !planned || room.paused) return;
     setPlanned(null);
     // Nouveau pli entre-temps (le pli a été remporté) : le coup préparé ne vaut plus.
     if (game.round !== planned.round || game.trick.length < planned.trickLength) return;
@@ -730,7 +761,7 @@ export function Table({
       return;
     }
     void send(socket.emitWithAck('game:play', { cardIds: planned.cardIds }));
-  }, [myTurn, planned]);
+  }, [myTurn, planned, room.paused]);
 
   async function exit() {
     await socket.emitWithAck('room:leave');
@@ -770,7 +801,7 @@ export function Table({
   const mid = (hand.length - 1) / 2;
 
   return (
-    <main className={`table-screen players-${n}`}>
+    <main className={`table-screen players-${n}${room.paused ? ' paused' : ''}`}>
       <header className="table-header">
         <div className="header-left">
           <span className="round">Manche {game.round}</span>
@@ -799,6 +830,11 @@ export function Table({
         <Scores game={game} />
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
+          {canPause && !room.paused && game.phase !== 'gameOver' && (
+            <button className="icon" onClick={() => void pause(true)} title="Mettre la partie en pause">
+              ⏸
+            </button>
+          )}
           {!spectator && (
             <button
               className={`icon${autoPass ? '' : ' off'}`}
@@ -972,6 +1008,7 @@ export function Table({
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown ? null : bannerText} />
       {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
+      {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );
 }
