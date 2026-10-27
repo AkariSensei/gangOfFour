@@ -20,6 +20,16 @@ describe('RoomManager', () => {
     expect(rooms.get(host.code)!.hostId).toBe(host.playerId);
   });
 
+  it('ne donne qu\'un siège par salon à un même navigateur', () => {
+    const rooms = new RoomManager();
+    const host = rooms.create('Alice', {}, 'nav-1');
+    if (!host.ok) throw new Error(host.error);
+    expect(rooms.join(host.code, 'Bis', {}, 'nav-1')).toEqual({ ok: false, error: 'alreadySeated' });
+    expect(rooms.join(host.code, 'Bruno', {}, 'nav-2').ok).toBe(true);
+    expect(rooms.join(host.code, 'Chloé').ok).toBe(true);
+    expect(rooms.roomView(rooms.get(host.code)!).players[0]).not.toHaveProperty('browser');
+  });
+
   it('refuse un pseudo vide et nettoie les espaces', () => {
     const rooms = new RoomManager();
     expect(rooms.create('   ')).toEqual({ ok: false, error: 'invalidName' });

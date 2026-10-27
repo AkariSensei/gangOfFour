@@ -9,8 +9,8 @@ const SESSION_KEY = 'gof-session';
 const SEAT_KEY = 'gof-seat';
 const NAME_KEY = 'gof-name';
 const LOOK_KEY = 'gof-look';
-
-export const socket: GameSocket = io({ autoConnect: true });
+const BROWSER_KEY = 'gof-browser';
+const ADMIN_KEY = 'gof-admin';
 
 // Le siège est gardé par onglet (sessionStorage) : un rechargement reprend la même place.
 // Il est aussi retenu pour tout le navigateur (localStorage) : après avoir fermé l'onglet,
@@ -39,6 +39,28 @@ function writeStorage(kind: 'local' | 'session', key: string, value: string | nu
     // Stockage indisponible : on se passe de la reconnexion automatique.
   }
 }
+
+/**
+ * Identifiant du navigateur, commun à tous ses onglets : le serveur refuse qu'il prenne deux sièges d'un même salon.
+ * L'admin ouvre une fois le site avec « ?admin=sa-clé » : la clé est retenue et lève cette limite pour tester seul.
+ */
+function connectionAuth() {
+  let browser = readStorage('local', BROWSER_KEY);
+  if (!browser) {
+    browser = crypto.randomUUID();
+    writeStorage('local', BROWSER_KEY, browser);
+  }
+  const url = new URL(window.location.href);
+  const admin = url.searchParams.get('admin');
+  if (admin !== null) {
+    writeStorage('local', ADMIN_KEY, admin || null);
+    url.searchParams.delete('admin');
+    window.history.replaceState(null, '', url);
+  }
+  return { browser, admin: readStorage('local', ADMIN_KEY) ?? undefined };
+}
+
+export const socket: GameSocket = io({ autoConnect: true, auth: connectionAuth() });
 
 export const savedName = () => readStorage('local', NAME_KEY) ?? '';
 export const saveName = (name: string) => writeStorage('local', NAME_KEY, name);

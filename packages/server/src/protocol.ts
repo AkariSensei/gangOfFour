@@ -48,7 +48,8 @@ export type RoomError =
   | 'emptyMessage'
   | 'tooManyRooms'
   | 'slowDown'
-  | 'seatTaken';
+  | 'seatTaken'
+  | 'alreadySeated';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
