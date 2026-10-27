@@ -148,7 +148,7 @@ export function AccountForm({ account, onSaved, onCancel }: { account: AccountVi
   );
 }
 
-/** Gestion des comptes par l'admin : renommer un pseudo, bloquer ou débloquer un compte. */
+/** Gestion des comptes par l'admin : renommer, bloquer, retirer du classement, ou remettre le classement à zéro. */
 export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [accounts, setAccounts] = useState<AdminAccount[] | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -171,6 +171,22 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   async function update(id: string, change: { name?: string; blocked?: boolean }) {
     setError('');
     const result = await socket.emitWithAck('admin:update', { id, ...change });
+    if (!result.ok) setError(errorLabel(result.error));
+    await load();
+  }
+
+  async function unrank(a: AdminAccount) {
+    if (!confirm(`Retirer ${a.name || a.email} du classement ? Ses parties jouées jusqu'ici ne compteront plus.`)) return;
+    setError('');
+    const result = await socket.emitWithAck('admin:unrank', { id: a.id });
+    if (!result.ok) setError(errorLabel(result.error));
+    await load();
+  }
+
+  async function resetRanking() {
+    if (!confirm('Remettre le classement à zéro ? Classement, records et badges repartent de zéro pour tout le monde.')) return;
+    setError('');
+    const result = await socket.emitWithAck('admin:resetRanking');
     if (!result.ok) setError(errorLabel(result.error));
     await load();
   }
@@ -199,12 +215,22 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 <span className="muted small">{a.email}</span>
               </div>
               {names[a.id] !== a.name && <button onClick={() => update(a.id, { name: names[a.id] })}>Renommer</button>}
+              {a.ranked && (
+                <button className="danger icon" onClick={() => unrank(a)} title="Retirer du classement" aria-label={`Retirer ${a.name} du classement`}>
+                  🏆✕
+                </button>
+              )}
               <button className={a.blocked ? '' : 'danger'} onClick={() => update(a.id, { blocked: !a.blocked })}>
                 {a.blocked ? 'Débloquer' : 'Bloquer'}
               </button>
             </li>
           ))}
         </ul>
+        {accounts && (
+          <button className="danger reset-ranking" onClick={resetRanking}>
+            Remettre le classement à zéro
+          </button>
+        )}
       </div>
     </div>
   );

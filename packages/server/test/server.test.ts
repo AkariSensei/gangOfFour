@@ -224,6 +224,10 @@ describe('serveur de jeu', () => {
     expect(await admin.emitWithAck('admin:update', { id, blocked: true })).toEqual({ ok: true });
     expect(await player.emitWithAck('room:create')).toEqual({ ok: false, error: 'notSignedIn' });
     expect(server.accounts.get(id)).toMatchObject({ name: 'Poli', blocked: true });
+    expect(await player.emitWithAck('admin:resetRanking')).toEqual({ ok: false, error: 'notAdmin' });
+    expect(await admin.emitWithAck('admin:unrank', { id: 'personne' })).toEqual({ ok: false, error: 'accountNotFound' });
+    expect(await admin.emitWithAck('admin:unrank', { id })).toEqual({ ok: true });
+    expect(await admin.emitWithAck('admin:resetRanking')).toEqual({ ok: true });
   });
 
   it('supprime un salon abandonné après le délai', async () => {

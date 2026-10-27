@@ -173,4 +173,41 @@ describe('GameHistory', () => {
     play({ Alice: 10, Bob: 10, Bot: 90 });
     expect(history.bestStreak()).toEqual({ name: 'Bob', wins: 4 });
   });
+
+  it('remet le classement à zéro en archivant les parties, sans les effacer du fichier', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'gof-')), 'history.json');
+    const history = new GameHistory(file);
+    const play = (scores: Record<string, number>) => history.record(finished(scores), new Date(), [2], ['a', 'b']);
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    history.resetRanking();
+    expect(history.leaderboard()).toEqual([]);
+    expect(history.recent()).toEqual([]);
+    expect(history.bestStreak()).toBeNull();
+    expect(history.profile('Alice')).toBeNull();
+    expect(history.isRanked('a')).toBe(false);
+    play({ Alice: 50, Bob: 10, Bot: 90 });
+    expect(history.leaderboard().map((e) => [e.name, e.wins, e.games])).toEqual([
+      ['Bob', 1, 1],
+      ['Alice', 0, 1],
+    ]);
+    expect(new GameHistory(file).leaderboard()).toHaveLength(2);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toHaveLength(3);
+  });
+
+  it('retire un compte du classement, des records et de sa fiche', () => {
+    const history = new GameHistory();
+    const play = (scores: Record<string, number>) => history.record(finished(scores), new Date(), [2], ['a', 'b']);
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    history.removeFromRanking('a');
+    expect(history.leaderboard().map((e) => e.name)).toEqual(['Bob']);
+    expect(history.bestStreak()).toBeNull();
+    expect(history.profile('Alice')).toBeNull();
+    expect(history.isRanked('a')).toBe(false);
+    expect(history.recent()[0]!.players.map((p) => p.name)).toEqual(['Alice', 'Bob', 'Bot']);
+    // Ses parties suivantes comptent à nouveau.
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    expect(history.leaderboard()[0]).toMatchObject({ name: 'Alice', wins: 1, games: 1 });
+  });
 });

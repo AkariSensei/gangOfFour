@@ -6,6 +6,8 @@ import { type Badge, badgesOf } from './badges';
 export interface GameRecord {
   finishedAt: string;
   rounds: number;
+  /** Partie d'avant une remise à zéro du classement : gardée dans le fichier, mais plus comptée nulle part. */
+  archived?: boolean;
   players: {
     name: string;
     score: number;
@@ -17,6 +19,8 @@ export interface GameRecord {
     roundsWon?: number;
     gangs?: number;
     worstRound?: number;
+    /** Retiré du classement par l'admin : la partie reste, mais ne compte plus pour ce joueur. */
+    removed?: boolean;
   }[];
 }
 
@@ -100,6 +104,33 @@ export class GameHistory {
     return record;
   }
 
+  /** Parties qui comptent : celles d'après la dernière remise à zéro. */
+  private get counted(): GameRecord[] {
+    return this.records.filter((r) => !r.archived);
+  }
+
+  /** Ce joueur compte-t-il dans le classement, les records et les badges ? */
+  private ranked(player: GameRecord['players'][number]): boolean {
+    return !player.bot && !player.removed;
+  }
+
+  /** Remise à zéro du classement : toutes les parties jouées jusqu'ici sont archivées (rien n'est effacé du fichier). */
+  resetRanking(): void {
+    for (const record of this.counted) record.archived = true;
+    this.save();
+  }
+
+  /** L'admin retire un compte du classement : ses parties jouées jusqu'ici ne comptent plus pour lui. */
+  removeFromRanking(accountId: string): void {
+    for (const p of this.counted.flatMap((r) => r.players)) if (p.account === accountId) p.removed = true;
+    this.save();
+  }
+
+  /** Ce compte a-t-il des parties qui comptent au classement ? */
+  isRanked(accountId: string): boolean {
+    return this.counted.some((r) => r.players.some((p) => this.ranked(p) && p.account === accountId));
+  }
+
   private save() {
     if (!this.file) return;
     try {
@@ -138,13 +169,13 @@ export class GameHistory {
   }
 
   recent(limit = 5): GameRecord[] {
-    return this.records
+    return this.counted
       .slice(-limit)
       .reverse()
       .map((record) => ({
         ...record,
         players: record.players.map((p) => {
-          const { account: _account, ...shown } = p;
+          const { account: _account, removed: _removed, ...shown } = p;
           return { ...shown, name: this.displayName(p) };
         }),
       }));
@@ -156,10 +187,10 @@ export class GameHistory {
    */
   leaderboard(limit = 10, month?: string): LeaderboardEntry[] {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
-    for (const record of this.records) {
+    for (const record of this.counted) {
       if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
       for (const p of record.players) {
-        if (p.bot) continue;
+        if (!this.ranked(p)) continue;
         const owner = this.owner(p);
         const entry = byName.get(owner) ?? { name: p.name, games: 0, wins: 0, averageScore: 0, total: 0 };
         entry.name = this.displayName(p);
@@ -182,9 +213,9 @@ export class GameHistory {
   bestStreak(): WinStreak | null {
     const current = new Map<string, number>();
     let best: { player: GameRecord['players'][number]; wins: number } | null = null;
-    for (const record of this.records) {
+    for (const record of this.counted) {
       for (const p of record.players) {
-        if (p.bot || !p.account) continue;
+        if (!this.ranked(p) || !p.account) continue;
         const wins = p.winner ? (current.get(p.account) ?? 0) + 1 : 0;
         current.set(p.account, wins);
         if (wins > (best?.wins ?? 1)) best = { player: p, wins };
@@ -196,8 +227,8 @@ export class GameHistory {
   /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
   profile(name: string): PlayerProfile | null {
     const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
-    const games = this.records.flatMap((record) => {
-      const me = record.players.find((p) => !p.bot && this.owner(p) === owner);
+    const games = this.counted.flatMap((record) => {
+      const me = record.players.find((p) => this.ranked(p) && this.owner(p) === owner);
       return me ? [{ record, me }] : [];
     });
     if (games.length === 0) return null;

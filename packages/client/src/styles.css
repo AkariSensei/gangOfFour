@@ -1889,6 +1889,14 @@ button.danger {
   align-items: center;
   gap: 0.5rem;
 }
+.admin-accounts button.icon {
+  padding-inline: 0.5rem;
+  white-space: nowrap;
+}
+.reset-ranking {
+  display: block;
+  margin: 1rem auto 0;
+}
 .admin-accounts li.blocked {
   opacity: 0.55;
 }

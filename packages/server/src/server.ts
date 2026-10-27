@@ -458,6 +458,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
           name: a.name ?? '',
           blocked: !!a.blocked,
           createdAt: a.createdAt,
+          ranked: history.isRanked(a.id),
           avatar: a.avatar,
           color: a.color,
         })),
@@ -474,6 +475,18 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       });
       if (result.ok && payload.name !== undefined) history.claim(accounts.get(id)!.name!, id);
       ack(result);
+    });
+    on('admin:unrank', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      const id = text(payload.id);
+      if (!accounts.get(id)) return ack({ ok: false, error: 'accountNotFound' });
+      history.removeFromRanking(id);
+      ack({ ok: true });
+    });
+    on('admin:resetRanking', (_payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      history.resetRanking();
+      ack({ ok: true });
     });
 
     on('room:create', (_payload, ack) => {

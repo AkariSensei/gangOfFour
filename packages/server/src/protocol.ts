@@ -103,6 +103,8 @@ export interface AdminAccount extends Look {
   name: string;
   blocked: boolean;
   createdAt: string;
+  /** A des parties qui comptent au classement. */
+  ranked: boolean;
 }
 
 export interface ClientToServerEvents {
@@ -114,6 +116,10 @@ export interface ClientToServerEvents {
   'account:signOut': (ack: Ack) => void;
   'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
   'admin:update': (payload: { id: string; name?: string; blocked?: boolean }, ack: Ack) => void;
+  /** L'admin retire un compte du classement (ses parties jouées jusqu'ici ne comptent plus). */
+  'admin:unrank': (payload: { id: string }, ack: Ack) => void;
+  /** L'admin remet le classement à zéro : les parties jouées jusqu'ici sont archivées. */
+  'admin:resetRanking': (ack: Ack) => void;
   'room:create': (ack: Ack<Session>) => void;
   'room:join': (payload: { code: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string; onlyIfFree?: boolean }, ack: Ack<Session>) => void;
