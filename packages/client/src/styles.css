@@ -134,6 +134,11 @@ button.icon {
   border-color: rgba(255, 255, 255, 0.15);
   padding: 0.3rem 0.55rem;
 }
+/* Option coupée (passe automatique). */
+button.icon.off {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
 /* Bouton du thème, en haut à droite de l'accueil et du salon. */
 button.theme-toggle {
   position: fixed;

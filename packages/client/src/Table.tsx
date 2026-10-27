@@ -8,6 +8,7 @@ import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { ThemeToggle } from './theme';
 import { useTurnAlert } from './turnAlert';
+import { useAutoPass } from './autoPass';
 
 type Seat = 'right' | 'top' | 'left' | 'bottom';
 type SortMode = 'value' | 'color';
@@ -489,6 +490,7 @@ export function Table({
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
   const mustCut = game.phase === 'cut' && game.dealer === me;
   const { sound, toggleSound } = useTurnAlert(myTurn || mustGive || mustCut);
+  const { autoPass, toggleAutoPass } = useAutoPass(room, game.players[me]?.id);
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   useEffect(() => {
@@ -649,7 +651,7 @@ export function Table({
     if (planned?.type === 'pass') return { text: 'Passe prévue : tu passeras dès que ce sera ton tour', ok: true };
     if (planned?.type === 'play') return { text: 'Coup prévu : il partira dès que ce sera ton tour (s\'il passe encore)', ok: true };
     if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis la carte à rendre';
-    if (selectedCards.length === 0) return playable?.size === 0 ? 'Rien ne passe : tu peux passer' : '';
+    if (selectedCards.length === 0) return playable?.size === 0 ? (autoPass ? 'Rien ne passe : tu passes' : 'Rien ne passe : tu peux passer') : '';
     const combo = analyzeCombination(selectedCards);
     if (!combo) return { text: 'Combinaison invalide', ok: false };
     const label = combinationLabel(combo.type, combo.cards.length);
@@ -660,7 +662,7 @@ export function Table({
     }
     if (target && !canBeat(combo, target)) return { text: `${label} · trop faible`, ok: false };
     return { text: label, ok: true };
-  }, [selectedCards, mustGive, game.table, playable, planned]);
+  }, [selectedCards, mustGive, game.table, playable, planned, autoPass]);
 
   function toggle(card: Card) {
     // Le clic qui termine un glisser ne sélectionne pas la carte.
@@ -796,6 +798,16 @@ export function Table({
           <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
             {sound ? '🔔' : '🔕'}
           </button>
+          {!spectator && (
+            <button
+              className={`icon${autoPass ? '' : ' off'}`}
+              onClick={toggleAutoPass}
+              title={autoPass ? 'Passe auto : tu passes tout seul quand rien ne passe (cliquer pour couper)' : 'Passe auto coupée (cliquer pour activer)'}
+              aria-pressed={autoPass}
+            >
+              ⏭
+            </button>
+          )}
           <button className="link" onClick={leave}>
             Quitter
           </button>
