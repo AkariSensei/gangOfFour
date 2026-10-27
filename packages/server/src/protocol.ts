@@ -17,7 +17,7 @@ export interface Look {
 export interface RoomView {
   code: string;
   hostId: string;
-  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean } & Look)[];
+  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean; muted: boolean } & Look)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;
@@ -56,7 +56,8 @@ export type RoomError =
   | 'blocked'
   | 'signInFailed'
   | 'notAdmin'
-  | 'accountNotFound';
+  | 'accountNotFound'
+  | 'muted';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -105,6 +106,8 @@ export interface ClientToServerEvents {
   'chat:send': (payload: { text: string }, ack: Ack) => void;
   'room:addBot': (ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
+  /** L'hôte ou l'admin coupe (ou rend) le chat d'un joueur du salon. */
+  'room:mute': (payload: { playerId: string; muted: boolean }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;

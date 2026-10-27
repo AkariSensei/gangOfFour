@@ -308,6 +308,28 @@ describe('serveur de jeu', () => {
     expect(JSON.stringify(server.rooms.all())).not.toContain('Salut');
   });
 
+  it("laisse l'hôte et l'admin couper le chat d'un joueur pendant la partie", async () => {
+    await start({ adminEmail: 'chef@exemple.fr' });
+    const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
+    const [host, bruno, chloe] = players;
+    const brunoId = bruno!.room!.players[1]!.id;
+    const chloeId = chloe!.room!.players[2]!.id;
+
+    expect(await bruno!.emitWithAck('room:mute', { playerId: chloeId, muted: true })).toEqual({ ok: false, error: 'notHost' });
+    expect(await host!.emitWithAck('room:mute', { playerId: brunoId, muted: true })).toEqual({ ok: true });
+    await waitFor(() => chloe!.room!.players[1]!.muted);
+    expect(await bruno!.emitWithAck('chat:send', { text: 'insulte' })).toEqual({ ok: false, error: 'muted' });
+    expect(await chloe!.emitWithAck('chat:send', { text: 'merci' })).toEqual({ ok: true });
+
+    // L'admin, même simple spectateur, peut rendre le chat.
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    await admin.emitWithAck('room:watch', { code });
+    expect(await admin.emitWithAck('room:mute', { playerId: brunoId, muted: false })).toEqual({ ok: true });
+    expect(await bruno!.emitWithAck('chat:send', { text: 'pardon' })).toEqual({ ok: true });
+  });
+
   it("sert l'interface avec les en-têtes de sécurité et refuse une adresse mal encodée", async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gof-static-'));
     writeFileSync(join(dir, 'index.html'), '<!doctype html>');
