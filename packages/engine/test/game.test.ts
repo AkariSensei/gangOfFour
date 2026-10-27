@@ -255,6 +255,8 @@ describe('fin de manche', () => {
     state = apply(state, { type: 'cut', playerIndex: 0, position: 10 });
 
     expect(state.dealer).toBe(2);
+    // Toute la table voit où l'ancien donneur a coupé, pour l'animation.
+    expect(getPlayerView(state, 1).lastCut).toEqual({ playerIndex: 0, position: 10, deckSize: 64 });
     // Les 10 cartes coupées sont passées dessous : à trois, elles finissent dans la main morte.
     expect(state.dummy.map((c) => c.id).slice(-10)).toEqual(top);
     const faces = (list: Card[]) => list.map((c) => `${c.color}${c.value}`).sort();

@@ -49,6 +49,13 @@ export interface Exchange {
   winnerCard: Card | null;
 }
 
+/** Coupe du paquet par le donneur : les `position` cartes du dessus d'un paquet de `deckSize` cartes passent dessous. */
+export interface Cut {
+  playerIndex: number;
+  position: number;
+  deckSize: number;
+}
+
 export type Phase = 'cut' | 'exchange' | 'playing' | 'roundOver' | 'gameOver';
 
 export interface GameState {
@@ -77,6 +84,8 @@ export interface GameState {
   /** Le prochain coup doit contenir le 1 multicolore (ouverture de la première manche). */
   mustPlayMultiOne: boolean;
   exchange: Exchange | null;
+  /** Dernière coupe du paquet, pour que toute la table la voie (absente des parties créées avant son ajout). */
+  lastCut?: Cut | null;
   lastRound: RoundResult | null;
   /** Indices des joueurs avec le score le plus bas en fin de partie. */
   winners: number[];
@@ -313,6 +322,7 @@ function nextRound(state: GameState): ActionResult {
   state.dummy = [];
   state.trick = [];
   state.exchange = null;
+  state.lastCut = null;
   state.phase = 'cut';
   state.currentPlayer = state.dealer;
   return { ok: true, state };
@@ -324,6 +334,7 @@ function cut(state: GameState, position: number): ActionResult {
     return { ok: false, error: 'invalidCut' };
   }
   const deck = [...state.deck.slice(position), ...state.deck.slice(0, position)];
+  state.lastCut = { playerIndex: state.dealer, position, deckSize: state.deck.length };
   state.deck = [];
   state.round += 1;
   state.direction = state.round % 2 === 1 ? -1 : 1;
@@ -403,6 +414,7 @@ export interface PlayerView {
   trick: TrickEntry[];
   mustPlayMultiOne: boolean;
   exchange: Exchange | null;
+  lastCut: Cut | null;
   lastRound: RoundResult | null;
   winners: number[];
 }
@@ -424,6 +436,7 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     trick: state.trick,
     mustPlayMultiOne: state.mustPlayMultiOne,
     exchange: state.exchange,
+    lastCut: state.lastCut ?? null,
     lastRound: state.lastRound,
     winners: state.winners,
   };
