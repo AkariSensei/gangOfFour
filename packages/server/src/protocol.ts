@@ -2,6 +2,7 @@ import type { ActionError, PlayerView } from '@gof/engine';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
+export type { Badge } from './badges';
 
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];

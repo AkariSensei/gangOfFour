@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
+import { type Badge, badgesOf } from './badges';
 
 export interface GameRecord {
   finishedAt: string;
@@ -33,6 +34,7 @@ export interface PlayerProfile {
   worstRound: number;
   /** Dernières parties, de la plus récente à la plus ancienne. */
   recent: { finishedAt: string; score: number; winner: boolean; rank: number; players: number }[];
+  badges: Badge[];
 }
 
 export interface LeaderboardEntry {
@@ -220,6 +222,7 @@ export class GameHistory {
           rank: 1 + record.players.filter((p) => p.score < me.score).length,
           players: record.players.length,
         })),
+      badges: badgesOf(games),
     };
   }
 }

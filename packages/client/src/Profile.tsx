@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
+import { BadgeGrid } from './Badges';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -43,6 +44,10 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
               <Stat value={profile.gangs} label={`gang${profile.gangs > 1 ? 's' : ''} posé${profile.gangs > 1 ? 's' : ''}`} />
               <Stat value={profile.worstRound} label="pire manche (pts)" />
             </div>
+            <h3>
+              Badges · {profile.badges.filter((b) => b.value >= b.goal).length} / {profile.badges.length}
+            </h3>
+            <BadgeGrid badges={profile.badges} />
             <h3>Dernières parties</h3>
             <ul className="recent">
               {profile.recent.map((g) => (

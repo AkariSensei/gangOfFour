@@ -131,6 +131,32 @@ describe('GameHistory', () => {
     expect(history.profile('David')).toBeNull();
   });
 
+  it('calcule les badges d\'un joueur', () => {
+    const history = new GameHistory();
+    const first = finished({ Alice: 15, Bruno: 104, Chloé: 60 });
+    first.round = 11;
+    first.stats = [
+      { roundsWon: 6, gangs: 1, worstRound: 10 },
+      { roundsWon: 0, gangs: 0, worstRound: 80 },
+      { roundsWon: 1, gangs: 0, worstRound: 18 },
+    ];
+    history.record(first);
+    history.record(finished({ Alice: 30, Bruno: 50, Chloé: 60 }));
+    history.record(finished({ Alice: 90, Bruno: 50, Chloé: 60 }));
+    const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
+    expect(badges('Alice')).toMatchObject({
+      'first-win': '1/1',
+      'games-10': '3/10',
+      'streak-3': '2/3',
+      'gang-1': '1/1',
+      'clean-win': '1/1',
+      steamroller: '5/5',
+      marathon: '10/10',
+      scapegoat: '0/1',
+    });
+    expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', 'clean-win': '0/1' });
+  });
+
   it('garde la plus longue série de victoires d\'un compte', () => {
     const history = new GameHistory();
     expect(history.bestStreak()).toBeNull();
