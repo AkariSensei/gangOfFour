@@ -2,7 +2,6 @@ import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { Table } from './Table';
 import { errorLabel } from './labels';
-import { ThemeToggle } from './theme';
 import { useAccount, useGameConnection } from './socket';
 
 export function App() {
@@ -21,7 +20,6 @@ export function App() {
     <div className="app">
       {!connected && <div className="banner">{errorLabel('disconnected')}</div>}
       {screen}
-      {screen?.type !== Table && <ThemeToggle className="icon theme-toggle" />}
     </div>
   );
 }
