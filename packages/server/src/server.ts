@@ -111,9 +111,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const botDelay = options.botDelayMs ?? 1100;
   const cutPause = options.cutPauseMs ?? 1800;
 
-  /** Si c'est à un bot d'agir, il joue après un court délai, puis on regarde si le suivant est aussi un bot. */
+  /**
+   * Si c'est à un bot d'agir, il joue après un court délai, puis on regarde si le suivant est aussi un bot.
+   * Un humain qui ne peut rien poser passe de la même façon, après le même délai pour que la table voie la passe.
+   */
   function scheduleBots(code: string) {
-    if (botTimers.has(code) || !rooms.botToAct(code)) return;
+    if (botTimers.has(code) || !(rooms.botToAct(code) || rooms.stuckToPass(code))) return;
     // L'échange suit juste la coupe : le bot attend la fin de l'animation pour que chacun voie la coupe puis l'échange.
     const justCut = rooms.get(code)?.game?.phase === 'exchange';
     botTimers.set(
@@ -132,6 +135,14 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   /** Le bot dont c'est le tour joue (s'il est toujours de mise), puis on regarde si le suivant est aussi un bot. */
   function playBot(code: string) {
     const room = rooms.get(code);
+    const stuck = rooms.stuckToPass(code);
+    if (room && stuck) {
+      const result = rooms.act(code, stuck.playerId, { type: 'pass' });
+      if (!result.ok) errors.record('bot', new Error(`Passe automatique refusée dans le salon ${code} : ${result.error}`));
+      void broadcast(code);
+      scheduleBots(code);
+      return;
+    }
     const seat = rooms.botToAct(code);
     if (!room?.game || !seat) return;
     const index = room.seats.indexOf(seat);

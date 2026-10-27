@@ -2,11 +2,11 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PlayerView } from '@gof/engine';
+import { type PlayerView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type ClientToServerEvents, type GameServer, type GameServerOptions, type RoomView, type ServerToClientEvents, createGameServer } from '../src';
-import { playBotTurn } from '../scripts/bot';
+import { isStuck, playBotTurn } from '../scripts/bot';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: PlayerView };
 
@@ -135,7 +135,7 @@ describe('serveur de jeu', () => {
       g.phase === 'roundOver' ||
       (g.phase === 'cut' && g.dealer === g.you) ||
       (g.phase === 'exchange' && g.exchange?.winnerIndex === g.you) ||
-      (g.phase === 'playing' && g.currentPlayer === g.you);
+      (g.phase === 'playing' && g.currentPlayer === g.you && !isStuck(g));
     const humans = [alice, chloe2];
     const done = () => alice.game!.round > 1 || alice.game!.phase === 'gameOver';
     for (let steps = 0; !done(); steps++) {
@@ -361,7 +361,7 @@ describe('serveur de jeu', () => {
   });
 
   it.each([3, 4])('joue une partie complète à %i joueurs par les sockets', async (count) => {
-    await start();
+    await start({ botDelayMs: 0 });
     const { players } = await lobby(count);
     await players[0]!.emitWithAck('game:start', {});
     await waitFor(() => players.every((p) => p.game));
@@ -396,7 +396,8 @@ describe('serveur de jeu', () => {
     await human.emitWithAck('game:start', {});
     await waitFor(() => !!human.game);
 
-    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls.
+    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls,
+    // et le serveur fait passer l'humain quand il ne peut rien poser.
     const seats = [human, human, human];
     const humanMustAct = (g: PlayerView) =>
       g.phase === 'roundOver' ||
@@ -487,6 +488,31 @@ describe('serveur de jeu', () => {
     await waitFor(() => server.rooms.get(code)!.game!.trick.length > before, 2000);
     // Et un nouveau tour relance le minuteur pour le joueur suivant.
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
+  });
+
+  it('fait passer tout seul un joueur qui ne peut rien poser, mais jamais quand il ouvre', async () => {
+    await start({ botDelayMs: 50 });
+    const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
+    await waitFor(() => players.every((p) => p.game));
+    // Partie arrangée : Alice ouvre avec le dragon, le joueur suivant n'a que des petites cartes isolées.
+    const game = server.rooms.get(code)!.game!;
+    const deck = createDeck();
+    const cards = (...ids: string[]) => ids.map((id) => deck.find((c) => c.id === id)!);
+    const next = (0 + game.direction + 3) % 3;
+    const last = (next + game.direction + 3) % 3;
+    Object.assign(game, { phase: 'playing', currentPlayer: 0, table: null, trick: [], passed: [false, false, false], mustPlayMultiOne: false, exchange: null });
+    game.players[0]!.hand = cards('rD', 'g2a', 'g3a');
+    game.players[next]!.hand = cards('g1a', 'y4a', 'r6b');
+    game.players[last]!.hand = cards('y7a', 'r8a', 'g9b');
+    expect((await players[0]!.emitWithAck('game:play', { cardIds: ['rD'] })).ok).toBe(true);
+    // Les deux autres passent sans rien faire, et Alice reprend la main pour ouvrir : là, rien ne se passe.
+    const now = () => server.rooms.get(code)!.game!;
+    await waitFor(() => now().table === null && now().currentPlayer === 0, 2000);
+    expect(now().trick.map((e) => e.combination === null)).toEqual([false, true, true]);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(now().currentPlayer).toBe(0);
+    expect(now().players[0]!.hand).toHaveLength(2);
   });
 
   it('ne lance pas de minuteur par défaut', async () => {

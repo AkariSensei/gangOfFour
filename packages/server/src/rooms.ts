@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView } from '@gof/engine';
+import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView, playableCards } from '@gof/engine';
 import { AVATARS, COLORS, type Look, type RoomError, type RoomView, type Session } from './protocol';
 
 export const MAX_PLAYERS = 4;
@@ -217,6 +217,22 @@ export class RoomManager {
   botToAct(code: string): Seat | null {
     const seat = this.seatToAct(code);
     return seat?.bot || (seat?.away && !this.isAbandoned(code)) ? seat : null;
+  }
+
+  /**
+   * Le joueur humain dont c'est le tour et qui ne peut rien poser sur la table (toute sa main est grisée) :
+   * il passera tout seul. Jamais quand il ouvre le pli, puisqu'il peut alors tout jouer.
+   */
+  stuckToPass(code: string): Seat | null {
+    const room = this.get(code);
+    const game = room?.game;
+    if (!room || !game || game.phase !== 'playing' || !game.table) return null;
+    const seat = room.seats[game.currentPlayer];
+    if (!seat || seat.bot || seat.away) return null;
+    const n = game.players.length;
+    const next = game.players[(game.currentPlayer + game.direction + n) % n]!;
+    const hand = game.players[game.currentPlayer]!.hand;
+    return playableCards(hand, game.table.combination, next.hand.length === 1).size === 0 ? seat : null;
   }
 
   delete(code: string): void {

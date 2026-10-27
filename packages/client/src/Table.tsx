@@ -636,7 +636,7 @@ export function Table({
     if (planned?.type === 'pass') return { text: 'Passe prévue : tu passeras dès que ce sera ton tour', ok: true };
     if (planned?.type === 'play') return { text: 'Coup prévu : il partira dès que ce sera ton tour (s\'il passe encore)', ok: true };
     if (mustGive) return selectedCards.length === 1 ? `Donner ${cardLabel(selectedCards[0]!)}` : 'Choisis la carte à rendre';
-    if (selectedCards.length === 0) return playable?.size === 0 ? 'Rien ne passe : tu peux passer' : '';
+    if (selectedCards.length === 0) return playable?.size === 0 ? 'Rien ne passe : tu passes' : '';
     const combo = analyzeCombination(selectedCards);
     if (!combo) return { text: 'Combinaison invalide', ok: false };
     const label = combinationLabel(combo.type, combo.cards.length);

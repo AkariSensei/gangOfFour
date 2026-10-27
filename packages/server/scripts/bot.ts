@@ -1,4 +1,4 @@
-import { type Card, type PlayerView, analyzeCombination, canBeat } from '@gof/engine';
+import { type Card, type PlayerView, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import type { Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '../src';
 
@@ -21,6 +21,14 @@ function firstCombination(hand: Card[]): string[] | null {
   return null;
 }
 
+/** Le joueur ne peut rien poser sur la table : le serveur le fera passer tout seul. */
+export function isStuck(view: PlayerView): boolean {
+  if (view.phase !== 'playing' || !view.table) return false;
+  const n = view.players.length;
+  const next = view.players[(view.you + view.direction + n) % n]!;
+  return playableCards(view.hand, view.table.combination, next.cardCount === 1).size === 0;
+}
+
 /** Fait jouer le joueur dont c'est le tour, avec une stratégie naïve : la plus petite carte seule possible. */
 export async function playBotTurn(players: Client[]): Promise<void> {
   const view = players[0]!.game!;
@@ -39,6 +47,8 @@ export async function playBotTurn(players: Client[]): Promise<void> {
     await client.emitWithAck('game:giveCard', { cardId: hand[0]!.id });
     return;
   }
+  // Rien ne passe : le serveur passe à sa place, il n'y a qu'à attendre.
+  if (isStuck(client.game!)) return;
   if (mustPlayMultiOne) {
     await client.emitWithAck('game:play', { cardIds: ['m1'] });
     return;
