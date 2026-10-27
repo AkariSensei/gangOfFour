@@ -20,9 +20,9 @@ async function start(options: GameServerOptions = {}) {
   await new Promise<void>((resolve) => server.http.listen(0, resolve));
 }
 
-function connect(): Client {
+function connect(auth?: Record<string, string>): Client {
   const { port } = server.http.address() as AddressInfo;
-  const client: Client = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true });
+  const client: Client = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, auth });
   client.on('room:state', (room) => (client.room = room));
   client.on('game:state', (game) => (client.game = game));
   clients.push(client);
@@ -139,6 +139,23 @@ describe('serveur de jeu', () => {
     await waitFor(() => !alice.room!.players[1]!.away && alice.room!.players[1]!.connected);
     expect(back.game!.you).toBe(1);
   }, 30000);
+
+  it("refuse un second siège au même navigateur, sauf pour l'admin", async () => {
+    await start({ adminKey: 'secret' });
+    const host = connect({ browser: 'nav-1' });
+    const created = await host.emitWithAck('room:create', { name: 'Alice' });
+    if (!created.ok) throw new Error(created.error);
+    const otherTab = connect({ browser: 'nav-1' });
+    expect(await otherTab.emitWithAck('room:join', { code: created.code, name: 'Bis' })).toEqual({ ok: false, error: 'alreadySeated' });
+    expect((await connect({ browser: 'nav-2' }).emitWithAck('room:join', { code: created.code, name: 'Bruno' })).ok).toBe(true);
+    const wrongKey = connect({ browser: 'nav-1', admin: 'faux' });
+    expect(await wrongKey.emitWithAck('room:join', { code: created.code, name: 'Bis' })).toMatchObject({ error: 'alreadySeated' });
+
+    const admin = { browser: 'nav-3', admin: 'secret' };
+    const adminRoom = await connect(admin).emitWithAck('room:create', { name: 'Maître' });
+    if (!adminRoom.ok) throw new Error(adminRoom.error);
+    expect((await connect(admin).emitWithAck('room:join', { code: adminRoom.code, name: 'Maître 2' })).ok).toBe(true);
+  });
 
   it('supprime un salon abandonné après le délai', async () => {
     await start({ abandonDelayMs: 50 });

@@ -25,7 +25,10 @@ const roomsFile = process.env.ROOMS_FILE ?? join(dirname(historyFile), 'salons.j
 // Les erreurs sont notées à côté, une par ligne : la surveillance GitHub les relève et ouvre une issue.
 const errorsFile = process.env.ERRORS_FILE ?? join(dirname(historyFile), 'erreurs.jsonl');
 
-const { http, saveRooms, errors } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile, errorsFile });
+// Clé de l'admin (variable d'environnement ADMIN_KEY, jamais dans le code) : il peut tenir plusieurs sièges pour tester.
+const adminKey = process.env.ADMIN_KEY || undefined;
+
+const { http, saveRooms, errors } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile, errorsFile, adminKey });
 
 // Filet de sécurité : une erreur imprévue est notée dans le journal mais n'arrête plus le serveur (et les parties).
 process.on('uncaughtException', (error) => errors.record('erreur non rattrapée', error));

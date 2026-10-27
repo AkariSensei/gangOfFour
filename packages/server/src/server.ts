@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { ErrorLog } from './errors';
@@ -27,6 +27,8 @@ interface SocketData {
   ip?: string;
   /** Regarde la partie de `code` sans y jouer. */
   spectator?: boolean;
+  /** Identifiant du navigateur (commun à ses onglets) ; absent pour l'admin, qui peut tenir plusieurs sièges. */
+  browser?: string;
 }
 
 export interface GameServer {
@@ -60,9 +62,17 @@ export interface GameServerOptions {
   botDelayMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
   roomsFile?: string;
+  /** Clé secrète de l'admin : son navigateur peut prendre plusieurs sièges d'un salon, pour tester seul. */
+  adminKey?: string;
 }
 
 type AnyAck = (result: unknown) => void;
+
+/** Compare deux textes sans laisser deviner, au temps de réponse, combien de caractères sont justes. */
+function sameSecret(a: string, b: string): boolean {
+  const hash = (text: string) => createHash('sha256').update(text).digest();
+  return timingSafeEqual(hash(a), hash(b));
+}
 
 /** Ce qui est envoyé avec un événement : n'importe quoi, puisque ça vient du réseau. */
 type Payload = Record<string, unknown>;
@@ -257,6 +267,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       return next(new Error('slowDown'));
     }
     socket.data.ip = ip;
+    const { browser, admin } = (socket.handshake.auth ?? {}) as Record<string, unknown>;
+    const isAdmin = !!options.adminKey && typeof admin === 'string' && sameSecret(admin, options.adminKey);
+    if (!isAdmin && typeof browser === 'string' && browser.length <= 64) socket.data.browser = browser;
     openSockets.set(ip, (openSockets.get(ip) ?? 0) + 1);
     socket.on('disconnect', () => {
       const left = (openSockets.get(ip) ?? 1) - 1;
@@ -314,7 +327,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     async function enter(result: Result<{ code: string; playerId: string; token: string }>, ack: AnyAck) {
       if (result.ok) {
         if (socket.data.code) leaveCurrent();
-        socket.data = { ip: socket.data.ip, code: result.code, playerId: result.playerId };
+        socket.data = { ip: socket.data.ip, browser: socket.data.browser, code: result.code, playerId: result.playerId };
         await socket.join(result.code);
         clearTimeout(cleanupTimers.get(result.code));
         clearTimeout(awayTimers.get(`${result.code}/${result.playerId}`));
@@ -332,7 +345,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { code, playerId, spectator } = socket.data;
       if (code && spectator) {
         void socket.leave(code);
-        socket.data = { ip: socket.data.ip };
+        socket.data = { ip: socket.data.ip, browser: socket.data.browser };
         void broadcast(code);
         return;
       }
@@ -340,7 +353,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       rooms.leave(code, playerId);
       if (rooms.get(code)?.game) scheduleAway(code, playerId);
       void socket.leave(code);
-      socket.data = { ip: socket.data.ip };
+      socket.data = { ip: socket.data.ip, browser: socket.data.browser };
       scheduleCleanup(code);
       void broadcast(code);
     }
@@ -366,9 +379,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
     on('room:create', (payload, ack) => {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      return allowed.ok ? enter(rooms.create(payload.name, payload), ack) : ack(allowed);
+      return allowed.ok ? enter(rooms.create(payload.name, payload, socket.data.browser), ack) : ack(allowed);
     });
-    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload), ack));
+    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload, socket.data.browser), ack));
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
@@ -379,7 +392,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
       if (socket.data.code) leaveCurrent();
-      socket.data = { ip: socket.data.ip, code: room.code, spectator: true };
+      socket.data = { ip: socket.data.ip, browser: socket.data.browser, code: room.code, spectator: true };
       await socket.join(room.code);
       ack({ ok: true, code: room.code, playerId: '', token: '', spectator: true });
       await broadcast(room.code);

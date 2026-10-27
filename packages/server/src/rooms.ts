@@ -30,6 +30,8 @@ export interface Seat {
   away?: boolean;
   avatar?: string;
   color?: string;
+  /** Navigateur qui a pris ce siège : il ne peut pas en prendre un second dans le même salon. */
+  browser?: string;
 }
 
 /** Noms donnés aux bots, dans l'ordre. */
@@ -88,30 +90,32 @@ export class RoomManager {
     return code;
   }
 
-  private seat(room: Room, name: string, look: unknown): Session {
-    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look) };
+  private seat(room: Room, name: string, look: unknown, browser?: string): Session {
+    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look), ...(browser ? { browser } : {}) };
     room.seats.push(seat);
     return { code: room.code, playerId: seat.playerId, token: seat.token };
   }
 
-  create(rawName: unknown, look?: unknown): Result<Session> {
+  create(rawName: unknown, look?: unknown, browser?: string): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null };
-    const session = this.seat(room, name, look);
+    const session = this.seat(room, name, look, browser);
     room.hostId = session.playerId;
     this.rooms.set(room.code, room);
     return { ok: true, ...session };
   }
 
-  join(code: string, rawName: unknown, look?: unknown): Result<Session> {
+  /** `browser` : un même navigateur (tous ses onglets) ne tient qu'un siège par salon, pour ne pas jouer deux mains. */
+  join(code: string, rawName: unknown, look?: unknown, browser?: string): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
+    if (browser && room.seats.some((s) => s.browser === browser)) return { ok: false, error: 'alreadySeated' };
     if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
-    return { ok: true, ...this.seat(room, name, look) };
+    return { ok: true, ...this.seat(room, name, look, browser) };
   }
 
   /** `onlyIfFree` : ne reprend pas un siège encore occupé par un autre onglet ouvert. */
