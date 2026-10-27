@@ -60,6 +60,13 @@ describe('canBeat', () => {
     expect(canBeat(combo('g5', 'r5', 'y5', 'gP', 'yP'), combo('g6', 'r6', 'y6', 'g2', 'r2'))).toBe(false);
   });
 
+  it('départage deux fulls au même brelan par la paire', () => {
+    expect(canBeat(combo('g10', 'r10', 'y10', 'g7', 'r7'), combo('g10', 'r10', 'y10', 'y3', 'g3'))).toBe(true);
+    expect(canBeat(combo('g10', 'r10', 'y10', 'y3', 'g3'), combo('g10', 'r10', 'y10', 'g7', 'r7'))).toBe(false);
+    expect(canBeat(combo('g10', 'r10', 'y10', 'gP', 'yP'), combo('g10', 'r10', 'y10', 'g9', 'r9'))).toBe(true);
+    expect(canBeat(combo('g10', 'r10', 'y10', 'y3', 'r3'), combo('g10', 'r10', 'y10', 'y3', 'g3'))).toBe(true);
+  });
+
   it('impose le même nombre de cartes', () => {
     expect(canBeat(combo('g9', 'r9'), combo('g2'))).toBe(false);
     expect(canBeat(combo('g9'), combo('g2', 'r2'))).toBe(false);
