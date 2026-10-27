@@ -30,8 +30,8 @@ export interface Seat {
   away?: boolean;
   avatar?: string;
   color?: string;
-  /** Navigateur qui a pris ce siège : il ne peut pas en prendre un second dans le même salon. */
-  browser?: string;
+  /** Compte du joueur assis : il ne peut pas prendre un second siège dans le même salon. */
+  account?: string;
 }
 
 /** Noms donnés aux bots, dans l'ordre. */
@@ -58,7 +58,7 @@ export type PlayerAction =
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError };
 
-function cleanName(name: unknown): string | null {
+export function cleanName(name: unknown): string | null {
   if (typeof name !== 'string') return null;
   // Pas de caractères invisibles ou de contrôle, qui permettraient des pseudos vides ou trompeurs.
   const trimmed = name.replace(/[\p{C}]/gu, '').trim().slice(0, MAX_NAME_LENGTH);
@@ -66,7 +66,7 @@ function cleanName(name: unknown): string | null {
 }
 
 /** Garde seulement un avatar et une couleur de la liste proposée. */
-function cleanLook(look: unknown): Look {
+export function cleanLook(look: unknown): Look {
   const { avatar, color } = (look && typeof look === 'object' ? look : {}) as Record<string, unknown>;
   return {
     ...(typeof avatar === 'string' && AVATARS.includes(avatar) ? { avatar } : {}),
@@ -90,32 +90,38 @@ export class RoomManager {
     return code;
   }
 
-  private seat(room: Room, name: string, look: unknown, browser?: string): Session {
-    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look), ...(browser ? { browser } : {}) };
+  private seat(room: Room, name: string, look: unknown, account?: string): Session {
+    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look), ...(account ? { account } : {}) };
     room.seats.push(seat);
     return { code: room.code, playerId: seat.playerId, token: seat.token };
   }
 
-  create(rawName: unknown, look?: unknown, browser?: string): Result<Session> {
+  create(rawName: unknown, look?: unknown, account?: string): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null };
-    const session = this.seat(room, name, look, browser);
+    const session = this.seat(room, name, look, account);
     room.hostId = session.playerId;
     this.rooms.set(room.code, room);
     return { ok: true, ...session };
   }
 
-  /** `browser` : un même navigateur (tous ses onglets) ne tient qu'un siège par salon, pour ne pas jouer deux mains. */
-  join(code: string, rawName: unknown, look?: unknown, browser?: string): Result<Session> {
+  /**
+   * `account` : un même compte ne tient qu'un siège par salon, pour ne pas jouer deux mains. `severalSeats` (l'admin,
+   * pour tester seul) lève cette limite : ses sièges suivants ne sont pas rattachés à son compte, ni au classement.
+   */
+  join(code: string, rawName: unknown, look?: unknown, account?: string, severalSeats = false): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
-    if (browser && room.seats.some((s) => s.browser === browser)) return { ok: false, error: 'alreadySeated' };
     if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
-    return { ok: true, ...this.seat(room, name, look, browser) };
+    if (account && room.seats.some((s) => s.account === account)) {
+      if (!severalSeats) return { ok: false, error: 'alreadySeated' };
+      account = undefined;
+    }
+    return { ok: true, ...this.seat(room, name, look, account) };
   }
 
   /** `onlyIfFree` : ne reprend pas un siège encore occupé par un autre onglet ouvert. */

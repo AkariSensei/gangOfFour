@@ -10,6 +10,8 @@ export interface GameRecord {
     score: number;
     winner: boolean;
     bot?: boolean;
+    /** Compte du joueur (absent des parties jouées avant les comptes, ou d'un siège en plus de l'admin). */
+    account?: string;
     /** Statistiques de la partie (absentes des parties enregistrées avant leur ajout). */
     roundsWon?: number;
     gangs?: number;
@@ -42,6 +44,12 @@ export interface LeaderboardEntry {
 
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 
+/** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
+export interface AccountNames {
+  get(id: string | undefined): { name?: string } | undefined;
+  byName(name: string): { id: string } | undefined;
+}
+
 /** Mois d'une date à l'heure de Paris, sous la forme « 2026-10 ». */
 const parisMonth = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit' });
 export const monthOf = (date: Date) => parisMonth.format(date).slice(0, 7);
@@ -50,7 +58,10 @@ export const monthOf = (date: Date) => parisMonth.format(date).slice(0, 7);
 export class GameHistory {
   private records: GameRecord[] = [];
 
-  constructor(private file?: string) {
+  constructor(
+    private file?: string,
+    private accounts?: AccountNames,
+  ) {
     if (!file) return;
     try {
       this.records = JSON.parse(readFileSync(file, 'utf8'));
@@ -59,8 +70,11 @@ export class GameHistory {
     }
   }
 
-  /** `bots` : indices des joueurs tenus par l'ordinateur, gardés dans l'historique mais pas dans le classement. */
-  record(game: GameState, finishedAt = new Date(), bots: number[] = []): GameRecord {
+  /**
+   * `bots` : indices des joueurs tenus par l'ordinateur, gardés dans l'historique mais pas dans le classement.
+   * `accounts` : compte de chaque siège, pour que le classement suive la personne et pas le pseudo.
+   */
+  record(game: GameState, finishedAt = new Date(), bots: number[] = [], accounts: (string | undefined)[] = []): GameRecord {
     const record: GameRecord = {
       finishedAt: finishedAt.toISOString(),
       rounds: game.round,
@@ -69,6 +83,7 @@ export class GameHistory {
         score: p.score,
         winner: game.winners.includes(i),
         ...(bots.includes(i) ? { bot: true } : {}),
+        ...(accounts[i] ? { account: accounts[i] } : {}),
         ...(game.stats?.[i] ?? {}),
       })),
     };
@@ -90,8 +105,41 @@ export class GameHistory {
     }
   }
 
+  /** À qui revient une ligne de l'historique : son compte, ou le pseudo seul pour une partie d'avant les comptes. */
+  private owner(player: GameRecord['players'][number]): string {
+    return player.account ?? `pseudo:${key(player.name)}`;
+  }
+
+  /**
+   * Un compte prend un pseudo : les parties jouées sous ce pseudo avant les comptes lui reviennent, pour de bon
+   * (même s'il change de pseudo plus tard). Le premier compte qui prend le pseudo les récupère.
+   */
+  claim(name: string, accountId: string): void {
+    let changed = false;
+    for (const p of this.records.flatMap((r) => r.players)) {
+      if (p.bot || p.account || key(p.name) !== key(name)) continue;
+      p.account = accountId;
+      changed = true;
+    }
+    if (changed) this.save();
+  }
+
+  /** Pseudo à afficher : celui du compte aujourd'hui (s'il a été renommé), sinon celui de la partie. */
+  private displayName(player: GameRecord['players'][number]): string {
+    return this.accounts?.get(this.owner(player))?.name ?? player.name;
+  }
+
   recent(limit = 5): GameRecord[] {
-    return this.records.slice(-limit).reverse();
+    return this.records
+      .slice(-limit)
+      .reverse()
+      .map((record) => ({
+        ...record,
+        players: record.players.map((p) => {
+          const { account: _account, ...shown } = p;
+          return { ...shown, name: this.displayName(p) };
+        }),
+      }));
   }
 
   /**
@@ -104,12 +152,13 @@ export class GameHistory {
       if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
       for (const p of record.players) {
         if (p.bot) continue;
-        const entry = byName.get(key(p.name)) ?? { name: p.name, games: 0, wins: 0, averageScore: 0, total: 0 };
-        entry.name = p.name;
+        const owner = this.owner(p);
+        const entry = byName.get(owner) ?? { name: p.name, games: 0, wins: 0, averageScore: 0, total: 0 };
+        entry.name = this.displayName(p);
         entry.games += 1;
         entry.wins += p.winner ? 1 : 0;
         entry.total += p.score;
-        byName.set(key(p.name), entry);
+        byName.set(owner, entry);
       }
     }
     return [...byName.values()]
@@ -120,14 +169,15 @@ export class GameHistory {
 
   /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
   profile(name: string): PlayerProfile | null {
+    const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
     const games = this.records.flatMap((record) => {
-      const me = record.players.find((p) => !p.bot && key(p.name) === key(name));
+      const me = record.players.find((p) => !p.bot && this.owner(p) === owner);
       return me ? [{ record, me }] : [];
     });
     if (games.length === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
     return {
-      name: games[games.length - 1]!.me.name,
+      name: this.displayName(games[games.length - 1]!.me),
       games: games.length,
       wins: games.filter((g) => g.me.winner).length,
       averageScore: Math.round(sum((g) => g.me.score) / games.length),

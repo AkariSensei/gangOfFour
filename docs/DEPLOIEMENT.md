@@ -62,6 +62,12 @@ dans `gangoffour/` (en remplaçant l'ancien), puis **Web → Sites → Redémarr
   le serveur les recharge et les joueurs reprennent leur place tout seuls (la page se reconnecte en quelques secondes).
 - Les parties terminées sont enregistrées dans `~/gangoffour/data/parties.json` (le classement du bureau).
   Une mise à jour ne remplace que `dist` : le classement est conservé.
+- Les comptes (Google) sont dans `~/gangoffour/data/comptes.json`, avec la clé qui signe les sessions : ne le
+  partage pas. Le supprimer déconnecte tout le monde et efface les pseudos.
+- **Connexion Google** : dans **Web → Sites → modifier → Environnement**, il faut `GOOGLE_CLIENT_ID=…apps.googleusercontent.com`
+  (console Google Cloud → Google Auth Platform → Clients, type « Application Web », origine JavaScript autorisée
+  `https://gangoffour.alwaysdata.net`) et `ADMIN_EMAIL=ton.adresse@gmail.com`. Règles de confidentialité à indiquer
+  à Google : `https://gangoffour.alwaysdata.net/confidentialite.html`.
 - Un salon dont tous les joueurs sont partis est supprimé au bout de 10 minutes.
 - **Journaux** : dossier `admin/logs/sites` (en SFTP) ou **Web → Sites → Journaux**. Au démarrage, le serveur écrit
   « Interface servie depuis … » si l'interface a bien été trouvée.

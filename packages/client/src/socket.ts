@@ -1,16 +1,13 @@
 import type { PlayerView } from '@gof/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { type Socket, io } from 'socket.io-client';
-import type { ChatMessage, ClientToServerEvents, Look, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
+import type { AccountView, ChatMessage, ClientToServerEvents, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
 
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SESSION_KEY = 'gof-session';
 const SEAT_KEY = 'gof-seat';
-const NAME_KEY = 'gof-name';
-const LOOK_KEY = 'gof-look';
-const BROWSER_KEY = 'gof-browser';
-const ADMIN_KEY = 'gof-admin';
+const ACCOUNT_KEY = 'gof-account';
 
 // Le siège est gardé par onglet (sessionStorage) : un rechargement reprend la même place.
 // Il est aussi retenu pour tout le navigateur (localStorage) : après avoir fermé l'onglet,
@@ -40,40 +37,56 @@ function writeStorage(kind: 'local' | 'session', key: string, value: string | nu
   }
 }
 
-/**
- * Identifiant du navigateur, commun à tous ses onglets : le serveur refuse qu'il prenne deux sièges d'un même salon.
- * L'admin ouvre une fois le site avec « ?admin=sa-clé » : la clé est retenue et lève cette limite pour tester seul.
- */
-function connectionAuth() {
-  let browser = readStorage('local', BROWSER_KEY);
-  if (!browser) {
-    browser = crypto.randomUUID();
-    writeStorage('local', BROWSER_KEY, browser);
-  }
-  const url = new URL(window.location.href);
-  const admin = url.searchParams.get('admin');
-  if (admin !== null) {
-    writeStorage('local', ADMIN_KEY, admin || null);
-    url.searchParams.delete('admin');
-    window.history.replaceState(null, '', url);
-  }
-  return { browser, admin: readStorage('local', ADMIN_KEY) ?? undefined };
+// La session du compte (remise après la connexion Google) est envoyée à chaque connexion, reconnexions comprises.
+export const socket: GameSocket = io({
+  autoConnect: true,
+  auth: (cb) => cb({ session: readStorage('local', ACCOUNT_KEY) ?? undefined }),
+});
+
+export interface AccountState {
+  /** undefined : pas encore chargé ; null : pas connecté. */
+  account: AccountView | null | undefined;
+  googleClientId: string | null;
 }
 
-export const socket: GameSocket = io({ autoConnect: true, auth: connectionAuth() });
+/** Compte du joueur : chargé à chaque connexion, mis à jour par la connexion Google, le profil ou la déconnexion. */
+export function useAccount() {
+  const [state, setState] = useState<AccountState>({ account: undefined, googleClientId: null });
 
-export const savedName = () => readStorage('local', NAME_KEY) ?? '';
-export const saveName = (name: string) => writeStorage('local', NAME_KEY, name);
+  useEffect(() => {
+    const load = async () => {
+      const result = await socket.emitWithAck('account:get');
+      if (result.ok) setState({ account: result.account, googleClientId: result.googleClientId });
+    };
+    socket.on('connect', load);
+    if (socket.connected) void load();
+    return () => {
+      socket.off('connect', load);
+    };
+  }, []);
 
-/** Avatar et couleur choisis, retenus pour tout le navigateur comme le pseudo. */
-export function savedLook(): Look {
-  try {
-    return JSON.parse(readStorage('local', LOOK_KEY) ?? '{}');
-  } catch {
-    return {};
-  }
+  const setAccount = useCallback((account: AccountView | null) => setState((s) => ({ ...s, account })), []);
+
+  const signIn = useCallback(
+    async (credential: string) => {
+      const result = await socket.emitWithAck('account:google', { credential });
+      if (!result.ok) return result.error;
+      writeStorage('local', ACCOUNT_KEY, result.session);
+      setAccount(result.account);
+      return null;
+    },
+    [setAccount],
+  );
+
+  const signOut = useCallback(async () => {
+    writeStorage('local', ACCOUNT_KEY, null);
+    writeStorage('local', SEAT_KEY, null);
+    await socket.emitWithAck('account:signOut');
+    setAccount(null);
+  }, [setAccount]);
+
+  return { ...state, setAccount, signIn, signOut };
 }
-export const saveLook = (look: Look) => writeStorage('local', LOOK_KEY, JSON.stringify(look));
 
 function readSession(kind: 'local' | 'session', key: string): Session | null {
   try {

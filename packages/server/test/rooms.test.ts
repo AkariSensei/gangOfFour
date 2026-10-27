@@ -20,14 +20,14 @@ describe('RoomManager', () => {
     expect(rooms.get(host.code)!.hostId).toBe(host.playerId);
   });
 
-  it('ne donne qu\'un siège par salon à un même navigateur', () => {
+  it('ne donne qu\'un siège par salon à un même compte', () => {
     const rooms = new RoomManager();
-    const host = rooms.create('Alice', {}, 'nav-1');
+    const host = rooms.create('Alice', {}, 'compte-1');
     if (!host.ok) throw new Error(host.error);
-    expect(rooms.join(host.code, 'Bis', {}, 'nav-1')).toEqual({ ok: false, error: 'alreadySeated' });
-    expect(rooms.join(host.code, 'Bruno', {}, 'nav-2').ok).toBe(true);
+    expect(rooms.join(host.code, 'Alice', {}, 'compte-1')).toEqual({ ok: false, error: 'alreadySeated' });
+    expect(rooms.join(host.code, 'Bruno', {}, 'compte-2').ok).toBe(true);
     expect(rooms.join(host.code, 'Chloé').ok).toBe(true);
-    expect(rooms.roomView(rooms.get(host.code)!).players[0]).not.toHaveProperty('browser');
+    expect(rooms.roomView(rooms.get(host.code)!).players[0]).not.toHaveProperty('account');
   });
 
   it('refuse un pseudo vide et nettoie les espaces', () => {

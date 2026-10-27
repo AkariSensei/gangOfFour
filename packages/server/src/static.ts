@@ -24,13 +24,14 @@ function cacheControl(path: string): string {
 
 /**
  * En-têtes de sécurité : le site ne peut pas être affiché dans un cadre d'un autre site (clics piégés), le
- * navigateur ne devine pas le type des fichiers, et seuls les scripts du site lui-même peuvent s'exécuter.
+ * navigateur ne devine pas le type des fichiers, et seuls les scripts du site lui-même (et celui du bouton Google) peuvent s'exécuter.
  */
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'same-origin',
-  'Content-Security-Policy': "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+  // Le bouton Google a besoin de connaître l'origine du site (pas le reste de l'adresse) et de charger son script.
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Content-Security-Policy': "script-src 'self' https://accounts.google.com/gsi/client; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 };
 
 /** Sert l'interface compilée (dist/client), avec index.html pour toute route inconnue. */

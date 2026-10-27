@@ -20,17 +20,21 @@ const { port } = server.http.address() as AddressInfo;
 console.log(`Serveur lancé sur le port ${port}, ${count} joueurs automatiques se connectent…\n`);
 
 type Client = ReturnType<typeof io> & { game?: PlayerView };
-const players: Client[] = names.map(() => {
-  const c: Client = io(`http://localhost:${port}`, { transports: ['websocket'] });
+// Chaque joueur automatique a son compte, créé directement sur le serveur (sans passer par Google).
+const players: Client[] = names.map((name, i) => {
+  server.accounts.signIn({ sub: `demo-${i}`, email: `demo-${i}@exemple.fr` });
+  server.accounts.update(`demo-${i}`, { name });
+  const auth = { session: server.accounts.session(`demo-${i}`) };
+  const c: Client = io(`http://localhost:${port}`, { transports: ['websocket'], auth });
   c.on('game:state', (g: PlayerView) => (c.game = g));
   return c;
 });
 
-const created = await players[0]!.emitWithAck('room:create', { name: names[0] });
+const created = await players[0]!.emitWithAck('room:create');
 if (!created.ok) throw new Error(created.error);
 console.log(`Salon ${created.code} créé par ${names[0]}`);
 for (let i = 1; i < count; i++) {
-  await players[i]!.emitWithAck('room:join', { code: created.code, name: names[i] });
+  await players[i]!.emitWithAck('room:join', { code: created.code });
   console.log(`${names[i]} rejoint le salon`);
 }
 await players[0]!.emitWithAck('game:start', {});
