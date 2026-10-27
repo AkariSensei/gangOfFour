@@ -22,20 +22,38 @@ function cacheControl(path: string): string {
   return 'no-cache';
 }
 
+/**
+ * En-têtes de sécurité : le site ne peut pas être affiché dans un cadre d'un autre site (clics piégés), le
+ * navigateur ne devine pas le type des fichiers, et seuls les scripts du site lui-même peuvent s'exécuter.
+ */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'same-origin',
+  'Content-Security-Policy': "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+};
+
 /** Sert l'interface compilée (dist/client), avec index.html pour toute route inconnue. */
 export function createStaticHandler(rootDir: string) {
   const root = resolve(rootDir);
 
   return async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.writeHead(405).end();
+      res.writeHead(405, SECURITY_HEADERS).end();
       return;
     }
-    const urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    // Une adresse mal encodée (« %E0 » seul par exemple) ferait échouer le décodage : on la refuse proprement.
+    let urlPath: string;
+    try {
+      urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    } catch {
+      res.writeHead(400, SECURITY_HEADERS).end();
+      return;
+    }
     let path = urlPath === '/' ? '/index.html' : urlPath;
     let file = normalize(join(root, path));
     if (file !== root && !file.startsWith(root + sep)) {
-      res.writeHead(403).end();
+      res.writeHead(403, SECURITY_HEADERS).end();
       return;
     }
 
@@ -45,12 +63,13 @@ export function createStaticHandler(rootDir: string) {
       file = join(root, path);
       info = await stat(file).catch(() => null);
       if (!info?.isFile()) {
-        res.writeHead(404).end('Interface introuvable : lance « npm run build ».');
+        res.writeHead(404, SECURITY_HEADERS).end('Interface introuvable : lance « npm run build ».');
         return;
       }
     }
 
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
       'Content-Type': CONTENT_TYPES[extname(file)] ?? 'application/octet-stream',
       'Content-Length': info.size,
       'Cache-Control': cacheControl(path),
