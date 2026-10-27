@@ -6,6 +6,7 @@ import { ChatButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
+import { ThemeToggle } from './theme';
 import { useTurnAlert } from './turnAlert';
 
 type Seat = 'right' | 'top' | 'left' | 'bottom';
@@ -691,6 +692,7 @@ export function Table({
         <Scores game={game} />
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} />
+          <ThemeToggle />
           <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
             {sound ? '🔔' : '🔕'}
           </button>
