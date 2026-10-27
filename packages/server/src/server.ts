@@ -103,7 +103,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
-    const bots = room.seats.flatMap((s, i) => (s.bot ? [i] : []));
+    const bots = room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
     history.record(room.game, new Date(), bots, room.seats.map((s) => s.account));
   }
 
@@ -507,9 +507,39 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!code || !seat) return ack({ ok: false, error: 'notInRoom' });
       const message = text(payload.text).replace(/[\p{Cc}]/gu, ' ').trim().slice(0, CHAT_MAX_LENGTH);
       if (!message) return ack({ ok: false, error: 'emptyMessage' });
+      if (rooms.isMuted(code, seat.playerId)) return ack({ ok: false, error: 'muted' });
       if (!chatPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
       io.to(code).emit('chat:message', { id: randomUUID(), playerId: seat.playerId, name: seat.name, text: message, at: Date.now() });
       ack({ ok: true });
+    });
+    on('room:mute', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      if (!code) return ack({ ok: false, error: 'notInRoom' });
+      const result = rooms.setMuted(code, playerId, accounts.isAdmin(me()), text(payload.playerId), payload.muted === true);
+      ack(result);
+      if (result.ok) void broadcast(code);
+    });
+    on('room:kick', async (payload, ack) => {
+      const { code, playerId } = socket.data;
+      if (!code) return ack({ ok: false, error: 'notInRoom' });
+      const targetId = text(payload.playerId);
+      // Personne n'exclut l'admin.
+      const target = rooms.get(code)?.seats.find((s) => s.playerId === targetId);
+      if (accounts.isAdmin(accounts.get(target?.account))) return ack({ ok: false, error: 'notAdmin' });
+      const result = rooms.kick(code, playerId, accounts.isAdmin(me()), targetId);
+      ack(result);
+      if (!result.ok) return;
+      clearTimeout(awayTimers.get(`${code}/${targetId}`));
+      awayTimers.delete(`${code}/${targetId}`);
+      for (const s of io.sockets.sockets.values()) {
+        if (s.data.code !== code || s.data.playerId !== targetId) continue;
+        s.emit('room:kicked');
+        await s.leave(code);
+        s.data = { ip: s.data.ip, accountId: s.data.accountId };
+      }
+      scheduleCleanup(code);
+      await broadcast(code);
+      scheduleBots(code);
     });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));

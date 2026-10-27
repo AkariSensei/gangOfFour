@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
-import { ChatPanel } from './Chat';
+import { ChatPanel, KickButton, MuteButton } from './Chat';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -14,11 +14,14 @@ export function Lobby({
   room,
   session,
   messages,
+  admin,
   onLeave,
 }: {
   room: RoomView;
   session: Session;
   messages: ChatMessage[];
+  /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */
+  admin: boolean;
   onLeave: () => void;
 }) {
   const [error, setError] = useState('');
@@ -40,6 +43,16 @@ export function Lobby({
 
   async function removeBot(botId: string) {
     const result = await socket.emitWithAck('room:removeBot', { botId });
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
+  async function mute(playerId: string, muted: boolean) {
+    const result = await socket.emitWithAck('room:mute', { playerId, muted });
+    if (!result.ok) setError(errorLabel(result.error));
+  }
+
+  async function kick(playerId: string) {
+    const result = await socket.emitWithAck('room:kick', { playerId });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -74,6 +87,14 @@ export function Lobby({
               {p.bot && <span className="tag">bot</span>}
               {p.id === room.hostId && <span className="tag">hôte</span>}
               {p.id === session.playerId && <span className="tag you">toi</span>}
+              {(isHost || admin) && !p.bot && p.id !== session.playerId ? (
+                <>
+                  <MuteButton name={p.name} muted={p.muted} onClick={() => mute(p.id, !p.muted)} />
+                  <KickButton name={p.name} onKick={() => kick(p.id)} />
+                </>
+              ) : (
+                p.muted && <span className="tag">🔇</span>
+              )}
               {p.bot && isHost && (
                 <button className="remove-bot" aria-label={`Retirer ${p.name}`} onClick={() => removeBot(p.id)}>
                   ✕
@@ -141,7 +162,7 @@ export function Lobby({
       </div>
       <div className="panel lobby-chat">
         <h2>Chat</h2>
-        <ChatPanel messages={messages} me={session.playerId} />
+        <ChatPanel messages={messages} me={session.playerId} muted={room.players.some((p) => p.id === session.playerId && p.muted)} />
       </div>
     </main>
   );

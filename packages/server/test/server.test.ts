@@ -308,6 +308,71 @@ describe('serveur de jeu', () => {
     expect(JSON.stringify(server.rooms.all())).not.toContain('Salut');
   });
 
+  it("laisse l'hôte et l'admin couper le chat d'un joueur pendant la partie", async () => {
+    await start({ adminEmail: 'chef@exemple.fr' });
+    const { code, players } = await lobby(3);
+    await players[0]!.emitWithAck('game:start', {});
+    const [host, bruno, chloe] = players;
+    const brunoId = bruno!.room!.players[1]!.id;
+    const chloeId = chloe!.room!.players[2]!.id;
+
+    expect(await bruno!.emitWithAck('room:mute', { playerId: chloeId, muted: true })).toEqual({ ok: false, error: 'notHost' });
+    expect(await host!.emitWithAck('room:mute', { playerId: brunoId, muted: true })).toEqual({ ok: true });
+    await waitFor(() => chloe!.room!.players[1]!.muted);
+    expect(await bruno!.emitWithAck('chat:send', { text: 'insulte' })).toEqual({ ok: false, error: 'muted' });
+    expect(await chloe!.emitWithAck('chat:send', { text: 'merci' })).toEqual({ ok: true });
+
+    // L'admin, même simple spectateur, peut rendre le chat.
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    await admin.emitWithAck('room:watch', { code });
+    expect(await admin.emitWithAck('room:mute', { playerId: brunoId, muted: false })).toEqual({ ok: true });
+    expect(await bruno!.emitWithAck('chat:send', { text: 'pardon' })).toEqual({ ok: true });
+  });
+
+  it('laisse l\'hôte exclure un joueur : un bot tient sa place jusqu\'à ce qu\'un nouvel humain la prenne', async () => {
+    await start({ botDelayMs: 5, cutPauseMs: 0 });
+    const { code, players } = await lobby(3);
+    const [host, bruno, chloe] = players;
+    await host!.emitWithAck('game:start', {});
+    const brunoId = bruno!.room!.players[1]!.id;
+    let kicked = false;
+    bruno!.on('room:kicked', () => (kicked = true));
+
+    expect(await chloe!.emitWithAck('room:kick', { playerId: brunoId })).toEqual({ ok: false, error: 'notHost' });
+    expect(await host!.emitWithAck('room:kick', { playerId: brunoId })).toEqual({ ok: true });
+    await waitFor(() => kicked && !!host!.room!.players[1]!.vacant);
+    expect(host!.game!.players[1]!.name).toMatch(/^Robot/);
+    expect(await bruno!.emitWithAck('game:pass')).toEqual({ ok: false, error: 'notInRoom' });
+    expect(await bruno!.emitWithAck('room:join', { code })).toEqual({ ok: false, error: 'kicked' });
+    expect(server.rooms.live()[0]).toMatchObject({ open: true });
+
+    // Un nouveau joueur prend la place, avec les cartes et les points du siège.
+    const david = connect('David');
+    const joined = await david.emitWithAck('room:join', { code });
+    expect(joined).toMatchObject({ ok: true, playerId: brunoId });
+    await waitFor(() => david.game?.you === 1 && host!.game!.players[1]!.name === 'David');
+    expect(host!.room!.players[1]).toMatchObject({ vacant: false, away: false });
+    expect(await connect('Emma').emitWithAck('room:join', { code })).toEqual({ ok: false, error: 'gameAlreadyStarted' });
+  });
+
+  it("laisse exclure avant la partie, mais personne n'exclut l'admin", async () => {
+    await start({ adminEmail: 'chef@exemple.fr' });
+    const { code, players } = await lobby(3);
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    server.accounts.update('chef', { name: 'Maître' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    await admin.emitWithAck('room:join', { code });
+    await waitFor(() => players[0]!.room!.players.length === 4);
+    const adminId = players[0]!.room!.players[3]!.id;
+    expect(await players[0]!.emitWithAck('room:kick', { playerId: adminId })).toEqual({ ok: false, error: 'notAdmin' });
+    // L'admin exclut même l'hôte, qui passe au joueur suivant.
+    expect(await admin.emitWithAck('room:kick', { playerId: players[0]!.room!.hostId })).toEqual({ ok: true });
+    await waitFor(() => admin.room?.players.length === 3);
+    expect(admin.room!.hostId).toBe(admin.room!.players[0]!.id);
+    expect(await players[0]!.emitWithAck('room:join', { code })).toEqual({ ok: false, error: 'kicked' });
+  });
+
   it("sert l'interface avec les en-têtes de sécurité et refuse une adresse mal encodée", async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gof-static-'));
     writeFileSync(join(dir, 'index.html'), '<!doctype html>');

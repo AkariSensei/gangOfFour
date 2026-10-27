@@ -344,6 +344,45 @@ input {
   font-size: 1rem;
   cursor: pointer;
 }
+.player-list .mute {
+  margin-left: auto;
+}
+
+/* Exclure un joueur (hôte et admin) */
+button.kick {
+  padding: 0 0.3rem;
+  min-height: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+button.kick:hover {
+  color: #b3261e;
+}
+
+/* Couper ou rendre le chat d'un joueur (hôte et admin) */
+button.mute {
+  padding: 0 0.3rem;
+  min-height: 0;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  opacity: 0.45;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+button.mute:hover,
+button.mute.on {
+  opacity: 1;
+}
+
 .player-list .remove-bot:hover {
   color: #b3261e;
 }
@@ -1531,6 +1570,11 @@ input {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
+}
+.live-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 .live-players {
   font-weight: 600;

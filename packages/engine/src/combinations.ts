@@ -77,7 +77,7 @@ export function analyzeCombination(cards: Card[]): Combination | null {
     const numbers = cards.filter((c) => !isSpecial(c));
     const phoenixPair = specials.length === 2 && specials.every((c) => c.value === PHOENIX_VALUE);
     if (!phoenixPair || !allSameValue(numbers)) return null;
-    return { type: 'fullHouse', cards, rank: [numbers[0]!.value, ...colorsDesc(numbers)] };
+    return { type: 'fullHouse', cards, rank: [numbers[0]!.value, ...colorsDesc(numbers), PHOENIX_VALUE, ...colorsDesc(specials)] };
   }
 
   const values = cards.map((c) => c.value);
@@ -95,8 +95,9 @@ export function analyzeCombination(cards: Card[]): Combination | null {
   for (const c of cards) counts.set(c.value, [...(counts.get(c.value) ?? []), c]);
   const groups = [...counts.values()].sort((a, b) => b.length - a.length);
   if (groups.length === 2 && groups[0]!.length === 3) {
-    const trio = groups[0]!;
-    return { type: 'fullHouse', cards, rank: [trio[0]!.value, ...colorsDesc(trio)] };
+    // Le brelan décide ; à brelan identique (les cartes existent en double), la paire départage.
+    const [trio, pair] = groups as [Card[], Card[]];
+    return { type: 'fullHouse', cards, rank: [trio[0]!.value, ...colorsDesc(trio), pair[0]!.value, ...colorsDesc(pair)] };
   }
 
   if (color) {

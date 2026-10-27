@@ -4,7 +4,18 @@ import { errorLabel } from './labels';
 import { socket } from './socket';
 
 /** Liste des messages du salon et champ pour écrire. */
-export function ChatPanel({ messages, me, autoFocus = false }: { messages: ChatMessage[]; me: string; autoFocus?: boolean }) {
+export function ChatPanel({
+  messages,
+  me,
+  muted = false,
+  autoFocus = false,
+}: {
+  messages: ChatMessage[];
+  me: string;
+  /** L'hôte ou l'admin a coupé le chat de ce joueur. */
+  muted?: boolean;
+  autoFocus?: boolean;
+}) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const list = useRef<HTMLOListElement>(null);
@@ -39,11 +50,12 @@ export function ChatPanel({ messages, me, autoFocus = false }: { messages: ChatM
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={200}
-          placeholder="Écrire un message…"
+          placeholder={muted ? '🔇 Chat coupé' : 'Écrire un message…'}
           aria-label="Message"
           autoFocus={autoFocus}
+          disabled={muted}
         />
-        <button type="submit" disabled={!text.trim()}>
+        <button type="submit" disabled={muted || !text.trim()}>
           Envoyer
         </button>
       </form>
@@ -53,7 +65,7 @@ export function ChatPanel({ messages, me, autoFocus = false }: { messages: ChatM
 }
 
 /** Bouton du chat pendant la partie : compte les messages non lus et montre brièvement le dernier reçu. */
-export function ChatButton({ messages, me }: { messages: ChatMessage[]; me: string }) {
+export function ChatButton({ messages, me, muted }: { messages: ChatMessage[]; me: string; muted?: boolean }) {
   const [open, setOpen] = useState(false);
   const [readCount, setReadCount] = useState(messages.length);
   const [preview, setPreview] = useState<ChatMessage | null>(null);
@@ -79,7 +91,7 @@ export function ChatButton({ messages, me }: { messages: ChatMessage[]; me: stri
       </button>
       {open && (
         <div className="chat-popover panel">
-          <ChatPanel messages={messages} me={me} autoFocus />
+          <ChatPanel messages={messages} me={me} muted={muted} autoFocus />
         </div>
       )}
       {!open && preview && (
@@ -88,5 +100,29 @@ export function ChatButton({ messages, me }: { messages: ChatMessage[]; me: stri
         </button>
       )}
     </div>
+  );
+}
+
+/** Bouton de l'hôte ou de l'admin pour couper ou rendre le chat d'un joueur. */
+export function MuteButton({ name, muted, onClick }: { name: string; muted: boolean; onClick: () => void }) {
+  const label = muted ? `Rendre le chat à ${name}` : `Couper le chat de ${name}`;
+  return (
+    <button className={`mute ${muted ? 'on' : ''}`} title={label} aria-label={label} aria-pressed={muted} onClick={onClick}>
+      {muted ? '🔇' : '🔈'}
+    </button>
+  );
+}
+
+/** Bouton de l'hôte ou de l'admin pour exclure un joueur, après confirmation. */
+export function KickButton({ name, onKick }: { name: string; onKick: () => void }) {
+  return (
+    <button
+      className="kick"
+      title={`Exclure ${name}`}
+      aria-label={`Exclure ${name}`}
+      onClick={() => confirm(`Exclure ${name} ? Un bot prendra sa place.`) && onKick()}
+    >
+      ✕
+    </button>
   );
 }

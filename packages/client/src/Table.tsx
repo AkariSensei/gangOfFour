@@ -2,7 +2,7 @@ import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, anal
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, Look, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
-import { ChatButton } from './Chat';
+import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
@@ -39,6 +39,9 @@ function Opponent({
   away,
   look,
   move,
+  muted,
+  onMute,
+  onKick,
 }: {
   game: PlayerView;
   index: number;
@@ -48,6 +51,10 @@ function Opponent({
   away: boolean;
   look?: Look;
   move?: TrickEntry;
+  muted: boolean;
+  /** Présent seulement pour l'hôte et l'admin : couper ou rendre le chat de ce joueur. */
+  onMute?: () => void;
+  onKick?: () => void;
 }) {
   const p = game.players[index]!;
   const active = game.phase === 'playing' && game.currentPlayer === index;
@@ -60,6 +67,8 @@ function Opponent({
           {p.name}
           {game.dealer === index && <span className="tag">donneur</span>}
           {away ? <span className="tag">🤖 bot</span> : !connected && <span className="tag">hors ligne</span>}
+          {onMute ? <MuteButton name={p.name} muted={muted} onClick={onMute} /> : muted && <span className="tag">🔇</span>}
+          {onKick && <KickButton name={p.name} onKick={onKick} />}
         </div>
         <div className="opponent-meta">
           <span className="count">{p.cardCount}</span> carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
@@ -453,11 +462,14 @@ export function Table({
   game,
   room,
   messages,
+  admin,
   onLeave,
 }: {
   game: PlayerView;
   room: RoomView;
   messages: ChatMessage[];
+  /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */
+  admin: boolean;
   onLeave: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
@@ -471,6 +483,7 @@ export function Table({
 
   const me = game.you;
   const spectator = me < 0;
+  const moderator = admin || (!spectator && room.hostId === game.players[me]?.id);
   const n = game.players.length;
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   const exchange = game.exchange;
@@ -669,6 +682,22 @@ export function Table({
     else setError(errorLabel(r.error));
   }
 
+  /** L'hôte et l'admin modèrent les autres joueurs humains (pas les bots, ni une place tenue par un bot). */
+  const canModerate = (index: number) => {
+    const p = room.players[index];
+    return moderator && !!p && !p.bot && !p.vacant;
+  };
+
+  async function kick(playerId: string) {
+    const r = await socket.emitWithAck('room:kick', { playerId });
+    if (!r.ok) setError(errorLabel(r.error));
+  }
+
+  async function mute(playerId: string, muted: boolean) {
+    const r = await socket.emitWithAck('room:mute', { playerId, muted });
+    if (!r.ok) setError(errorLabel(r.error));
+  }
+
   // Un coup préparé ne vaut que pour le pli en cours : il est oublié quand un nouveau pli ou une nouvelle manche commence.
   const trickLength = game.trick.length;
   const previousTrick = useRef({ round: game.round, length: trickLength });
@@ -764,7 +793,7 @@ export function Table({
         </div>
         <Scores game={game} />
         <div className="header-right">
-          <ChatButton messages={messages} me={game.players[me]?.id ?? ''} />
+          <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
           <ThemeToggle />
           <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
             {sound ? '🔔' : '🔕'}
@@ -793,10 +822,13 @@ export function Table({
             index={index}
             seat={seat}
             connected={room.players[index]?.connected ?? true}
-            bot={room.players[index]?.bot ?? false}
+            bot={!!(room.players[index]?.bot || room.players[index]?.vacant)}
             away={room.players[index]?.away ?? false}
             look={room.players[index]}
             move={moves.get(index)}
+            muted={room.players[index]?.muted ?? false}
+            onMute={canModerate(index) ? () => void mute(room.players[index]!.id, !room.players[index]!.muted) : undefined}
+            onKick={canModerate(index) ? () => void kick(room.players[index]!.id) : undefined}
           />
         ))}
         <CenterPile game={game} cut={cutShown} />

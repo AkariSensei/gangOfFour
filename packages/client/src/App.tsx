@@ -6,15 +6,16 @@ import { ThemeToggle } from './theme';
 import { useAccount, useGameConnection } from './socket';
 
 export function App() {
-  const { connected, session, room, game, messages, remember } = useGameConnection();
+  const { connected, session, room, game, messages, kicked, remember } = useGameConnection();
   const account = useAccount();
+  const admin = !!account.account?.admin;
 
   let screen;
-  if (!session || !room) screen = <Home onEnter={remember} account={account} />;
+  if (!session || !room) screen = <Home onEnter={remember} account={account} notice={kicked ? errorLabel('kicked') : ''} />;
   else if (session.spectator)
-    screen = game ? <Table game={game} room={room} messages={messages} onLeave={() => remember(null)} /> : null;
-  else if (!room.started || !game) screen = <Lobby room={room} session={session} messages={messages} onLeave={() => remember(null)} />;
-  else screen = <Table game={game} room={room} messages={messages} onLeave={() => remember(null)} />;
+    screen = game ? <Table game={game} room={room} messages={messages} admin={admin} onLeave={() => remember(null)} /> : null;
+  else if (!room.started || !game) screen = <Lobby room={room} session={session} messages={messages} admin={admin} onLeave={() => remember(null)} />;
+  else screen = <Table game={game} room={room} messages={messages} admin={admin} onLeave={() => remember(null)} />;
 
   return (
     <div className="app">
