@@ -13,6 +13,11 @@ export interface Limits {
   /** Nouvelles connexions acceptées depuis une même adresse IP par fenêtre de `windowMs`. */
   connectionsPerIp: number;
   windowMs: number;
+  /** Événements qu'une connexion peut envoyer par fenêtre de `eventWindowMs` (au-delà, ils sont refusés). */
+  eventsPerSocket: number;
+  eventWindowMs: number;
+  /** Taille maximale d'un message reçu, en octets (le jeu n'envoie que de petits messages). */
+  maxMessageBytes: number;
 }
 
 export const DEFAULT_LIMITS: Limits = {
@@ -22,6 +27,9 @@ export const DEFAULT_LIMITS: Limits = {
   socketsPerIp: 40,
   connectionsPerIp: 80,
   windowMs: 5 * 60 * 1000,
+  eventsPerSocket: 40,
+  eventWindowMs: 5 * 1000,
+  maxMessageBytes: 16 * 1024,
 };
 
 /** Compte des événements par clé sur une fenêtre glissante. */
