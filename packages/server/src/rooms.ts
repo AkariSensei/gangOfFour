@@ -112,10 +112,12 @@ export class RoomManager {
     return { ok: true, ...this.seat(room, name, look) };
   }
 
-  rejoin(code: string, token: string): Result<Session> {
+  /** `onlyIfFree` : ne reprend pas un siège encore occupé par un autre onglet ouvert. */
+  rejoin(code: string, token: string, onlyIfFree = false): Result<Session> {
     const room = this.get(code);
     const seat = room?.seats.find((s) => s.token === token);
     if (!room || !seat) return { ok: false, error: 'roomNotFound' };
+    if (onlyIfFree && seat.connected) return { ok: false, error: 'seatTaken' };
     seat.connected = true;
     return { ok: true, code: room.code, playerId: seat.playerId, token };
   }
@@ -225,6 +227,22 @@ export class RoomManager {
       { targetScore: TARGET_SCORES.includes(options.targetScore!) ? options.targetScore! : DEFAULT_TARGET_SCORE },
     );
     room.turnSeconds = TURN_SECONDS.includes(options.turnSeconds!) ? options.turnSeconds : 0;
+    return { ok: true };
+  }
+
+  /** Revanche : une partie terminée repart avec les mêmes joueurs et les mêmes réglages, à la demande de n'importe quel joueur. */
+  rematch(code: string, playerId: string, seed = randomInt(2 ** 31)): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!room.game) return { ok: false, error: 'gameNotStarted' };
+    if (!room.seats.some((s) => s.playerId === playerId && !s.bot)) return { ok: false, error: 'notInRoom' };
+    if (room.game.phase !== 'gameOver') return { ok: false, error: 'wrongPhase' };
+    room.game = createGame(
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      seed,
+      room.game.config,
+    );
+    room.recorded = false;
     return { ok: true };
   }
 

@@ -65,8 +65,11 @@ type Payload = Record<string, unknown>;
 
 export function createGameServer(options: GameServerOptions = {}): GameServer {
   const http = createHttpServer(options.staticDir ? createStaticHandler(options.staticDir) : undefined);
+  const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const io = new Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>(http, {
     cors: options.corsOrigin ? { origin: options.corsOrigin } : undefined,
+    // Un message trop gros est refusé (et la connexion coupée) avant même d'être lu.
+    maxHttpBufferSize: limits.maxMessageBytes,
   });
   const rooms = new RoomManager();
   const history = new GameHistory(options.historyFile);
@@ -218,12 +221,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     );
   }
 
-  const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const connectionsPerIp = new RateLimiter(limits.connectionsPerIp, limits.windowMs);
   const roomsPerIp = new RateLimiter(limits.roomsPerIp, limits.windowMs);
   const roomsPerSocket = new RateLimiter(limits.roomsPerSocket, limits.windowMs);
   const openSockets = new Map<string, number>();
   const chatPerSocket = new RateLimiter(CHAT_MESSAGES, CHAT_WINDOW_MS);
+  const eventsPerSocket = new RateLimiter(limits.eventsPerSocket, limits.eventWindowMs);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
   io.use((socket, next) => {
@@ -259,6 +262,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         const ack: AnyAck = typeof last === 'function' ? (last as AnyAck) : () => {};
         const first = args[0];
         const payload: Payload = first && typeof first === 'object' && !Array.isArray(first) ? (first as Payload) : {};
+        // Une connexion qui envoie des événements à la chaîne est freinée : on refuse sans rien traiter.
+        if (!eventsPerSocket.allow(socket.id)) {
+          try {
+            ack({ ok: false, error: 'slowDown' });
+          } catch {
+            // Rien à faire si la réponse échoue.
+          }
+          return;
+        }
         const fail = (error: unknown) => {
           errors.record(`événement ${event}`, error);
           try {
@@ -328,7 +340,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       return allowed.ok ? enter(rooms.create(payload.name, payload), ack) : ack(allowed);
     });
     on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload), ack));
-    on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
+    on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
       ack({ ok: true });
@@ -370,6 +382,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
       ),
     );
+    on('game:rematch', (_payload, ack) => handle(ack, (code, playerId) => rooms.rematch(code, playerId)));
     on('game:play', (payload, ack) =>
       act({ type: 'play', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
     );

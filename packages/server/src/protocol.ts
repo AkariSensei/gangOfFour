@@ -47,7 +47,8 @@ export type RoomError =
   | 'serverError'
   | 'emptyMessage'
   | 'tooManyRooms'
-  | 'slowDown';
+  | 'slowDown'
+  | 'seatTaken';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -63,7 +64,7 @@ export interface Session {
 export interface ClientToServerEvents {
   'room:create': (payload: { name: string } & Look, ack: Ack<Session>) => void;
   'room:join': (payload: { code: string; name: string } & Look, ack: Ack<Session>) => void;
-  'room:rejoin': (payload: { code: string; token: string }, ack: Ack<Session>) => void;
+  'room:rejoin': (payload: { code: string; token: string; onlyIfFree?: boolean }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
   'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;
   'rooms:live': (ack: Ack<{ rooms: LiveRoom[] }>) => void;
@@ -71,6 +72,7 @@ export interface ClientToServerEvents {
   'room:addBot': (ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
+  'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;

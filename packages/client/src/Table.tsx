@@ -136,9 +136,16 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
           </tbody>
         </table>
         {over ? (
-          <button className="primary big" onClick={onExit}>
-            Retour à l'accueil
-          </button>
+          <div className="end-actions">
+            {game.you >= 0 && (
+              <button className="primary big" onClick={() => socket.emitWithAck('game:rematch')}>
+                Revanche
+              </button>
+            )}
+            <button className={game.you >= 0 ? 'big' : 'primary big'} onClick={onExit}>
+              Retour à l'accueil
+            </button>
+          </div>
         ) : (
           <>
             <p className="muted">

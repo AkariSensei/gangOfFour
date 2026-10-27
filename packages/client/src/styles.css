@@ -1620,6 +1620,13 @@ input {
   border: 2px solid rgba(255, 255, 255, 0.7);
 }
 
+.end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
 /* Sur téléphone, laisse la place au bouton du thème au-dessus du contenu. */
 @media (max-width: 560px) {
   .home,
