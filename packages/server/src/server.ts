@@ -523,6 +523,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       act({ type: 'play', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
     );
     on('game:pass', (_payload, ack) => act({ type: 'pass' }, ack));
+    on('game:autoPass', (payload, ack) => handle(ack, (code, playerId) => rooms.setAutoPass(code, playerId, payload.enabled === true)));
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));

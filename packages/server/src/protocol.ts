@@ -17,7 +17,15 @@ export interface Look {
 export interface RoomView {
   code: string;
   hostId: string;
-  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean } & Look)[];
+  players: ({
+    id: string;
+    name: string;
+    connected: boolean;
+    bot: boolean;
+    away: boolean;
+    /** Le joueur passe tout seul quand aucune de ses cartes ne peut battre la table (son choix, activé par défaut). */
+    autoPass: boolean;
+  } & Look)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;
@@ -109,6 +117,7 @@ export interface ClientToServerEvents {
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
+  'game:autoPass': (payload: { enabled: boolean }, ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
