@@ -84,6 +84,10 @@ describe('RoomManager', () => {
     expect(rooms.rejoin(host.code, 'mauvais-jeton')).toEqual({ ok: false, error: 'roomNotFound' });
     expect(rooms.rejoin(host.code, others[0]!.token)).toMatchObject({ ok: true, playerId: others[0]!.playerId });
     expect(rooms.get(host.code)!.seats[1]!.connected).toBe(true);
+    // Depuis un nouvel onglet, on ne prend pas une place encore ouverte ailleurs.
+    expect(rooms.rejoin(host.code, others[0]!.token, true)).toEqual({ ok: false, error: 'seatTaken' });
+    rooms.leave(host.code, others[0]!.playerId);
+    expect(rooms.rejoin(host.code, others[0]!.token, true)).toMatchObject({ ok: true });
   });
 
   it('déduit le siège du joueur et refuse de jouer à sa place', () => {

@@ -6,13 +6,15 @@ import type { ChatMessage, ClientToServerEvents, Look, RoomView, ServerToClientE
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SESSION_KEY = 'gof-session';
+const SEAT_KEY = 'gof-seat';
 const NAME_KEY = 'gof-name';
 const LOOK_KEY = 'gof-look';
 
 export const socket: GameSocket = io({ autoConnect: true });
 
-// Le siège est gardé par onglet (sessionStorage) : un rechargement reprend la même place,
-// mais un nouvel onglet est un nouveau joueur. Le pseudo, lui, est retenu pour tout le navigateur.
+// Le siège est gardé par onglet (sessionStorage) : un rechargement reprend la même place.
+// Il est aussi retenu pour tout le navigateur (localStorage) : après avoir fermé l'onglet,
+// revenir sur le site rend la place, sauf si elle est encore ouverte dans un autre onglet.
 function storage(kind: 'local' | 'session'): Storage | null {
   try {
     return kind === 'local' ? localStorage : sessionStorage;
@@ -51,12 +53,18 @@ export function savedLook(): Look {
 }
 export const saveLook = (look: Look) => writeStorage('local', LOOK_KEY, JSON.stringify(look));
 
-function readSession(): Session | null {
+function readSession(kind: 'local' | 'session', key: string): Session | null {
   try {
-    return JSON.parse(readStorage('session', SESSION_KEY) ?? 'null');
+    return JSON.parse(readStorage(kind, key) ?? 'null');
   } catch {
     return null;
   }
+}
+
+/** Oublie la place retenue pour le navigateur si c'est bien celle-ci. */
+function forgetSeat(s: Session | null) {
+  const seat = readSession('local', SEAT_KEY);
+  if (s && seat?.token === s.token) writeStorage('local', SEAT_KEY, null);
 }
 
 /** État de connexion, salon et partie, avec reprise automatique du siège après un rechargement. */
@@ -69,8 +77,10 @@ export function useGameConnection() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const remember = useCallback((s: Session | null) => {
+    if (!s) forgetSeat(readSession('session', SESSION_KEY));
     setSession(s);
     writeStorage('session', SESSION_KEY, s ? JSON.stringify(s) : null);
+    if (s && !s.spectator) writeStorage('local', SEAT_KEY, JSON.stringify(s));
     if (!s) {
       setRoom(null);
       setGame(null);
@@ -81,12 +91,21 @@ export function useGameConnection() {
   useEffect(() => {
     const rejoin = async () => {
       setConnected(true);
-      const saved = readSession();
-      if (!saved) return;
-      const result = saved.spectator
-        ? await socket.emitWithAck('room:watch', { code: saved.code })
-        : await socket.emitWithAck('room:rejoin', { code: saved.code, token: saved.token });
-      remember(result.ok ? saved : null);
+      const saved = readSession('session', SESSION_KEY);
+      if (saved) {
+        const result = saved.spectator
+          ? await socket.emitWithAck('room:watch', { code: saved.code })
+          : await socket.emitWithAck('room:rejoin', { code: saved.code, token: saved.token });
+        if (!result.ok) forgetSeat(saved);
+        remember(result.ok ? saved : null);
+        return;
+      }
+      // Nouvel onglet : reprendre la place laissée en fermant l'onglet, si elle est libre.
+      const seat = readSession('local', SEAT_KEY);
+      if (!seat) return;
+      const result = await socket.emitWithAck('room:rejoin', { code: seat.code, token: seat.token, onlyIfFree: true });
+      if (result.ok) remember(seat);
+      else if (result.error !== 'seatTaken') forgetSeat(seat);
     };
     const onDisconnect = () => setConnected(false);
     socket.on('connect', rejoin);
