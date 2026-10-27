@@ -46,6 +46,8 @@ export interface Room {
   recorded?: boolean;
   /** Temps laissé à chaque joueur pour agir, en secondes ; 0 ou absent : pas de minuteur. */
   turnSeconds?: number;
+  /** Joueurs que l'hôte ou l'admin a privés de chat dans ce salon. */
+  muted?: string[];
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -194,6 +196,22 @@ export class RoomManager {
     return { ok: true };
   }
 
+  /** L'hôte, ou l'admin (assis ou spectateur), coupe ou rend le chat à un autre joueur humain du salon. */
+  setMuted(code: string, byId: string | undefined, isAdmin: boolean, targetId: string, muted: boolean): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    if (!isAdmin && (!byId || room.hostId !== byId)) return { ok: false, error: 'notHost' };
+    const target = room.seats.find((s) => s.playerId === targetId && !s.bot);
+    if (!target || targetId === byId) return { ok: false, error: 'notInRoom' };
+    const others = (room.muted ?? []).filter((id) => id !== targetId);
+    room.muted = muted ? [...others, targetId] : others;
+    return { ok: true };
+  }
+
+  isMuted(code: string, playerId: string): boolean {
+    return !!this.get(code)?.muted?.includes(playerId);
+  }
+
   /** Le joueur qui doit agir maintenant (jouer, rendre une carte ou couper), s'il y en a un. */
   seatToAct(code: string): Seat | null {
     const room = this.get(code);
@@ -295,6 +313,7 @@ export class RoomManager {
         connected: s.connected,
         bot: s.bot ?? false,
         away: s.away ?? false,
+        muted: room.muted?.includes(s.playerId) ?? false,
         ...cleanLook(s),
       })),
       started: room.game !== null,

@@ -496,9 +496,17 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!code || !seat) return ack({ ok: false, error: 'notInRoom' });
       const message = text(payload.text).replace(/[\p{Cc}]/gu, ' ').trim().slice(0, CHAT_MAX_LENGTH);
       if (!message) return ack({ ok: false, error: 'emptyMessage' });
+      if (rooms.isMuted(code, seat.playerId)) return ack({ ok: false, error: 'muted' });
       if (!chatPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
       io.to(code).emit('chat:message', { id: randomUUID(), playerId: seat.playerId, name: seat.name, text: message, at: Date.now() });
       ack({ ok: true });
+    });
+    on('room:mute', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      if (!code) return ack({ ok: false, error: 'notInRoom' });
+      const result = rooms.setMuted(code, playerId, accounts.isAdmin(me()), text(payload.playerId), payload.muted === true);
+      ack(result);
+      if (result.ok) void broadcast(code);
     });
     on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));

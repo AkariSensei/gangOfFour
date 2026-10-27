@@ -49,6 +49,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   invalidCut: 'Coupe le paquet entre deux cartes.',
   serverError: 'Le serveur a eu un problème, réessaie.',
   emptyMessage: 'Message vide.',
+  muted: 'Ton chat a été coupé dans ce salon.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 
