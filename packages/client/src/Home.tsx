@@ -4,6 +4,7 @@ import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
 import { MyBadges } from './Badges';
 import { Leaderboard } from './Leaderboard';
+import { Rules } from './Rules';
 import { errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
 
@@ -22,6 +23,7 @@ export function Home({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const [rules, setRules] = useState(false);
   const { account } = me;
 
   async function signIn(credential: string) {
@@ -111,8 +113,12 @@ export function Home({
             Gang <span>of</span> Four
           </h1>
           <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+          <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
+            Règles du jeu
+          </button>
         </div>
       </header>
+      {rules && <Rules onClose={() => setRules(false)} />}
 
       <div className="home-start">
         <section className="panel">
