@@ -190,7 +190,7 @@ input {
   display: block;
   width: clamp(130px, 22vh, 190px);
   margin: 0 auto 1.25rem;
-  border-radius: 12px;
+  border-radius: 22%;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   transform: rotate(-4deg);
   animation: float 6s ease-in-out infinite;

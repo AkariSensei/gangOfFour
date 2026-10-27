@@ -104,7 +104,7 @@ export function Home({
   return (
     <main className="home">
       <header className="home-hero">
-        <img className="home-logo" src="/cards/dos.webp" alt="" />
+        <img className="home-logo" src="/logo.svg" alt="" />
         <div>
           <h1>
             Gang <span>of</span> Four
