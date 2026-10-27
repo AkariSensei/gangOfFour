@@ -58,6 +58,8 @@ export interface GameServerOptions {
   turnSecondMs?: number;
   /** Temps de réflexion des bots, pour que les humains voient leurs coups passer. */
   botDelayMs?: number;
+  /** Pause des bots juste après la coupe, le temps que la table voie l'animation (l'interface la montre 1,8 s). */
+  cutPauseMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
   roomsFile?: string;
 }
@@ -92,10 +94,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
   const botTimers = new Map<string, NodeJS.Timeout>();
   const botDelay = options.botDelayMs ?? 1100;
+  const cutPause = options.cutPauseMs ?? 1800;
 
   /** Si c'est à un bot d'agir, il joue après un court délai, puis on regarde si le suivant est aussi un bot. */
   function scheduleBots(code: string) {
     if (botTimers.has(code) || !rooms.botToAct(code)) return;
+    // L'échange suit juste la coupe : le bot attend la fin de l'animation pour que chacun voie la coupe puis l'échange.
+    const justCut = rooms.get(code)?.game?.phase === 'exchange';
     botTimers.set(
       code,
       setTimeout(() => {
@@ -105,7 +110,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         } catch (error) {
           errors.record('bot', error);
         }
-      }, botDelay),
+      }, botDelay + (justCut ? cutPause : 0)),
     );
   }
 
