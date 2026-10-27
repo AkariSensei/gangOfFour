@@ -30,11 +30,14 @@ Les parties terminées sont enregistrées dans `data/parties.json` (chemin modif
 
 Le client se connecte en Socket.IO. Toutes les commandes répondent par un accusé `{ ok: true }` ou `{ ok: false, error }`, et le serveur diffuse ensuite `room:state` (le salon) et `game:state` (la vue de la partie propre à chaque joueur, sans les mains des autres). Les types sont dans `packages/server/src/protocol.ts`.
 
-- `room:create { name }`, `room:join { code, name }` : renvoient `{ code, playerId, token }`. Le salon a un code de 4 lettres et accueille 3 ou 4 joueurs.
+- Comptes : pour jouer, il faut se connecter avec Google. `account:google { credential }` vérifie le jeton du bouton Google et renvoie une session signée, que le navigateur renvoie à chaque connexion (`auth.session`). `account:get`, `account:update { name, avatar, color }` (pseudo unique), `account:signOut`. L'admin (`ADMIN_EMAIL`) a `admin:accounts` et `admin:update { id, name?, blocked? }`, et peut tenir plusieurs sièges d'un salon pour tester seul.
+- `room:create`, `room:join { code }` : prennent le pseudo et l'avatar du compte, et renvoient `{ code, playerId, token }`. Le salon a un code de 4 lettres et accueille 3 ou 4 joueurs, un siège par compte.
 - `room:rejoin { code, token }` : reprendre son siège après une déconnexion (le client garde le jeton).
 - `room:leave`, `game:start` (hôte uniquement), `game:play { cardIds }`, `game:pass`, `game:giveCard { cardId }`, `game:nextRound`.
 
-Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minutes. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules).
+Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minutes. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules), `GOOGLE_CLIENT_ID` (client OAuth « Application Web » de la console Google Cloud, avec le site en origine JavaScript autorisée), `ADMIN_EMAIL` (adresse Google de l'admin). Les comptes sont gardés dans `data/comptes.json` (`ACCOUNTS_FILE`).
+
+Classement : il suit les comptes. Les parties jouées avant les comptes reviennent au premier compte qui prend le même pseudo (ou que l'admin renomme ainsi).
 
 ## Règles implémentées dans le moteur
 

@@ -20,7 +20,21 @@ async function start(options: GameServerOptions = {}) {
   await new Promise<void>((resolve) => server.http.listen(0, resolve));
 }
 
-function connect(auth?: Record<string, string>): Client {
+let accountCount = 0;
+
+/** Ouvre une connexion avec un compte qui porte ce pseudo (créé directement sur le serveur) ; null : sans compte. */
+function connect(name: string | null = `Joueur ${accountCount + 1}`): Client {
+  let auth: { session: string } | undefined;
+  if (name !== null) {
+    const id = `google-${++accountCount}`;
+    server.accounts.signIn({ sub: id, email: `${id}@exemple.fr` });
+    if (!server.accounts.update(id, { name }).ok) server.accounts.update(id, { name: `${name} ${accountCount}` });
+    auth = { session: server.accounts.session(id) };
+  }
+  return connectWith(auth);
+}
+
+function connectWith(auth?: { session: string }): Client {
   const { port } = server.http.address() as AddressInfo;
   const client: Client = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, auth });
   client.on('room:state', (room) => (client.room = room));
@@ -43,13 +57,13 @@ afterEach(async () => {
 });
 
 async function lobby(count: number) {
-  const host = connect();
-  const created = await host.emitWithAck('room:create', { name: 'Alice' });
+  const host = connect('Alice');
+  const created = await host.emitWithAck('room:create');
   if (!created.ok) throw new Error(created.error);
   const players = [host];
   for (const name of ['Bruno', 'Chloé', 'David'].slice(0, count - 1)) {
-    const c = connect();
-    const joined = await c.emitWithAck('room:join', { code: created.code, name });
+    const c = connect(name);
+    const joined = await c.emitWithAck('room:join', { code: created.code });
     expect(joined.ok).toBe(true);
     players.push(c);
   }
@@ -140,21 +154,76 @@ describe('serveur de jeu', () => {
     expect(back.game!.you).toBe(1);
   }, 30000);
 
-  it("refuse un second siège au même navigateur, sauf pour l'admin", async () => {
-    await start({ adminKey: 'secret' });
-    const host = connect({ browser: 'nav-1' });
-    const created = await host.emitWithAck('room:create', { name: 'Alice' });
+  it("refuse un second siège au même compte, sauf pour l'admin", async () => {
+    await start({ adminEmail: 'Chef@Exemple.fr' });
+    const host = connect('Alice');
+    const created = await host.emitWithAck('room:create');
     if (!created.ok) throw new Error(created.error);
-    const otherTab = connect({ browser: 'nav-1' });
-    expect(await otherTab.emitWithAck('room:join', { code: created.code, name: 'Bis' })).toEqual({ ok: false, error: 'alreadySeated' });
-    expect((await connect({ browser: 'nav-2' }).emitWithAck('room:join', { code: created.code, name: 'Bruno' })).ok).toBe(true);
-    const wrongKey = connect({ browser: 'nav-1', admin: 'faux' });
-    expect(await wrongKey.emitWithAck('room:join', { code: created.code, name: 'Bis' })).toMatchObject({ error: 'alreadySeated' });
+    const session = (host.auth as { session: string }).session;
+    const otherBrowser = connectWith({ session });
+    expect(await otherBrowser.emitWithAck('room:join', { code: created.code })).toEqual({ ok: false, error: 'alreadySeated' });
+    expect((await connect('Bruno').emitWithAck('room:join', { code: created.code })).ok).toBe(true);
 
-    const admin = { browser: 'nav-3', admin: 'secret' };
-    const adminRoom = await connect(admin).emitWithAck('room:create', { name: 'Maître' });
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    server.accounts.update('chef', { name: 'Maître' });
+    const admin = { session: server.accounts.session('chef') };
+    const adminRoom = await connectWith(admin).emitWithAck('room:create');
     if (!adminRoom.ok) throw new Error(adminRoom.error);
-    expect((await connect(admin).emitWithAck('room:join', { code: adminRoom.code, name: 'Maître 2' })).ok).toBe(true);
+    expect((await connectWith(admin).emitWithAck('room:join', { code: adminRoom.code })).ok).toBe(true);
+    // Le second siège de l'admin n'est pas rattaché à son compte : il ne compte pas deux fois au classement.
+    expect(server.rooms.get(adminRoom.code)!.seats.map((s) => s.account)).toEqual(['chef', undefined]);
+  });
+
+  it('demande un compte avec un pseudo pour jouer, mais pas pour regarder', async () => {
+    await start();
+    const guest = connect(null);
+    expect(await guest.emitWithAck('room:create')).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(await guest.emitWithAck('room:join', { code: 'ABCD' })).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(await guest.emitWithAck('stats:get')).toMatchObject({ ok: true });
+    expect(await guest.emitWithAck('account:get')).toEqual({ ok: true, account: null, googleClientId: null });
+    expect(await connectWith({ session: 'fausse.session.signee' }).emitWithAck('account:get')).toMatchObject({ account: null });
+  });
+
+  it('crée le compte à la connexion Google, puis le pseudo choisi est unique', async () => {
+    const verifyGoogle = async (credential: string) => (credential.startsWith('ok-') ? { sub: credential, email: `${credential}@exemple.fr` } : null);
+    await start({ verifyGoogle, googleClientId: 'client-test' });
+    const client = connect(null);
+    expect(await client.emitWithAck('account:google', { credential: 'faux' })).toEqual({ ok: false, error: 'signInFailed' });
+    const signed = await client.emitWithAck('account:google', { credential: 'ok-camille' });
+    if (!signed.ok) throw new Error(signed.error);
+    expect(signed.account).toMatchObject({ id: 'ok-camille', name: '', admin: false });
+    expect(await client.emitWithAck('room:create')).toEqual({ ok: false, error: 'noName' });
+
+    connect('Alice');
+    expect(await client.emitWithAck('account:update', { name: ' alice ' })).toEqual({ ok: false, error: 'nameTaken' });
+    expect(await client.emitWithAck('account:update', { name: 'Camille', avatar: '🦊', color: 'pas une couleur' })).toMatchObject({
+      ok: true,
+      account: { name: 'Camille', avatar: '🦊' },
+    });
+    expect((await client.emitWithAck('room:create')).ok).toBe(true);
+    expect(server.rooms.all()[0]!.seats[0]).toMatchObject({ name: 'Camille', avatar: '🦊', account: 'ok-camille' });
+
+    // La session remise suffit à se reconnecter depuis un autre onglet.
+    const again = connectWith({ session: signed.session });
+    expect(await again.emitWithAck('account:get')).toMatchObject({ account: { name: 'Camille' }, googleClientId: 'client-test' });
+  });
+
+  it("laisse l'admin renommer et bloquer les comptes", async () => {
+    await start({ adminEmail: 'chef@exemple.fr' });
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    server.accounts.update('chef', { name: 'Maître' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    const player = connect('Grossier');
+    const id = `google-${accountCount}`;
+
+    expect(await player.emitWithAck('admin:accounts')).toEqual({ ok: false, error: 'notAdmin' });
+    const list = await admin.emitWithAck('admin:accounts');
+    expect(list.ok && list.accounts.map((a) => a.name)).toEqual(['Grossier', 'Maître']);
+    expect(await admin.emitWithAck('admin:update', { id, name: 'Maître' })).toEqual({ ok: false, error: 'nameTaken' });
+    expect(await admin.emitWithAck('admin:update', { id, name: 'Poli' })).toEqual({ ok: true });
+    expect(await admin.emitWithAck('admin:update', { id, blocked: true })).toEqual({ ok: true });
+    expect(await player.emitWithAck('room:create')).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(server.accounts.get(id)).toMatchObject({ name: 'Poli', blocked: true });
   });
 
   it('supprime un salon abandonné après le délai', async () => {
@@ -180,17 +249,17 @@ describe('serveur de jeu', () => {
     await start({ limits: { roomsPerSocket: 2, roomsPerIp: 3 } });
     const spammer = connect();
     const results = [];
-    for (let i = 0; i < 3; i++) results.push(await spammer.emitWithAck('room:create', { name: 'Spam' }));
+    for (let i = 0; i < 3; i++) results.push(await spammer.emitWithAck('room:create'));
     expect(results.map((r) => r.ok)).toEqual([true, true, false]);
     expect(results[2]).toEqual({ ok: false, error: 'slowDown' });
 
     // Une autre connexion de la même adresse n'a plus droit qu'à un salon.
     const other = connect();
-    expect((await other.emitWithAck('room:create', { name: 'Bob' })).ok).toBe(true);
-    expect(await other.emitWithAck('room:create', { name: 'Bob' })).toEqual({ ok: false, error: 'slowDown' });
+    expect((await other.emitWithAck('room:create')).ok).toBe(true);
+    expect(await other.emitWithAck('room:create')).toEqual({ ok: false, error: 'slowDown' });
     // Rejoindre un salon reste possible.
     const code = (results[1] as { code: string }).code;
-    expect((await connect().emitWithAck('room:join', { code, name: 'Chloé' })).ok).toBe(true);
+    expect((await connect().emitWithAck('room:join', { code })).ok).toBe(true);
   });
 
   it('laisse regarder une partie en cours sans voir aucune main ni pouvoir jouer', async () => {
@@ -220,8 +289,8 @@ describe('serveur de jeu', () => {
   it('relaie le chat aux joueurs du salon seulement, sans rien garder', async () => {
     await start();
     const { players } = await lobby(3);
-    const outsider = connect();
-    await outsider.emitWithAck('room:create', { name: 'Zoé' });
+    const outsider = connect('Zoé');
+    await outsider.emitWithAck('room:create');
     const received: { name: string; text: string }[][] = [[], [], [], []];
     [...players, outsider].forEach((c, i) => c.on('chat:message', (m) => received[i]!.push({ name: m.name, text: m.text })));
 
@@ -271,9 +340,9 @@ describe('serveur de jeu', () => {
 
   it('refuse de nouveaux salons au-delà du maximum', async () => {
     await start({ limits: { maxRooms: 2 } });
-    expect((await connect().emitWithAck('room:create', { name: 'A' })).ok).toBe(true);
-    expect((await connect().emitWithAck('room:create', { name: 'B' })).ok).toBe(true);
-    expect(await connect().emitWithAck('room:create', { name: 'C' })).toEqual({ ok: false, error: 'tooManyRooms' });
+    expect((await connect().emitWithAck('room:create')).ok).toBe(true);
+    expect((await connect().emitWithAck('room:create')).ok).toBe(true);
+    expect(await connect().emitWithAck('room:create')).toEqual({ ok: false, error: 'tooManyRooms' });
   });
 
   it('refuse les connexions en trop depuis une même adresse', async () => {
@@ -373,7 +442,7 @@ describe('serveur de jeu', () => {
     // Sans charge utile, la réponse arrive quand même (la fonction est alors le premier argument).
     const fresh = connect();
     const result = await (fresh as unknown as { emitWithAck: (e: string) => Promise<{ ok: boolean; error?: string }> }).emitWithAck('room:join');
-    expect(result).toEqual({ ok: false, error: 'invalidName' });
+    expect(result).toEqual({ ok: false, error: 'roomNotFound' });
     // Le serveur répond toujours.
     const stats = await players[0]!.emitWithAck('stats:get');
     expect(stats.ok).toBe(true);

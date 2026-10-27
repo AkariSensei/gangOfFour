@@ -1,7 +1,9 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
+import { AccountStore } from './accounts';
 import { ErrorLog } from './errors';
+import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
@@ -27,8 +29,8 @@ interface SocketData {
   ip?: string;
   /** Regarde la partie de `code` sans y jouer. */
   spectator?: boolean;
-  /** Identifiant du navigateur (commun à ses onglets) ; absent pour l'admin, qui peut tenir plusieurs sièges. */
-  browser?: string;
+  /** Compte du joueur connecté (session envoyée à la connexion, ou connexion Google). */
+  accountId?: string;
 }
 
 export interface GameServer {
@@ -36,6 +38,7 @@ export interface GameServer {
   io: Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
   rooms: RoomManager;
   history: GameHistory;
+  accounts: AccountStore;
   errors: ErrorLog;
   /** Enregistre tout de suite les salons sur disque (avant un arrêt du serveur). */
   saveRooms: () => void;
@@ -64,17 +67,17 @@ export interface GameServerOptions {
   cutPauseMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
   roomsFile?: string;
-  /** Clé secrète de l'admin : son navigateur peut prendre plusieurs sièges d'un salon, pour tester seul. */
-  adminKey?: string;
+  /** Fichier JSON des comptes ; sans fichier, les comptes restent en mémoire. */
+  accountsFile?: string;
+  /** Identifiant du client OAuth Google (GOOGLE_CLIENT_ID) ; sans lui, personne ne peut se connecter. */
+  googleClientId?: string;
+  /** Adresse Google de l'admin (ADMIN_EMAIL) : il gère les comptes et peut tenir plusieurs sièges pour tester seul. */
+  adminEmail?: string;
+  /** Vérification du jeton Google (remplacée dans les tests). */
+  verifyGoogle?: VerifyGoogle;
 }
 
 type AnyAck = (result: unknown) => void;
-
-/** Compare deux textes sans laisser deviner, au temps de réponse, combien de caractères sont justes. */
-function sameSecret(a: string, b: string): boolean {
-  const hash = (text: string) => createHash('sha256').update(text).digest();
-  return timingSafeEqual(hash(a), hash(b));
-}
 
 /** Ce qui est envoyé avec un événement : n'importe quoi, puisque ça vient du réseau. */
 type Payload = Record<string, unknown>;
@@ -88,7 +91,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     maxHttpBufferSize: limits.maxMessageBytes,
   });
   const rooms = new RoomManager();
-  const history = new GameHistory(options.historyFile);
+  const accounts = new AccountStore(options.accountsFile, options.adminEmail);
+  const history = new GameHistory(options.historyFile, accounts);
+  const verifyGoogle = options.verifyGoogle ?? (options.googleClientId ? googleVerifier(options.googleClientId) : undefined);
   const errors = new ErrorLog(options.errorsFile);
   const saved = new SavedRooms(options.roomsFile, () => rooms.all());
   rooms.restore(saved.load());
@@ -99,7 +104,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
     const bots = room.seats.flatMap((s, i) => (s.bot ? [i] : []));
-    history.record(room.game, new Date(), bots);
+    history.record(room.game, new Date(), bots, room.seats.map((s) => s.account));
   }
 
   const botTimers = new Map<string, NodeJS.Timeout>();
@@ -272,9 +277,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       return next(new Error('slowDown'));
     }
     socket.data.ip = ip;
-    const { browser, admin } = (socket.handshake.auth ?? {}) as Record<string, unknown>;
-    const isAdmin = !!options.adminKey && typeof admin === 'string' && sameSecret(admin, options.adminKey);
-    if (!isAdmin && typeof browser === 'string' && browser.length <= 64) socket.data.browser = browser;
+    const { session } = (socket.handshake.auth ?? {}) as Record<string, unknown>;
+    socket.data.accountId = accounts.fromSession(session)?.id;
     openSockets.set(ip, (openSockets.get(ip) ?? 0) + 1);
     socket.on('disconnect', () => {
       const left = (openSockets.get(ip) ?? 1) - 1;
@@ -332,7 +336,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     async function enter(result: Result<{ code: string; playerId: string; token: string }>, ack: AnyAck) {
       if (result.ok) {
         if (socket.data.code) leaveCurrent();
-        socket.data = { ip: socket.data.ip, browser: socket.data.browser, code: result.code, playerId: result.playerId };
+        socket.data = { ip: socket.data.ip, accountId: socket.data.accountId, code: result.code, playerId: result.playerId };
         await socket.join(result.code);
         clearTimeout(cleanupTimers.get(result.code));
         clearTimeout(awayTimers.get(`${result.code}/${result.playerId}`));
@@ -350,7 +354,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { code, playerId, spectator } = socket.data;
       if (code && spectator) {
         void socket.leave(code);
-        socket.data = { ip: socket.data.ip, browser: socket.data.browser };
+        socket.data = { ip: socket.data.ip, accountId: socket.data.accountId };
         void broadcast(code);
         return;
       }
@@ -358,7 +362,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       rooms.leave(code, playerId);
       if (rooms.get(code)?.game) scheduleAway(code, playerId);
       void socket.leave(code);
-      socket.data = { ip: socket.data.ip, browser: socket.data.browser };
+      socket.data = { ip: socket.data.ip, accountId: socket.data.accountId };
       scheduleCleanup(code);
       void broadcast(code);
     }
@@ -382,11 +386,85 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         return result;
       });
 
-    on('room:create', (payload, ack) => {
-      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      return allowed.ok ? enter(rooms.create(payload.name, payload, socket.data.browser), ack) : ack(allowed);
+    /** Compte de cette connexion, s'il existe encore et n'est pas bloqué. */
+    function me() {
+      const account = accounts.get(socket.data.accountId);
+      return account && !account.blocked ? account : undefined;
+    }
+
+    /** Pour s'asseoir à une table, il faut un compte avec un pseudo. */
+    function player(): Result<{ account: NonNullable<ReturnType<typeof me>>; name: string }> {
+      const account = me();
+      if (!account) return { ok: false, error: 'notSignedIn' };
+      if (!account.name) return { ok: false, error: 'noName' };
+      return { ok: true, account, name: account.name };
+    }
+
+    on('account:get', (_payload, ack) => {
+      const account = me();
+      ack({ ok: true, account: account ? accounts.view(account) : null, googleClientId: options.googleClientId ?? null });
     });
-    on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload, socket.data.browser), ack));
+    on('account:google', async (payload, ack) => {
+      const identity = verifyGoogle && (await verifyGoogle(text(payload.credential)));
+      if (!identity) return ack({ ok: false, error: 'signInFailed' });
+      const result = accounts.signIn(identity);
+      if (!result.ok) return ack(result);
+      socket.data.accountId = result.account.id;
+      ack({ ok: true, account: accounts.view(result.account), session: accounts.session(result.account.id) });
+    });
+    on('account:update', (payload, ack) => {
+      const account = me();
+      if (!account) return ack({ ok: false, error: 'notSignedIn' });
+      const result = accounts.update(account.id, { name: payload.name, look: payload });
+      if (result.ok) history.claim(account.name!, account.id);
+      ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
+    });
+    on('account:signOut', (_payload, ack) => {
+      leaveCurrent();
+      socket.data.accountId = undefined;
+      ack({ ok: true });
+    });
+    on('admin:accounts', (_payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      ack({
+        ok: true,
+        accounts: accounts.list().map((a) => ({
+          id: a.id,
+          email: a.email,
+          name: a.name ?? '',
+          blocked: !!a.blocked,
+          createdAt: a.createdAt,
+          avatar: a.avatar,
+          color: a.color,
+        })),
+      });
+    });
+    on('admin:update', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      const id = text(payload.id);
+      // L'admin ne peut pas se bloquer lui-même (il ne pourrait plus rien débloquer).
+      if (payload.blocked === true && accounts.isAdmin(accounts.get(id))) return ack({ ok: false, error: 'notAdmin' });
+      const result = accounts.update(id, {
+        ...(payload.name !== undefined ? { name: payload.name } : {}),
+        ...(typeof payload.blocked === 'boolean' ? { blocked: payload.blocked } : {}),
+      });
+      if (result.ok && payload.name !== undefined) history.claim(accounts.get(id)!.name!, id);
+      ack(result);
+    });
+
+    on('room:create', (_payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      const { account, name } = seated;
+      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
+      return allowed.ok ? enter(rooms.create(name, account, account.id), ack) : ack(allowed);
+    });
+    on('room:join', (payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      const { account, name } = seated;
+      return enter(rooms.join(text(payload.code), name, account, account.id, accounts.isAdmin(account)), ack);
+    });
     on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
@@ -397,7 +475,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
       if (socket.data.code) leaveCurrent();
-      socket.data = { ip: socket.data.ip, browser: socket.data.browser, code: room.code, spectator: true };
+      socket.data = { ip: socket.data.ip, accountId: socket.data.accountId, code: room.code, spectator: true };
       await socket.join(room.code);
       ack({ ok: true, code: room.code, playerId: '', token: '', spectator: true });
       await broadcast(room.code);
@@ -467,5 +545,5 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     awayTimers.forEach(clearTimeout);
     turnTimers.forEach((t) => clearTimeout(t.timer));
   });
-  return { http, io, rooms, history, errors, saveRooms: () => saved.saveNow() };
+  return { http, io, rooms, history, accounts, errors, saveRooms: () => saved.saveNow() };
 }

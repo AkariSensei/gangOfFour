@@ -25,10 +25,24 @@ const roomsFile = process.env.ROOMS_FILE ?? join(dirname(historyFile), 'salons.j
 // Les erreurs sont notées à côté, une par ligne : la surveillance GitHub les relève et ouvre une issue.
 const errorsFile = process.env.ERRORS_FILE ?? join(dirname(historyFile), 'erreurs.jsonl');
 
-// Clé de l'admin (variable d'environnement ADMIN_KEY, jamais dans le code) : il peut tenir plusieurs sièges pour tester.
-const adminKey = process.env.ADMIN_KEY || undefined;
+// Les comptes des joueurs (et la clé qui signe leurs sessions) sont gardés à côté aussi.
+const accountsFile = process.env.ACCOUNTS_FILE ?? join(dirname(historyFile), 'comptes.json');
 
-const { http, saveRooms, errors } = createGameServer({ corsOrigin, staticDir, historyFile, roomsFile, errorsFile, adminKey });
+// Connexion Google : identifiant du client OAuth (GOOGLE_CLIENT_ID), et adresse Google de l'admin (ADMIN_EMAIL).
+const googleClientId = process.env.GOOGLE_CLIENT_ID || undefined;
+const adminEmail = process.env.ADMIN_EMAIL || undefined;
+if (!googleClientId) console.warn('GOOGLE_CLIENT_ID absent : personne ne pourra se connecter pour jouer.');
+
+const { http, saveRooms, errors } = createGameServer({
+  corsOrigin,
+  staticDir,
+  historyFile,
+  roomsFile,
+  errorsFile,
+  accountsFile,
+  googleClientId,
+  adminEmail,
+});
 
 // Filet de sécurité : une erreur imprévue est notée dans le journal mais n'arrête plus le serveur (et les parties).
 process.on('uncaughtException', (error) => errors.record('erreur non rattrapée', error));

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type GameState, createGame } from '@gof/engine';
 import { describe, expect, it } from 'vitest';
-import { GameHistory, monthOf } from '../src';
+import { AccountStore, GameHistory, monthOf } from '../src';
 
 function finished(scores: Record<string, number>): GameState {
   const names = Object.keys(scores);
@@ -19,6 +19,44 @@ function finished(scores: Record<string, number>): GameState {
 }
 
 describe('GameHistory', () => {
+  it('suit le compte et pas le pseudo, et rend les parties d\'avant les comptes au compte qui prend le pseudo', () => {
+    const accounts = new AccountStore();
+    accounts.signIn({ sub: 'a', email: 'a@exemple.fr' });
+    accounts.signIn({ sub: 'b', email: 'b@exemple.fr' });
+    accounts.update('b', { name: 'Bob' });
+    const history = new GameHistory(undefined, accounts);
+    // Partie d'avant les comptes : « alice » revient au compte qui prend le pseudo Alice, même renommé ensuite.
+    history.record(finished({ alice: 10, Bruno: 120, David: 40 }));
+    accounts.update('a', { name: 'Alice' });
+    history.claim('Alice', 'a');
+    // Bob jouait sous un pseudo usurpé « Bruno » ? Impossible : son compte compte, quel que soit le nom à la table.
+    history.record(finished({ Alice: 50, Bruno: 20, Chloé: 60 }), new Date(), [], ['a', 'b']);
+    accounts.update('a', { name: 'Alicia' });
+    expect(history.leaderboard().map((e) => [e.name, e.games, e.wins])).toEqual([
+      ['Bob', 1, 1],
+      ['Alicia', 2, 1],
+      ['David', 1, 0],
+      ['Chloé', 1, 0],
+      ['Bruno', 1, 0],
+    ]);
+    expect(history.profile('alicia')).toMatchObject({ name: 'Alicia', games: 2 });
+    expect(history.recent(1)[0]!.players.map((p) => p.name)).toEqual(['Alicia', 'Bob', 'Chloé']);
+    expect(history.recent(1)[0]!.players[0]).not.toHaveProperty('account');
+  });
+
+  it('signe des sessions que personne ne peut fabriquer, et les coupe pour un compte bloqué', () => {
+    const accounts = new AccountStore();
+    accounts.signIn({ sub: 'a', email: 'a@exemple.fr' });
+    const session = accounts.session('a');
+    expect(accounts.fromSession(session)?.id).toBe('a');
+    expect(accounts.fromSession(session.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')))).toBeUndefined();
+    expect(accounts.fromSession(session, Date.now() + 400 * 24 * 3600 * 1000)).toBeUndefined();
+    expect(new AccountStore().fromSession(session)).toBeUndefined();
+    accounts.update('a', { blocked: true });
+    expect(accounts.fromSession(session)).toBeUndefined();
+    expect(accounts.signIn({ sub: 'a', email: 'a@exemple.fr' })).toEqual({ ok: false, error: 'blocked' });
+  });
+
   it('classe par victoires, puis taux de victoire, puis score moyen', () => {
     const history = new GameHistory();
     history.record(finished({ Alice: 20, Bruno: 104, Chloé: 60 }));

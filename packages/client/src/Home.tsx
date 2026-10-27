@@ -1,112 +1,76 @@
-import { type FormEvent, useEffect, useState } from 'react';
-import { AVATARS, COLORS, type LiveRoom, type Look, type Session } from '../../server/src/protocol';
+import { useEffect, useState } from 'react';
+import type { LiveRoom, Session } from '../../server/src/protocol';
+import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
 import { Leaderboard } from './Leaderboard';
 import { errorLabel } from './labels';
-import { saveLook, saveName, savedLook, savedName, socket } from './socket';
+import { socket, type useAccount } from './socket';
 
-export function Home({ onEnter }: { onEnter: (s: Session) => void }) {
-  const [name, setName] = useState(savedName);
+export function Home({ onEnter, account: me }: { onEnter: (s: Session) => void; account: ReturnType<typeof useAccount> }) {
   const [code, setCode] = useState(() => new URLSearchParams(location.search).get('salon')?.toUpperCase() ?? '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [look, setLook] = useState<Look>(savedLook);
-  const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [admin, setAdmin] = useState(false);
+  const { account } = me;
 
-  function changeLook(change: Look) {
-    const next = { ...look, ...change };
-    setLook(next);
-    saveLook(next);
+  async function signIn(credential: string) {
+    setError('');
+    const failure = await me.signIn(credential);
+    if (failure) setError(errorLabel(failure));
   }
 
-  async function submit(kind: 'create' | 'join', e?: FormEvent) {
-    e?.preventDefault();
+  async function submit(kind: 'create' | 'join') {
     setBusy(true);
     setError('');
-    saveName(name);
-    const result =
-      kind === 'create'
-        ? await socket.emitWithAck('room:create', { name, ...look })
-        : await socket.emitWithAck('room:join', { code, name, ...look });
+    const result = kind === 'create' ? await socket.emitWithAck('room:create') : await socket.emitWithAck('room:join', { code });
     setBusy(false);
     if (result.ok) onEnter(result);
     else setError(errorLabel(result.error));
   }
 
-  return (
-    <main className="home">
-      <img className="home-logo" src="/cards/dos.webp" alt="" />
-      <h1>
-        Gang <span>of</span> Four
-      </h1>
-      <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
-
-      <form className="panel" onSubmit={(e) => submit(code ? 'join' : 'create', e)}>
-        <label htmlFor="pseudo">Ton pseudo</label>
-        <div className="identity">
-          <button
-            type="button"
-            className="avatar-button"
-            onClick={() => setPicking((p) => !p)}
-            title="Choisir ton avatar et ta couleur"
-            aria-expanded={picking}
-          >
-            <Avatar name={name || '?'} look={look} />
-          </button>
-          <input
-            id="pseudo"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={20}
-            autoFocus
-            placeholder="ex. Camille"
-          />
-        </div>
-        {picking && (
-          <div className="look-picker">
-            <div className="look-grid" role="radiogroup" aria-label="Avatar">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!look.avatar}
-                className={!look.avatar ? 'on' : ''}
-                onClick={() => changeLook({ avatar: undefined })}
-                title="Mes initiales"
-              >
-                Aa
-              </button>
-              {AVATARS.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  role="radio"
-                  aria-checked={look.avatar === a}
-                  className={look.avatar === a ? 'on' : ''}
-                  onClick={() => changeLook({ avatar: a })}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
-            <div className="look-colors" role="radiogroup" aria-label="Couleur">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={look.color === c}
-                  aria-label={`Couleur ${c}`}
-                  className={`swatch ${look.color === c ? 'on' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => changeLook({ color: look.color === c ? undefined : c })}
-                />
-              ))}
-            </div>
-          </div>
+  let panel;
+  if (account === undefined) {
+    panel = <p className="muted">Connexion…</p>;
+  } else if (account === null) {
+    panel = (
+      <>
+        <p className="signin-hint">Connecte-toi avec ton compte Google pour jouer.</p>
+        {me.googleClientId ? (
+          <GoogleButton clientId={me.googleClientId} onCredential={signIn} />
+        ) : (
+          <p className="error">La connexion Google n'est pas encore configurée sur le serveur.</p>
         )}
-
-        <div className="home-actions">
-          <button type="button" className="primary" disabled={busy || !name.trim()} onClick={() => submit('create')}>
+      </>
+    );
+  } else if (!account.name || editing) {
+    panel = (
+      <AccountForm
+        account={account}
+        onSaved={(a) => {
+          me.setAccount(a);
+          setEditing(false);
+        }}
+        onCancel={account.name ? () => setEditing(false) : undefined}
+      />
+    );
+  } else {
+    panel = (
+      <>
+        <div className="signed-in">
+          <button type="button" className="avatar-button" onClick={() => setEditing(true)} title="Modifier mon pseudo et mon avatar">
+            <Avatar name={account.name} look={account} />
+          </button>
+          <strong>{account.name}</strong>
+        </div>
+        <form
+          className="home-actions"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit(code ? 'join' : 'create');
+          }}
+        >
+          <button type="button" className="primary" disabled={busy} onClick={() => submit('create')}>
             Créer un salon
           </button>
           <div className="or">ou</div>
@@ -119,13 +83,40 @@ export function Home({ onEnter }: { onEnter: (s: Session) => void }) {
               aria-label="Code du salon"
               className="code-input"
             />
-            <button type="submit" disabled={busy || !name.trim() || code.length !== 4}>
+            <button type="submit" disabled={busy || code.length !== 4}>
               Rejoindre
             </button>
           </div>
-        </div>
+        </form>
+      </>
+    );
+  }
+
+  return (
+    <main className="home">
+      <img className="home-logo" src="/cards/dos.webp" alt="" />
+      <h1>
+        Gang <span>of</span> Four
+      </h1>
+      <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+
+      <section className="panel">
+        {panel}
         {error && <p className="error">{error}</p>}
-      </form>
+        {account && (
+          <div className="account-links">
+            {account.admin && (
+              <button type="button" className="link small" onClick={() => setAdmin(true)}>
+                Gérer les comptes
+              </button>
+            )}
+            <button type="button" className="link small" onClick={() => void me.signOut()}>
+              Se déconnecter
+            </button>
+          </div>
+        )}
+      </section>
+      {admin && <AdminPanel onClose={() => setAdmin(false)} />}
 
       <LiveRooms onWatch={onEnter} />
       <Leaderboard />

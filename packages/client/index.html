@@ -4,19 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#efe7d4" />
-    <script>
-      // Pose le thème avant le premier affichage, pour éviter un flash de la mauvaise couleur.
-      (function () {
-        var theme;
-        try {
-          theme = localStorage.getItem('gof-theme');
-        } catch (e) {}
-        if (theme !== 'dark' && theme !== 'light')
-          theme = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.dataset.theme = theme;
-        if (theme === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b1812');
-      })();
-    </script>
+    <script src="/theme.js"></script>
     <title>Gang of Four</title>
     <link rel="icon" type="image/webp" href="/cards/1M.webp" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

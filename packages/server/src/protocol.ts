@@ -49,7 +49,14 @@ export type RoomError =
   | 'tooManyRooms'
   | 'slowDown'
   | 'seatTaken'
-  | 'alreadySeated';
+  | 'alreadySeated'
+  | 'notSignedIn'
+  | 'noName'
+  | 'nameTaken'
+  | 'blocked'
+  | 'signInFailed'
+  | 'notAdmin'
+  | 'accountNotFound';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -62,9 +69,35 @@ export interface Session {
   spectator?: boolean;
 }
 
+/** Compte du joueur connecté, tel que le voit son navigateur. */
+export interface AccountView extends Look {
+  id: string;
+  email: string;
+  /** Pseudo unique ; vide tant que le joueur ne l'a pas choisi. */
+  name: string;
+  admin: boolean;
+}
+
+/** Ligne de la liste des comptes, vue par l'admin. */
+export interface AdminAccount extends Look {
+  id: string;
+  email: string;
+  name: string;
+  blocked: boolean;
+  createdAt: string;
+}
+
 export interface ClientToServerEvents {
-  'room:create': (payload: { name: string } & Look, ack: Ack<Session>) => void;
-  'room:join': (payload: { code: string; name: string } & Look, ack: Ack<Session>) => void;
+  /** Compte de cette connexion (null sans compte), et l'identifiant du client Google pour afficher le bouton. */
+  'account:get': (ack: Ack<{ account: AccountView | null; googleClientId: string | null }>) => void;
+  /** Connexion avec le jeton du bouton Google : renvoie la session à garder dans le navigateur. */
+  'account:google': (payload: { credential: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
+  'account:update': (payload: { name: string } & Look, ack: Ack<{ account: AccountView }>) => void;
+  'account:signOut': (ack: Ack) => void;
+  'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
+  'admin:update': (payload: { id: string; name?: string; blocked?: boolean }, ack: Ack) => void;
+  'room:create': (ack: Ack<Session>) => void;
+  'room:join': (payload: { code: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string; onlyIfFree?: boolean }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
   'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;

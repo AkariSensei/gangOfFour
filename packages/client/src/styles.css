@@ -1736,3 +1736,72 @@ input {
     padding-top: 4rem;
   }
 }
+
+/* Compte : connexion Google, joueur connecté, gestion des comptes par l'admin */
+.google-button {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 0.75rem;
+}
+.signed-in {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.signed-in strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.1rem;
+}
+.account-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.9rem;
+}
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.admin-accounts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.admin-accounts li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-accounts li.blocked {
+  opacity: 0.55;
+}
+.admin-who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+.admin-who input {
+  min-width: 0;
+}
+.admin-who .small {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.signin-hint {
+  text-align: center;
+  margin: 0;
+}
