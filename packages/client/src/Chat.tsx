@@ -112,3 +112,17 @@ export function MuteButton({ name, muted, onClick }: { name: string; muted: bool
     </button>
   );
 }
+
+/** Bouton de l'hôte ou de l'admin pour exclure un joueur, après confirmation. */
+export function KickButton({ name, onKick }: { name: string; onKick: () => void }) {
+  return (
+    <button
+      className="kick"
+      title={`Exclure ${name}`}
+      aria-label={`Exclure ${name}`}
+      onClick={() => confirm(`Exclure ${name} ? Un bot prendra sa place.`) && onKick()}
+    >
+      ✕
+    </button>
+  );
+}

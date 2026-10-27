@@ -343,6 +343,23 @@ input {
   margin-left: auto;
 }
 
+/* Exclure un joueur (hôte et admin) */
+button.kick {
+  padding: 0 0.3rem;
+  min-height: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+button.kick:hover {
+  color: #b3261e;
+}
+
 /* Couper ou rendre le chat d'un joueur (hôte et admin) */
 button.mute {
   padding: 0 0.3rem;
@@ -1548,6 +1565,11 @@ button.mute.on {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
+}
+.live-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 .live-players {
   font-weight: 600;

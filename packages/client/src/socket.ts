@@ -110,9 +110,12 @@ export function useGameConnection() {
   const [game, setGame] = useState<PlayerView | null>(null);
   // Le chat ne vit que dans la page : rien n'est gardé, ni ici après un départ, ni sur le serveur.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /** Exclu par l'hôte ou l'admin : l'accueil le dit. */
+  const [kicked, setKicked] = useState(false);
 
   const remember = useCallback((s: Session | null) => {
     if (!s) forgetSeat(readSession('session', SESSION_KEY));
+    setKicked(false);
     setSession(s);
     writeStorage('session', SESSION_KEY, s ? JSON.stringify(s) : null);
     if (s && !s.spectator) writeStorage('local', SEAT_KEY, JSON.stringify(s));
@@ -149,6 +152,11 @@ export function useGameConnection() {
     socket.on('game:state', setGame);
     const onMessage = (m: ChatMessage) => setMessages((list) => [...list.slice(-99), m]);
     socket.on('chat:message', onMessage);
+    const onKicked = () => {
+      remember(null);
+      setKicked(true);
+    };
+    socket.on('room:kicked', onKicked);
     if (socket.connected) void rejoin();
     return () => {
       socket.off('connect', rejoin);
@@ -156,8 +164,9 @@ export function useGameConnection() {
       socket.off('room:state', setRoom);
       socket.off('game:state', setGame);
       socket.off('chat:message', onMessage);
+      socket.off('room:kicked', onKicked);
     };
   }, [remember]);
 
-  return { connected, session, room, game, messages, remember };
+  return { connected, session, room, game, messages, kicked, remember };
 }
