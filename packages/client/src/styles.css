@@ -4,9 +4,9 @@
   --felt-dark: #123b29;
   --wood: #5a3519;
   --wood-light: #8a5a2e;
-  --panel: #fffaf0;
-  --text: #1f2421;
-  --muted: #6d756f;
+  --panel: #16231c;
+  --text: #ebe6da;
+  --muted: #9aa79f;
   /* Encre fixe, pour le texte posé sur l'or ou le blanc. */
   --ink: #1f2421;
   --gold: #e8b931;
@@ -21,22 +21,19 @@
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  /* Page couleur sable, panneaux crème. */
-  color-scheme: light;
-  --page-bg:
-    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.22), transparent 55%),
-    radial-gradient(ellipse at top, #fbf6ea, #e6dcc4 75%);
-  --page-color: #e6dcc4;
-  --page-title: #1d3d2c;
-  --page-sub: #4f6157;
-  --surface: #fff;
-  --surface-2: #f4eedf;
-  --line: #e3dccd;
-  --line-strong: #d6d0c2;
-  --highlight: #fbf0d0;
-  --soft: rgba(0, 0, 0, 0.05);
-  --panel-shadow: 0 14px 40px rgba(60, 45, 15, 0.16);
-  /* La table garde son tapis sombre. */
+  /* Page sur le même tapis sombre que la table, panneaux vert nuit. */
+  color-scheme: dark;
+  --page-bg: var(--table-bg);
+  --page-color: var(--bg);
+  --page-title: #fff;
+  --page-sub: #cfe3d7;
+  --surface: #213229;
+  --surface-2: #1d2d24;
+  --line: #2c3f35;
+  --line-strong: #3a5045;
+  --highlight: #3b3418;
+  --soft: rgba(255, 255, 255, 0.06);
+  --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   --table-bg:
     radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
     radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
