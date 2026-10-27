@@ -739,10 +739,40 @@ input {
   font-style: italic;
 }
 .exchange-recap {
+  position: absolute;
+  top: clamp(12px, 3vh, 28px);
+  left: clamp(16px, 4vw, 48px);
   display: grid;
-  gap: 0.2rem;
-  font-size: 0.85rem;
-  color: #d9eadf;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem 0.5rem 0.5rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e6f1ea;
+  pointer-events: none;
+  z-index: 1;
+}
+.exchange-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
+}
+.exchange-row .card,
+.exchange-row .card-back {
+  --card-w: 34px;
+  width: 34px;
+  margin: 0;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+.exchange-row .card-back.pending {
+  aspect-ratio: 108 / 167;
+  opacity: 0.7;
+}
+.exchange-row .card {
+  animation: pop-in 0.3s ease;
 }
 
 .cut-deck {
@@ -1145,6 +1175,26 @@ input {
     grid-column: 1 / -1;
     align-self: center;
     padding: 0.25rem 0;
+  }
+  .exchange-recap {
+    order: 5;
+    position: relative;
+    inset: auto;
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: fit-content;
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem 0.9rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.72rem;
+  }
+  .exchange-row .card,
+  .exchange-row .card-back {
+    --card-w: 24px;
+    width: 24px;
   }
   .hand {
     --overlap: 0.42;

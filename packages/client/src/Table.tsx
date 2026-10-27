@@ -248,6 +248,29 @@ function CutDeck({ game }: { game: PlayerView }) {
   );
 }
 
+/** Rappel de l'échange de début de manche : les deux cartes données, visibles par tous jusqu'à la fin du premier pli. */
+function ExchangeRecap({ game }: { game: PlayerView }) {
+  const exchange = game.exchange!;
+  const loser = game.players[exchange.loserIndex]!.name;
+  const winner = game.players[exchange.winnerIndex]!.name;
+  return (
+    <div className="exchange-recap pop-in" aria-label="Échange de cartes">
+      <div className="exchange-row">
+        <CardView card={exchange.loserCard} />
+        <span>
+          {loser} <span aria-hidden>→</span> {winner}
+        </span>
+      </div>
+      <div className="exchange-row">
+        {exchange.winnerCard ? <CardView card={exchange.winnerCard} key={exchange.winnerCard.id} /> : <span className="card card-back pending" />}
+        <span>
+          {winner} <span aria-hidden>→</span> {loser}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** Le centre de la table : la combinaison à battre, les coups précédents du pli en retrait, ou l'échange de cartes. */
 function CenterPile({ game }: { game: PlayerView }) {
   const plays = game.trick.filter((e) => e.combination);
@@ -287,16 +310,6 @@ function CenterPile({ game }: { game: PlayerView }) {
         {game.phase === 'playing' && (
           <div className="pile-empty">
             {game.currentPlayer === game.you ? 'À toi d’ouvrir un nouveau pli' : `${current.name} ouvre un nouveau pli`}
-          </div>
-        )}
-        {exchange?.winnerCard && game.phase === 'playing' && plays.length === 0 && (
-          <div className="exchange-recap">
-            <span>
-              {game.players[exchange.loserIndex]!.name} a donné <strong>{cardLabel(exchange.loserCard)}</strong>
-            </span>
-            <span>
-              {game.players[exchange.winnerIndex]!.name} a rendu <strong>{cardLabel(exchange.winnerCard)}</strong>
-            </span>
           </div>
         )}
       </div>
@@ -486,6 +499,15 @@ export function Table({
   // Nouvelle manche, nouvelle main : l'ordre rangé à la main pour la manche d'avant ne veut plus rien dire
   // (les cartes gardent le même identifiant d'une manche à l'autre, il mélangerait la nouvelle main).
   useEffect(() => setOrder(null), [game.round]);
+
+  // L'échange reste affiché jusqu'à la fin du premier pli : le pli est fini quand la table est vidée après des coups.
+  const [firstTrickDone, setFirstTrickDone] = useState(0);
+  const trickOver = game.phase === 'playing' && !game.table && game.trick.length > 0;
+  useEffect(() => {
+    if (trickOver) setFirstTrickDone(game.round);
+  }, [trickOver, game.round]);
+  const showExchange =
+    !!exchange && (game.phase === 'exchange' || (game.phase === 'playing' && firstTrickDone !== game.round && !trickOver));
 
   // Un Gang vient d'être posé : on le fête (une fois par Gang, grâce à sa clé).
   const top = game.table;
@@ -719,6 +741,7 @@ export function Table({
           />
         ))}
         <CenterPile game={game} />
+        {showExchange && <ExchangeRecap game={game} />}
       </div>
 
       {spectator ? (
