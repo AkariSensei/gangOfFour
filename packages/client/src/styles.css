@@ -1099,6 +1099,14 @@ button.mute.on {
   place-items: center;
   padding: 1rem;
 }
+/* Pause : la table est voilée, mais l'en-tête (chat, quitter) reste au-dessus pour discuter en attendant. */
+.pause-overlay {
+  z-index: 25;
+}
+.table-screen.paused .table-header {
+  position: relative;
+  z-index: 26;
+}
 .modal {
   width: min(520px, 100%);
   display: grid;
