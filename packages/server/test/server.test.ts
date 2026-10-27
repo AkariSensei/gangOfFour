@@ -1,11 +1,11 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PlayerView } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type ClientToServerEvents, type GameServer, type RoomView, type ServerToClientEvents, createGameServer } from '../src';
+import { type ClientToServerEvents, type GameServer, type GameServerOptions, type RoomView, type ServerToClientEvents, createGameServer } from '../src';
 import { playBotTurn } from '../scripts/bot';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: PlayerView };
@@ -13,8 +13,10 @@ type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: Room
 let server: GameServer;
 const clients: Client[] = [];
 
-async function start(options = {}) {
-  server = createGameServer(options);
+// Les parties de test enchaînent les coups bien plus vite qu'un humain : on lève la limite d'événements,
+// vérifiée à part dans son propre test.
+async function start(options: GameServerOptions = {}) {
+  server = createGameServer({ ...options, limits: { eventsPerSocket: Infinity, ...options.limits } });
   await new Promise<void>((resolve) => server.http.listen(0, resolve));
 }
 
@@ -220,6 +222,36 @@ describe('serveur de jeu', () => {
     expect(JSON.stringify(server.rooms.all())).not.toContain('Salut');
   });
 
+  it("sert l'interface avec les en-têtes de sécurité et refuse une adresse mal encodée", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gof-static-'));
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>');
+    await start({ staticDir: dir });
+    const { port } = server.http.address() as AddressInfo;
+    const page = await fetch(`http://localhost:${port}/`);
+    expect(page.status).toBe(200);
+    expect(page.headers.get('x-frame-options')).toBe('DENY');
+    expect(page.headers.get('content-security-policy')).toContain("script-src 'self'");
+    expect((await fetch(`http://localhost:${port}/%E0`)).status).toBe(400);
+    expect((await fetch(`http://localhost:${port}/`)).status).toBe(200);
+  });
+
+  it('freine une connexion qui envoie des événements à la chaîne', async () => {
+    await start({ limits: { eventsPerSocket: 5 } });
+    const client = connect();
+    const results = [];
+    for (let i = 0; i < 6; i++) results.push(await client.emitWithAck('stats:get'));
+    expect(results.slice(0, 5).every((r) => r.ok)).toBe(true);
+    expect(results[5]).toEqual({ ok: false, error: 'slowDown' });
+  });
+
+  it('coupe une connexion qui envoie un message trop gros', async () => {
+    await start({ limits: { maxMessageBytes: 1000 } });
+    const client = connect();
+    await waitFor(() => client.connected);
+    client.emit('chat:send', { text: 'x'.repeat(5000) }, () => {});
+    await waitFor(() => !client.connected);
+  });
+
   it('refuse de nouveaux salons au-delà du maximum', async () => {
     await start({ limits: { maxRooms: 2 } });
     expect((await connect().emitWithAck('room:create', { name: 'A' })).ok).toBe(true);
@@ -299,6 +331,15 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.recent).toHaveLength(1);
     expect(stats.ok && stats.leaderboard.map((e) => e.name)).toEqual(['Alice']);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
+
+    // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
+    const target = server.rooms.get(code)!.game!.config.targetScore;
+    expect((await human.emitWithAck('game:rematch')).ok).toBe(true);
+    await waitFor(() => human.game!.phase !== 'gameOver');
+    expect(human.game!.round).toBe(1);
+    expect(human.game!.players.every((p) => p.score === 0)).toBe(true);
+    expect(server.rooms.get(code)!.game!.config.targetScore).toBe(target);
+    expect(server.rooms.get(code)!.recorded).toBe(false);
   }, 60000);
 
   it('survit aux messages bizarres : sans réponse attendue, sans données, ou avec des données invalides', async () => {
