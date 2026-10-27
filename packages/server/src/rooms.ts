@@ -26,6 +26,8 @@ export interface Seat {
   connected: boolean;
   /** Siège tenu par l'ordinateur, ajouté par l'hôte pour compléter la table. */
   bot?: boolean;
+  /** Joueur parti en pleine partie depuis un moment : un bot joue à sa place jusqu'à son retour. */
+  away?: boolean;
   avatar?: string;
   color?: string;
 }
@@ -117,6 +119,7 @@ export class RoomManager {
     const seat = room?.seats.find((s) => s.token === token);
     if (!room || !seat) return { ok: false, error: 'roomNotFound' };
     seat.connected = true;
+    delete seat.away;
     return { ok: true, code: room.code, playerId: seat.playerId, token };
   }
 
@@ -147,6 +150,15 @@ export class RoomManager {
   isAbandoned(code: string): boolean {
     const room = this.get(code);
     return !!room && room.seats.every((s) => s.bot || !s.connected);
+  }
+
+  /** Un bot prend la place d'un joueur parti en pleine partie, s'il n'est toujours pas revenu. */
+  replaceByBot(code: string, playerId: string): boolean {
+    const room = this.get(code);
+    const seat = room?.seats.find((s) => s.playerId === playerId);
+    if (!room?.game || room.game.phase === 'gameOver' || !seat || seat.bot || seat.connected) return false;
+    seat.away = true;
+    return true;
   }
 
   /** L'hôte ajoute un bot sur un siège libre, avant la partie. */
@@ -186,10 +198,13 @@ export class RoomManager {
     return room.seats[index] ?? null;
   }
 
-  /** Le bot qui doit agir maintenant dans ce salon, s'il y en a un. */
+  /**
+   * Le bot qui doit agir maintenant dans ce salon, s'il y en a un : un vrai bot, ou un bot qui remplace un joueur
+   * parti (seulement s'il reste un humain à la table, pour ne pas finir la partie sans personne).
+   */
   botToAct(code: string): Seat | null {
     const seat = this.seatToAct(code);
-    return seat?.bot ? seat : null;
+    return seat?.bot || (seat?.away && !this.isAbandoned(code)) ? seat : null;
   }
 
   delete(code: string): void {
@@ -251,6 +266,7 @@ export class RoomManager {
         name: s.name,
         connected: s.connected,
         bot: s.bot ?? false,
+        away: s.away ?? false,
         ...cleanLook(s),
       })),
       started: room.game !== null,

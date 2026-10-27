@@ -14,6 +14,8 @@ import { type PlayerAction, RoomManager, type Result } from './rooms';
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
 export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
+/** Temps laissé à un joueur parti en pleine partie avant qu'un bot ne joue à sa place. */
+export const AWAY_DELAY_MS = 60 * 1000;
 /** Chat : longueur maximale d'un message, et nombre de messages par connexion sur la fenêtre donnée. */
 const CHAT_MAX_LENGTH = 200;
 const CHAT_MESSAGES = 6;
@@ -40,6 +42,8 @@ export interface GameServer {
 export interface GameServerOptions {
   corsOrigin?: string | string[];
   abandonDelayMs?: number;
+  /** Délai avant qu'un bot remplace un joueur déconnecté en pleine partie. */
+  awayDelayMs?: number;
   /** Délai avant de supprimer un salon abandonné avant le début de la partie. */
   lobbyAbandonDelayMs?: number;
   /** Garde-fous contre la création de salons ou de connexions à la chaîne. */
@@ -135,7 +139,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const current = turnTimers.get(code);
     // Le tour est identifié par la manche, la phase, le pli et le joueur : tant qu'il ne change pas, le temps court.
     const turn = game && seat ? `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` : '';
-    const active = !!room?.turnSeconds && !!seat && !seat.bot && !rooms.isAbandoned(code);
+    const active = !!room?.turnSeconds && !!seat && !seat.bot && !seat.away && !rooms.isAbandoned(code);
     if (!active) {
       clearTimeout(current?.timer);
       turnTimers.delete(code);
@@ -203,6 +207,24 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
       if (gameView) socket.emit('game:state', gameView);
     }
+  }
+
+  const awayTimers = new Map<string, NodeJS.Timeout>();
+  const awayDelay = options.awayDelayMs ?? AWAY_DELAY_MS;
+
+  /** Joueur déconnecté en pleine partie : s'il n'est pas revenu au bout d'une minute, un bot joue pour lui. */
+  function scheduleAway(code: string, playerId: string) {
+    const key = `${code}/${playerId}`;
+    clearTimeout(awayTimers.get(key));
+    awayTimers.set(
+      key,
+      setTimeout(() => {
+        awayTimers.delete(key);
+        if (!rooms.replaceByBot(code, playerId)) return;
+        void broadcast(code);
+        scheduleBots(code);
+      }, awayDelay),
+    );
   }
 
   function scheduleCleanup(code: string) {
@@ -283,9 +305,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         socket.data = { ip: socket.data.ip, code: result.code, playerId: result.playerId };
         await socket.join(result.code);
         clearTimeout(cleanupTimers.get(result.code));
+        clearTimeout(awayTimers.get(`${result.code}/${result.playerId}`));
+        awayTimers.delete(`${result.code}/${result.playerId}`);
       }
       ack(result);
-      if (result.ok) await broadcast(result.code);
+      if (result.ok) {
+        await broadcast(result.code);
+        // Un humain revient : les bots remplaçants peuvent reprendre s'ils attendaient.
+        scheduleBots(result.code);
+      }
     }
 
     function leaveCurrent() {
@@ -298,6 +326,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       }
       if (!code || !playerId) return;
       rooms.leave(code, playerId);
+      if (rooms.get(code)?.game) scheduleAway(code, playerId);
       void socket.leave(code);
       socket.data = { ip: socket.data.ip };
       scheduleCleanup(code);
@@ -385,6 +414,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (code && spectator) return void broadcast(code);
       if (!code || !playerId) return;
       rooms.setConnected(code, playerId, false);
+      if (rooms.get(code)?.game) scheduleAway(code, playerId);
       scheduleCleanup(code);
       void broadcast(code);
     });
@@ -395,11 +425,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   rooms.all().forEach((room) => {
     scheduleCleanup(room.code);
     scheduleBots(room.code);
+    if (room.game) room.seats.forEach((s) => !s.bot && !s.away && scheduleAway(room.code, s.playerId));
   });
 
   io.engine.on('close', () => {
     cleanupTimers.forEach(clearTimeout);
     botTimers.forEach(clearTimeout);
+    awayTimers.forEach(clearTimeout);
     turnTimers.forEach((t) => clearTimeout(t.timer));
   });
   return { http, io, rooms, history, errors, saveRooms: () => saved.saveNow() };
