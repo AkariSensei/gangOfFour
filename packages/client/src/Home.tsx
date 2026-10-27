@@ -103,31 +103,37 @@ export function Home({
 
   return (
     <main className="home">
-      <img className="home-logo" src="/cards/dos.webp" alt="" />
-      <h1>
-        Gang <span>of</span> Four
-      </h1>
-      <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+      <header className="home-hero">
+        <img className="home-logo" src="/cards/dos.webp" alt="" />
+        <div>
+          <h1>
+            Gang <span>of</span> Four
+          </h1>
+          <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+        </div>
+      </header>
 
-      <section className="panel">
-        {panel}
-        {error && <p className="error">{error}</p>}
-        {account && (
-          <div className="account-links">
-            {account.admin && (
-              <button type="button" className="link small" onClick={() => setAdmin(true)}>
-                Gérer les comptes
+      <div className="home-start">
+        <section className="panel">
+          {panel}
+          {error && <p className="error">{error}</p>}
+          {account && (
+            <div className="account-links">
+              {account.admin && (
+                <button type="button" className="link small" onClick={() => setAdmin(true)}>
+                  Gérer les comptes
+                </button>
+              )}
+              <button type="button" className="link small" onClick={() => void me.signOut()}>
+                Se déconnecter
               </button>
-            )}
-            <button type="button" className="link small" onClick={() => void me.signOut()}>
-              Se déconnecter
-            </button>
-          </div>
-        )}
-      </section>
-      {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+            </div>
+          )}
+        </section>
+        {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+        <LiveRooms onWatch={onEnter} />
+      </div>
 
-      <LiveRooms onWatch={onEnter} />
       <Leaderboard />
     </main>
   );
@@ -167,9 +173,7 @@ function LiveRooms({ onWatch }: { onWatch: (s: Session) => void }) {
         {rooms.map((r) => (
           <li key={r.code}>
             <div className="live-info">
-              <span className="live-players">
-                {r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}
-              </span>
+              <span className="live-players">{r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}</span>
               <span className="muted">
                 Manche {r.round}
                 {r.spectators > 0 && ` · 👀 ${r.spectators}`}

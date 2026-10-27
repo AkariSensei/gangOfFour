@@ -216,6 +216,72 @@ input {
   text-align: center;
   margin: 0.5rem 0 1.75rem;
 }
+/* Sur grand écran, l'accueil s'étale en colonnes : jouer, classement, dernières parties. */
+.recent-games {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.recent-games h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+@media (min-width: 820px) {
+  .home {
+    max-width: 1240px;
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    grid-template-areas:
+      'hero hero'
+      'start rank'
+      'start recent';
+    grid-template-rows: auto auto 1fr;
+    gap: 1.25rem 1.5rem;
+    align-items: start;
+    padding-inline: 1.5rem;
+  }
+  .home-hero {
+    grid-area: hero;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .home-hero .home-logo {
+    width: 110px;
+    margin: 0;
+  }
+  .home-hero h1,
+  .home-hero .tagline {
+    text-align: left;
+  }
+  .home-hero .tagline {
+    margin-bottom: 0;
+  }
+  .home-start {
+    grid-area: start;
+  }
+  .home .leaderboard {
+    grid-area: rank;
+  }
+  .home .recent-games {
+    grid-area: recent;
+  }
+  .home .leaderboard,
+  .home .recent-games {
+    margin-top: 0;
+  }
+}
+@media (min-width: 1180px) {
+  .home {
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      'hero hero hero'
+      'start rank recent';
+    grid-template-rows: auto 1fr;
+  }
+}
 .home label {
   display: grid;
   gap: 0.4rem;
