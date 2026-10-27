@@ -35,6 +35,7 @@ function Opponent({
   seat,
   connected,
   bot,
+  away,
   look,
   move,
 }: {
@@ -43,6 +44,7 @@ function Opponent({
   seat: Seat;
   connected: boolean;
   bot: boolean;
+  away: boolean;
   look?: Look;
   move?: TrickEntry;
 }) {
@@ -56,7 +58,7 @@ function Opponent({
         <div className="opponent-name">
           {p.name}
           {game.dealer === index && <span className="tag">donneur</span>}
-          {!connected && <span className="tag">hors ligne</span>}
+          {away ? <span className="tag">🤖 bot</span> : !connected && <span className="tag">hors ligne</span>}
         </div>
         <div className="opponent-meta">
           <span className="count">{p.cardCount}</span> carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
@@ -711,6 +713,7 @@ export function Table({
             seat={seat}
             connected={room.players[index]?.connected ?? true}
             bot={room.players[index]?.bot ?? false}
+            away={room.players[index]?.away ?? false}
             look={room.players[index]}
             move={moves.get(index)}
           />

@@ -17,7 +17,7 @@ export interface Look {
 export interface RoomView {
   code: string;
   hostId: string;
-  players: ({ id: string; name: string; connected: boolean; bot: boolean } & Look)[];
+  players: ({ id: string; name: string; connected: boolean; bot: boolean; away: boolean } & Look)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;

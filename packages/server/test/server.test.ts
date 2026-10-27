@@ -99,6 +99,47 @@ describe('serveur de jeu', () => {
     expect(again.game!.you).toBe(1);
   });
 
+  it('fait jouer un bot à la place d\'un joueur parti, puis lui rend sa place à son retour', async () => {
+    await start({ botDelayMs: 0, awayDelayMs: 30 });
+    const { code, players } = await lobby(3);
+    const [alice, bruno, chloe] = players as [Client, Client, Client];
+    const token = server.rooms.get(code)!.seats[1]!.token;
+    await alice.emitWithAck('game:start', {});
+    await waitFor(() => !!alice.game);
+
+    // Chloé revient avant le délai : elle garde la main. Bruno, lui, est remplacé.
+    bruno.disconnect();
+    chloe.disconnect();
+    const chloeToken = server.rooms.get(code)!.seats[2]!.token;
+    const chloe2 = connect();
+    await chloe2.emitWithAck('room:rejoin', { code, token: chloeToken });
+    await waitFor(() => alice.room!.players[1]!.away);
+    expect(alice.room!.players.map((p) => p.away)).toEqual([false, true, false]);
+
+    // Les humains jouent quand c'est à eux ; le bot de Bruno joue tout seul, jusqu'à la manche suivante.
+    const mustAct = (g: PlayerView) =>
+      g.phase === 'roundOver' ||
+      (g.phase === 'cut' && g.dealer === g.you) ||
+      (g.phase === 'exchange' && g.exchange?.winnerIndex === g.you) ||
+      (g.phase === 'playing' && g.currentPlayer === g.you);
+    const humans = [alice, chloe2];
+    const done = () => alice.game!.round > 1 || alice.game!.phase === 'gameOver';
+    for (let steps = 0; !done(); steps++) {
+      expect(steps).toBeLessThan(2000);
+      await waitFor(() => done() || humans.some((h) => h.game && mustAct(h.game)), 5000);
+      if (done()) break;
+      const before = JSON.stringify(alice.game);
+      const human = humans.find((h) => h.game && mustAct(h.game))!;
+      await playBotTurn([human, human, human]);
+      await waitFor(() => JSON.stringify(alice.game) !== before);
+    }
+
+    const back = connect();
+    expect(await back.emitWithAck('room:rejoin', { code, token })).toMatchObject({ ok: true });
+    await waitFor(() => !alice.room!.players[1]!.away && alice.room!.players[1]!.connected);
+    expect(back.game!.you).toBe(1);
+  }, 30000);
+
   it('supprime un salon abandonné après le délai', async () => {
     await start({ abandonDelayMs: 50 });
     const { code, players } = await lobby(3);
