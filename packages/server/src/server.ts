@@ -584,7 +584,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     on('stats:get', (_payload, ack) =>
-      ack({ ok: true, leaderboard: history.leaderboard(), monthly: history.leaderboard(10, monthOf(new Date())), recent: history.recent() }),
+      ack({ ok: true, leaderboard: history.leaderboard(), monthly: history.leaderboard(10, monthOf(new Date())), recent: history.recent(), streak: history.bestStreak() }),
     );
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

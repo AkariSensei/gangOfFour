@@ -1,7 +1,7 @@
 import type { ActionError, PlayerView } from '@gof/engine';
-import type { GameRecord, LeaderboardEntry, PlayerProfile } from './history';
+import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
-export type { GameRecord, LeaderboardEntry, PlayerProfile };
+export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
 
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
@@ -136,7 +136,7 @@ export interface ClientToServerEvents {
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
-  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[] }>) => void;
+  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[]; streak: WinStreak | null }>) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
 }
 
