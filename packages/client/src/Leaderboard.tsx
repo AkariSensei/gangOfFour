@@ -3,17 +3,20 @@ import type { GameRecord, LeaderboardEntry } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
+const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long' });
+
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 /** Classement du bureau et dernières parties, affichés sur l'accueil. */
 export function Leaderboard() {
-  const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; recent: GameRecord[] } | null>(null);
+  const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[] } | null>(null);
   const [shown, setShown] = useState<string | null>(null);
+  const [tab, setTab] = useState<'month' | 'all'>('month');
 
   useEffect(() => {
     const load = async () => {
       const result = await socket.emitWithAck('stats:get');
-      if (result.ok) setStats({ leaderboard: result.leaderboard, recent: result.recent });
+      if (result.ok) setStats({ leaderboard: result.leaderboard, monthly: result.monthly, recent: result.recent });
     };
     if (socket.connected) void load();
     socket.on('connect', load);
@@ -24,13 +27,31 @@ export function Leaderboard() {
 
   if (!stats || stats.leaderboard.length === 0) return null;
 
+  const month = monthFormat.format(new Date());
+  const ranking = tab === 'month' ? stats.monthly : stats.leaderboard;
+
   return (
     <section className="panel leaderboard">
-      <h2>Classement du bureau</h2>
+      <div className="leaderboard-head">
+        <h2>Classement du bureau</h2>
+        <div className="segmented" role="tablist" aria-label="Période du classement">
+          {(
+            [
+              ['month', month[0]!.toUpperCase() + month.slice(1)],
+              ['all', 'Général'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       {shown && <Profile name={shown} onClose={() => setShown(null)} />}
       <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>
+      {ranking.length === 0 && <p className="muted">Aucune partie terminée en {month} pour l'instant.</p>}
       <ol className="ranking">
-        {stats.leaderboard.map((e, i) => (
+        {ranking.map((e, i) => (
           <li key={e.name}>
             <span className="medal" aria-hidden>
               {['🥇', '🥈', '🥉'][i] ?? i + 1}

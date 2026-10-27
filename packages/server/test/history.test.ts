@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type GameState, createGame } from '@gof/engine';
 import { describe, expect, it } from 'vitest';
-import { GameHistory } from '../src';
+import { GameHistory, monthOf } from '../src';
 
 function finished(scores: Record<string, number>): GameState {
   const names = Object.keys(scores);
@@ -31,6 +31,21 @@ describe('GameHistory', () => {
       ['Chloé', 2, 0, 55],
     ]);
     expect(history.recent(1)[0]!.players.find((p) => p.winner)!.name).toBe('alice');
+  });
+
+  it('fait un classement du mois à l\'heure de Paris', () => {
+    const history = new GameHistory();
+    history.record(finished({ Alice: 20, Bruno: 104, David: 60 }), new Date('2026-09-30T22:30:00Z')); // déjà le 1er octobre à Paris
+    history.record(finished({ Alice: 101, Bruno: 30, David: 50 }), new Date('2026-10-15T12:00:00Z'));
+    history.record(finished({ Alice: 10, Chloé: 50, David: 40 }), new Date('2026-09-30T20:00:00Z'));
+    expect(monthOf(new Date('2026-09-30T22:30:00Z'))).toBe('2026-10');
+    expect(history.leaderboard(10, '2026-10').map((e) => [e.name, e.games, e.wins])).toEqual([
+      ['Alice', 2, 1],
+      ['Bruno', 2, 1],
+      ['David', 2, 0],
+    ]);
+    expect(history.leaderboard(10, '2026-09').map((e) => e.name)).toEqual(['Alice', 'David', 'Chloé']);
+    expect(history.leaderboard(10, '2026-11')).toEqual([]);
   });
 
   it('enregistre dans un fichier et le relit au démarrage', () => {
