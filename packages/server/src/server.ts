@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { ErrorLog } from './errors';
-import { GameHistory } from './history';
+import { GameHistory, monthOf } from './history';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
@@ -390,7 +390,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
-    on('stats:get', (_payload, ack) => ack({ ok: true, leaderboard: history.leaderboard(), recent: history.recent() }));
+    on('stats:get', (_payload, ack) =>
+      ack({ ok: true, leaderboard: history.leaderboard(), monthly: history.leaderboard(10, monthOf(new Date())), recent: history.recent() }),
+    );
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 
     socket.on('disconnect', () => {

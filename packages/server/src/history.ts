@@ -42,6 +42,10 @@ export interface LeaderboardEntry {
 
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 
+/** Mois d'une date à l'heure de Paris, sous la forme « 2026-10 ». */
+const parisMonth = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit' });
+export const monthOf = (date: Date) => parisMonth.format(date).slice(0, 7);
+
 /** Historique des parties terminées, gardé dans un fichier JSON (ou en mémoire sans fichier). */
 export class GameHistory {
   private records: GameRecord[] = [];
@@ -90,10 +94,14 @@ export class GameHistory {
     return this.records.slice(-limit).reverse();
   }
 
-  /** Classement par victoires, puis taux de victoire, puis score moyen (le plus bas est le meilleur). */
-  leaderboard(limit = 10): LeaderboardEntry[] {
+  /**
+   * Classement par victoires, puis taux de victoire, puis score moyen (le plus bas est le meilleur).
+   * `month` (« 2026-10 ») ne compte que les parties finies ce mois-là, à l'heure de Paris.
+   */
+  leaderboard(limit = 10, month?: string): LeaderboardEntry[] {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
     for (const record of this.records) {
+      if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
       for (const p of record.players) {
         if (p.bot) continue;
         const entry = byName.get(key(p.name)) ?? { name: p.name, games: 0, wins: 0, averageScore: 0, total: 0 };
