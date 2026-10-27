@@ -7,7 +7,7 @@
   --panel: #fffaf0;
   --text: #1f2421;
   --muted: #6d756f;
-  /* Encre fixe, pour le texte posé sur l'or ou le blanc quel que soit le thème. */
+  /* Encre fixe, pour le texte posé sur l'or ou le blanc. */
   --ink: #1f2421;
   --gold: #e8b931;
   --gold-dark: #b98b12;
@@ -21,7 +21,7 @@
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  /* Thème clair (par défaut) : page couleur sable, panneaux crème. */
+  /* Page couleur sable, panneaux crème. */
   color-scheme: light;
   --page-bg:
     radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.22), transparent 55%),
@@ -36,29 +36,10 @@
   --highlight: #fbf0d0;
   --soft: rgba(0, 0, 0, 0.05);
   --panel-shadow: 0 14px 40px rgba(60, 45, 15, 0.16);
-  /* La table garde son tapis sombre dans les deux thèmes. */
+  /* La table garde son tapis sombre. */
   --table-bg:
     radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
     radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
-}
-
-/* Thème sombre : choisi par le bouton, ou suivi du système tant qu'aucun choix n'est mémorisé. */
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --page-bg: var(--table-bg);
-  --page-color: var(--bg);
-  --page-title: #fff;
-  --page-sub: #cfe3d7;
-  --panel: #16231c;
-  --text: #ebe6da;
-  --muted: #9aa79f;
-  --surface: #213229;
-  --surface-2: #1d2d24;
-  --line: #2c3f35;
-  --line-strong: #3a5045;
-  --highlight: #3b3418;
-  --soft: rgba(255, 255, 255, 0.06);
-  --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -138,19 +119,6 @@ button.icon {
 button.icon.off {
   opacity: 0.45;
   filter: grayscale(1);
-}
-/* Bouton du thème, en haut à droite de l'accueil et du salon. */
-button.theme-toggle {
-  position: fixed;
-  top: max(0.75rem, env(safe-area-inset-top));
-  right: 0.75rem;
-  z-index: 25;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 0.5rem 0.6rem;
-  background: var(--surface);
-  border-color: var(--line-strong);
-  box-shadow: var(--panel-shadow);
 }
 :focus-visible {
   outline: 3px solid var(--gold);

@@ -6,7 +6,6 @@ import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
-import { ThemeToggle } from './theme';
 import { useTurnAlert } from './turnAlert';
 import { useAutoPass } from './autoPass';
 
@@ -495,7 +494,7 @@ export function Table({
   const exchange = game.exchange;
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
   const mustCut = game.phase === 'cut' && game.dealer === me;
-  const { sound, toggleSound } = useTurnAlert(myTurn || mustGive || mustCut);
+  useTurnAlert(myTurn || mustGive || mustCut);
   const { autoPass, toggleAutoPass } = useAutoPass(room, game.players[me]?.id);
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
@@ -800,10 +799,6 @@ export function Table({
         <Scores game={game} />
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
-          <ThemeToggle />
-          <button className="icon" onClick={toggleSound} title={sound ? 'Couper le son' : 'Activer le son'}>
-            {sound ? '🔔' : '🔕'}
-          </button>
           {!spectator && (
             <button
               className={`icon${autoPass ? '' : ' off'}`}

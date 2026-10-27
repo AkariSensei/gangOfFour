@@ -47,7 +47,7 @@ export function GoogleButton({ clientId, onCredential }: { clientId: string; onC
         if (!active || !ref.current || !api) return;
         api.initialize({ client_id: clientId, callback: (r) => callback.current(r.credential) });
         api.renderButton(ref.current, {
-          theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+          theme: 'outline',
           size: 'large',
           shape: 'pill',
           text: 'signin_with',
