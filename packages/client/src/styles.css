@@ -1907,3 +1907,122 @@ button.danger {
   text-align: center;
   margin: 0;
 }
+
+/* Badges : grille dans la fiche joueur, rangée d'icônes sur l'accueil */
+.modal.profile {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+.badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(0, 0, 0, 0.18);
+  text-align: left;
+}
+.badge.won {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.badge-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-bottom: 0.35rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 1.25rem;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.badge.won .badge-icon {
+  background: var(--gold);
+  filter: none;
+  opacity: 1;
+}
+.badge strong {
+  font-size: 0.9rem;
+}
+.badge-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1;
+}
+.badge-won {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #2f7d4f;
+}
+.badge-progress {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.badge-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.badge-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+.my-badges {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+}
+.my-badges-open {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 0;
+  margin-bottom: 0.6rem;
+}
+.my-badges h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0;
+}
+.badge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.badge-strip span {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 1rem;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.badge-strip span.won {
+  background: var(--gold);
+  filter: none;
+  opacity: 1;
+}

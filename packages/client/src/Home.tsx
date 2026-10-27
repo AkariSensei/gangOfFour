@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
+import { MyBadges } from './Badges';
 import { Leaderboard } from './Leaderboard';
 import { errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
@@ -131,6 +132,7 @@ export function Home({
           )}
         </section>
         {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+        {account?.name && <MyBadges name={account.name} />}
         <LiveRooms onWatch={onEnter} />
       </div>
 
