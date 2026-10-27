@@ -783,6 +783,45 @@ input {
 .cut-card:disabled {
   cursor: default;
 }
+/* Animation de la coupe : le haut du paquet (à gauche) se soulève, passe au bout, et se repose dessous. */
+.cut-part {
+  display: flex;
+  align-items: flex-end;
+}
+.cut-deck.cutting .cut-top {
+  position: relative;
+  z-index: 1;
+  animation: cut-top 1.1s ease-in-out 0.3s both;
+}
+.cut-deck.cutting .cut-rest {
+  animation: cut-rest 1.1s ease-in-out 0.3s both;
+}
+@keyframes cut-top {
+  25% {
+    transform: translate(0, -30px) rotate(-2deg);
+  }
+  70% {
+    transform: translate(calc(var(--rest) * var(--strip)), -30px) rotate(-2deg);
+  }
+  to {
+    transform: translate(calc(var(--rest) * var(--strip)), 0);
+  }
+}
+@keyframes cut-rest {
+  25% {
+    transform: none;
+  }
+  70%,
+  to {
+    transform: translateX(calc(var(--top) * var(--strip) * -1));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cut-deck.cutting .cut-top,
+  .cut-deck.cutting .cut-rest {
+    animation: none;
+  }
+}
 
 .pop-in {
   animation: pop-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.3);
@@ -1281,7 +1320,7 @@ input {
 }
 .hand.dealing .card {
   animation: deal 0.32s ease-out backwards;
-  animation-delay: calc(var(--i, 0) * 45ms);
+  animation-delay: calc(var(--deal-delay, 0ms) + var(--i, 0) * 45ms);
 }
 @keyframes deal {
   from {

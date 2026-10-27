@@ -1,4 +1,4 @@
-import { type Card, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
+import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, Look, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
@@ -248,13 +248,41 @@ function CutDeck({ game }: { game: PlayerView }) {
   );
 }
 
+/** Durée de l'animation de la coupe, montrée à toute la table avant la distribution. */
+const CUT_ANIMATION_MS = 1800;
+
+/** La coupe vient d'avoir lieu : les cartes du dessus se soulèvent et passent sous le paquet, sous les yeux de tous. */
+function CutAnimation({ game, cut }: { game: PlayerView; cut: Cut }) {
+  const rest = cut.deckSize - cut.position;
+  const strips = (count: number) => Array.from({ length: count }, (_, i) => <span key={i} className="cut-card" />);
+  return (
+    <div className="center-pile">
+      <div className="pile-label">
+        {cut.playerIndex === game.you ? 'Tu as coupé le paquet' : `${game.players[cut.playerIndex]!.name} a coupé le paquet`}
+      </div>
+      <div
+        className="cut-deck cutting"
+        style={{ '--size': cut.deckSize, '--top': cut.position, '--rest': rest } as CSSProperties}
+        aria-hidden
+      >
+        <div className="cut-part cut-top">{strips(cut.position)}</div>
+        <div className="cut-part cut-rest">{strips(rest)}</div>
+      </div>
+      <div className="pile-empty">
+        {cut.position} carte{cut.position > 1 ? 's' : ''} du dessus passent dessous
+      </div>
+    </div>
+  );
+}
+
 /** Le centre de la table : la combinaison à battre, les coups précédents du pli en retrait, ou l'échange de cartes. */
-function CenterPile({ game }: { game: PlayerView }) {
+function CenterPile({ game, cut }: { game: PlayerView; cut: Cut | null }) {
   const plays = game.trick.filter((e) => e.combination);
   const top = game.table;
   const exchange = game.exchange;
 
   if (game.phase === 'cut') return <CutDeck game={game} />;
+  if (cut) return <CutAnimation game={game} cut={cut} />;
 
   if (game.phase === 'exchange' && exchange) {
     return (
@@ -469,17 +497,36 @@ export function Table({
     return () => clearTimeout(t);
   }, [error]);
 
+  // La coupe vient d'avoir lieu : toute la table la voit (seulement si on était là pendant la coupe, pas en revenant).
+  const [cutShown, setCutShown] = useState<Cut | null>(null);
+  const previousPhase = useRef(game.phase);
+  const dealDelay = useRef(0);
+  useEffect(() => {
+    const cutDone = previousPhase.current === 'cut' && game.phase !== 'cut' && game.lastCut;
+    previousPhase.current = game.phase;
+    if (!cutDone) return;
+    dealDelay.current = CUT_ANIMATION_MS;
+    setCutShown(game.lastCut);
+  }, [game.phase, game.round]);
+  useEffect(() => {
+    if (!cutShown) return;
+    const t = setTimeout(() => setCutShown(null), CUT_ANIMATION_MS);
+    return () => clearTimeout(t);
+  }, [cutShown]);
+
   // Nouvelle main : les cartes arrivent une à une, comme une distribution (seulement pendant ce court moment,
-  // pour ne pas rejouer l'animation quand on range sa main).
-  const [dealing, setDealing] = useState(() => game.hand.length >= 10);
+  // pour ne pas rejouer l'animation quand on range sa main). Après une coupe, la distribution attend la fin de l'animation.
+  const [dealing, setDealing] = useState<{ delay: number } | null>(() => (game.hand.length >= 10 ? { delay: 0 } : null));
   const handSize = game.hand.length;
   const previousHandSize = useRef(0);
   useEffect(() => {
     const grew = handSize >= 10 && previousHandSize.current < 10;
     previousHandSize.current = handSize;
     if (!grew) return;
-    setDealing(true);
-    const t = setTimeout(() => setDealing(false), 1500);
+    const delay = dealDelay.current;
+    dealDelay.current = 0;
+    setDealing({ delay });
+    const t = setTimeout(() => setDealing(null), 1500 + delay);
     return () => clearTimeout(t);
   }, [handSize]);
 
@@ -718,7 +765,7 @@ export function Table({
             move={moves.get(index)}
           />
         ))}
-        <CenterPile game={game} />
+        <CenterPile game={game} cut={cutShown} />
       </div>
 
       {spectator ? (
@@ -761,7 +808,10 @@ export function Table({
             </div>
           </div>
 
-          <div className={`hand ${dealing ? 'dealing' : ''}`} style={{ '--count': hand.length } as CSSProperties}>
+          <div
+            className={`hand ${dealing ? 'dealing' : ''}`}
+            style={{ '--count': hand.length, '--deal-delay': `${dealing?.delay ?? 0}ms` } as CSSProperties}
+          >
             {hand.map((c, i) => (
               <CardView
                 key={c.id}
@@ -852,7 +902,7 @@ export function Table({
         </div>
       )}
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
-      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating ? null : bannerText} />
+      <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown ? null : bannerText} />
       {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
     </main>
   );
