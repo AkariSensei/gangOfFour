@@ -227,7 +227,9 @@ describe('serveur de jeu', () => {
     expect(await player.emitWithAck('admin:resetRanking')).toEqual({ ok: false, error: 'notAdmin' });
     expect(await admin.emitWithAck('admin:unrank', { id: 'personne' })).toEqual({ ok: false, error: 'accountNotFound' });
     expect(await admin.emitWithAck('admin:unrank', { id })).toEqual({ ok: true });
+    const changed = new Promise<void>((resolve) => player.once('stats:changed', resolve));
     expect(await admin.emitWithAck('admin:resetRanking')).toEqual({ ok: true });
+    await changed; // l'accueil de chacun recharge le classement
   });
 
   it('supprime un salon abandonné après le délai', async () => {

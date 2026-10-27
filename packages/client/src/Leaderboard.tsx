@@ -20,8 +20,10 @@ export function Leaderboard() {
     };
     if (socket.connected) void load();
     socket.on('connect', load);
+    socket.on('stats:changed', load);
     return () => {
       socket.off('connect', load);
+      socket.off('stats:changed', load);
     };
   }, []);
 

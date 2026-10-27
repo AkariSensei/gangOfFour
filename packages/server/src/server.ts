@@ -107,6 +107,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     room.recorded = true;
     const bots = room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
     history.record(room.game, new Date(), bots, room.seats.map((s) => s.account));
+    io.emit('stats:changed');
   }
 
   const botTimers = new Map<string, NodeJS.Timeout>();
@@ -481,11 +482,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const id = text(payload.id);
       if (!accounts.get(id)) return ack({ ok: false, error: 'accountNotFound' });
       history.removeFromRanking(id);
+      io.emit('stats:changed');
       ack({ ok: true });
     });
     on('admin:resetRanking', (_payload, ack) => {
       if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
       history.resetRanking();
+      io.emit('stats:changed');
       ack({ ok: true });
     });
 
