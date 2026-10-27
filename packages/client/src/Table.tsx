@@ -99,9 +99,15 @@ function Scores({ game }: { game: PlayerView }) {
   );
 }
 
+/** Temps minimal d'affichage du résumé avant qu'on puisse lancer la suite, pour que chacun ait le temps de le lire. */
+const RECAP_MIN_MS = 8000;
+
 function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   const r = game.lastRound!;
   const over = game.phase === 'gameOver';
+  const [readUntil] = useState(() => Date.now() + RECAP_MIN_MS);
+  const wait = useCountdown(readUntil) || 0;
+  const suffix = wait > 0 ? ` (${wait})` : '';
   const ranking = game.players.map((p, i) => ({ ...p, i })).sort((a, b) => a.score - b.score);
   const winnerNames = game.winners.map((i) => game.players[i]!.name).join(' et ');
   return (
@@ -150,8 +156,8 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
         {over ? (
           <div className="end-actions">
             {game.you >= 0 && (
-              <button className="primary big" onClick={() => socket.emitWithAck('game:rematch')}>
-                Revanche
+              <button className="primary big" disabled={wait > 0} onClick={() => socket.emitWithAck('game:rematch')}>
+                Revanche{suffix}
               </button>
             )}
             <button className={game.you >= 0 ? 'big' : 'primary big'} onClick={onExit}>
@@ -166,8 +172,8 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             {game.you < 0 ? (
               <p className="muted">La manche suivante commence quand un joueur la lance.</p>
             ) : (
-              <button className="primary big" onClick={() => socket.emitWithAck('game:nextRound')}>
-                Manche suivante
+              <button className="primary big" disabled={wait > 0} onClick={() => socket.emitWithAck('game:nextRound')}>
+                Manche suivante{suffix}
               </button>
             )}
           </>
