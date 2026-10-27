@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { GameRecord, LeaderboardEntry } from '../../server/src/protocol';
+import type { GameRecord, LeaderboardEntry, WinStreak } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
@@ -9,14 +9,14 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'sh
 
 /** Classement du bureau et dernières parties, affichés sur l'accueil. */
 export function Leaderboard() {
-  const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[] } | null>(null);
+  const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[]; streak: WinStreak | null } | null>(null);
   const [shown, setShown] = useState<string | null>(null);
   const [tab, setTab] = useState<'month' | 'all'>('month');
 
   useEffect(() => {
     const load = async () => {
       const result = await socket.emitWithAck('stats:get');
-      if (result.ok) setStats({ leaderboard: result.leaderboard, monthly: result.monthly, recent: result.recent });
+      if (result.ok) setStats({ leaderboard: result.leaderboard, monthly: result.monthly, recent: result.recent, streak: result.streak });
     };
     if (socket.connected) void load();
     socket.on('connect', load);
@@ -68,6 +68,12 @@ export function Leaderboard() {
           </li>
         ))}
       </ol>
+      {stats.streak && (
+        <p className="streak" title="Record du bureau : plus longue série de victoires d'affilée">
+          🔥 Record : <button className="who" onClick={() => setShown(stats.streak!.name)}>{stats.streak.name}</button>,{' '}
+          <strong>{stats.streak.wins}</strong> victoires d'affilée
+        </p>
+      )}
       {stats.recent.length > 0 && (
         <>
           <h3>Dernières parties</h3>

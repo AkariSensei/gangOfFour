@@ -130,4 +130,21 @@ describe('GameHistory', () => {
     });
     expect(history.profile('David')).toBeNull();
   });
+
+  it('garde la plus longue série de victoires d\'un compte', () => {
+    const history = new GameHistory();
+    expect(history.bestStreak()).toBeNull();
+    const play = (scores: Record<string, number>) => history.record(finished(scores), new Date(), [2], ['a', 'b']);
+    play({ Alice: 10, Bob: 50, Bot: 0 }); // le bot gagne : la série d'Alice ne démarre pas
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    expect(history.bestStreak()).toBeNull();
+    play({ Alice: 10, Bob: 10, Bot: 90 }); // victoire partagée
+    play({ Alice: 10, Bob: 50, Bot: 90 });
+    play({ Alice: 50, Bob: 10, Bot: 90 });
+    play({ Alice: 50, Bob: 10, Bot: 90 });
+    play({ Alice: 50, Bob: 10, Bot: 90 });
+    expect(history.bestStreak()).toEqual({ name: 'Alice', wins: 3 }); // égalité : Alice l'a atteint en premier
+    play({ Alice: 10, Bob: 10, Bot: 90 });
+    expect(history.bestStreak()).toEqual({ name: 'Bob', wins: 4 });
+  });
 });

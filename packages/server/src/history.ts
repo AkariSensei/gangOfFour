@@ -42,6 +42,12 @@ export interface LeaderboardEntry {
   averageScore: number;
 }
 
+/** Plus longue série de victoires d'affilée d'un compte. */
+export interface WinStreak {
+  name: string;
+  wins: number;
+}
+
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 
 /** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
@@ -165,6 +171,24 @@ export class GameHistory {
       .map(({ total, ...e }) => ({ ...e, averageScore: Math.round(total / e.games) }))
       .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || a.averageScore - b.averageScore)
       .slice(0, limit);
+  }
+
+  /**
+   * Record du bureau : la plus longue série de parties gagnées d'affilée par un compte (une victoire partagée compte).
+   * À égalité, le record reste à celui qui l'a atteint en premier. Null tant que personne n'a gagné deux fois de suite.
+   */
+  bestStreak(): WinStreak | null {
+    const current = new Map<string, number>();
+    let best: { player: GameRecord['players'][number]; wins: number } | null = null;
+    for (const record of this.records) {
+      for (const p of record.players) {
+        if (p.bot || !p.account) continue;
+        const wins = p.winner ? (current.get(p.account) ?? 0) + 1 : 0;
+        current.set(p.account, wins);
+        if (wins > (best?.wins ?? 1)) best = { player: p, wins };
+      }
+    }
+    return best && { name: this.displayName(best.player), wins: best.wins };
   }
 
   /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
