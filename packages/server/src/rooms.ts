@@ -112,10 +112,12 @@ export class RoomManager {
     return { ok: true, ...this.seat(room, name, look) };
   }
 
-  rejoin(code: string, token: string): Result<Session> {
+  /** `onlyIfFree` : ne reprend pas un siège encore occupé par un autre onglet ouvert. */
+  rejoin(code: string, token: string, onlyIfFree = false): Result<Session> {
     const room = this.get(code);
     const seat = room?.seats.find((s) => s.token === token);
     if (!room || !seat) return { ok: false, error: 'roomNotFound' };
+    if (onlyIfFree && seat.connected) return { ok: false, error: 'seatTaken' };
     seat.connected = true;
     return { ok: true, code: room.code, playerId: seat.playerId, token };
   }

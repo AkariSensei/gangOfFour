@@ -340,7 +340,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       return allowed.ok ? enter(rooms.create(payload.name, payload), ack) : ack(allowed);
     });
     on('room:join', (payload, ack) => enter(rooms.join(text(payload.code), payload.name, payload), ack));
-    on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token)), ack));
+    on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack));
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
       ack({ ok: true });
