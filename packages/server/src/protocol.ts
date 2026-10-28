@@ -162,4 +162,6 @@ export interface ServerToClientEvents {
   'chat:message': (message: ChatMessage) => void;
   /** Ce joueur vient d'être exclu du salon par l'hôte ou l'admin. */
   'room:kicked': () => void;
+  /** Le classement a changé (partie finie, remise à zéro…) : l'accueil le recharge. */
+  'stats:changed': () => void;
 }

@@ -42,7 +42,12 @@ export function MyBadges({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    void socket.emitWithAck('stats:player', { name }).then((r) => setBadges(r.ok && r.profile ? r.profile.badges : null));
+    const load = () => void socket.emitWithAck('stats:player', { name }).then((r) => setBadges(r.ok && r.profile ? r.profile.badges : null));
+    load();
+    socket.on('stats:changed', load);
+    return () => {
+      socket.off('stats:changed', load);
+    };
   }, [name]);
 
   if (!badges) return null;
