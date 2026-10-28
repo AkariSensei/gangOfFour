@@ -432,18 +432,12 @@ function CenterPile({ game, cut }: { game: PlayerView; cut: Cut | null }) {
     );
   }
 
-  const previous = plays.slice(-3, -1);
+  // Les trois coups d'avant dans le pli, du plus récent au plus ancien, en petit sous le coup en cours.
+  const previous = plays.slice(-4, -1).reverse();
   const tablePlayer = game.players[top.playerIndex]!;
   return (
     <div className="center-pile">
       <div className="pile-stack">
-        {previous.map((e, i) => (
-          <div key={i} className="pile-cards previous" style={{ '--depth': previous.length - i } as CSSProperties}>
-            {e.combination!.cards.map((c) => (
-              <CardView key={c.id} card={c} />
-            ))}
-          </div>
-        ))}
         <div className={`pile-cards top fly-in from-${sideOf(game, top.playerIndex)}`} key={top.combination.cards.map((c) => c.id).join()}>
           {top.combination.cards.map((c) => (
             <CardView key={c.id} card={c} />
@@ -453,6 +447,20 @@ function CenterPile({ game, cut }: { game: PlayerView; cut: Cut | null }) {
       <div className={`pile-label ${top.combination.type === 'gang' ? 'gang' : ''}`}>
         {tablePlayer.name} · {combinationLabel(top.combination.type, top.combination.cards.length)}
       </div>
+      {previous.length > 0 && (
+        <ol className="pile-history" aria-label="Coups précédents du pli">
+          {previous.map((e) => (
+            <li key={e.combination!.cards.map((c) => c.id).join()}>
+              <span className="history-name">{game.players[e.playerIndex]!.name}</span>
+              <span className="pile-cards">
+                {e.combination!.cards.map((c) => (
+                  <CardView key={c.id} card={c} />
+                ))}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

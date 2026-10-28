@@ -163,15 +163,19 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   }
 
   const botTimers = new Map<string, NodeJS.Timeout>();
-  const botDelay = options.botDelayMs ?? 1100;
+  /** Temps de réflexion d'un bot : 3 à 4 secondes, pour que chacun voie passer ses coups. */
+  const botDelay = () => options.botDelayMs ?? 3000 + Math.random() * 1000;
+  /** Passe automatique d'un humain qui ne peut rien poser : juste le temps que la table voie la passe. */
+  const passDelay = options.botDelayMs ?? 1100;
   const cutPause = options.cutPauseMs ?? 1800;
 
   /**
-   * Si c'est à un bot d'agir, il joue après un court délai, puis on regarde si le suivant est aussi un bot.
-   * Un humain qui ne peut rien poser passe de la même façon, après le même délai pour que la table voie la passe.
+   * Si c'est à un bot d'agir, il joue après son temps de réflexion, puis on regarde si le suivant est aussi un bot.
+   * Un humain qui ne peut rien poser passe de la même façon, plus vite.
    */
   function scheduleBots(code: string) {
-    if (botTimers.has(code) || !(rooms.botToAct(code) || rooms.stuckToPass(code))) return;
+    const bot = rooms.botToAct(code);
+    if (botTimers.has(code) || !(bot || rooms.stuckToPass(code))) return;
     // L'échange suit juste la coupe : le bot attend la fin de l'animation pour que chacun voie la coupe puis l'échange.
     const justCut = rooms.get(code)?.game?.phase === 'exchange';
     botTimers.set(
@@ -183,7 +187,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         } catch (error) {
           errors.record('bot', error);
         }
-      }, botDelay + (justCut ? cutPause : 0)),
+      }, (bot ? botDelay() : passDelay) + (justCut ? cutPause : 0)),
     );
   }
 

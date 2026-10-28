@@ -1135,10 +1135,38 @@ button.mute.on {
 .pile-cards .card {
   --card-w: var(--pile-w);
 }
-.pile-cards.previous {
-  opacity: 0.45;
-  filter: saturate(0.6) brightness(0.85);
-  transform: translateX(calc(var(--depth) * -22px)) rotate(calc(var(--depth) * -6deg)) scale(0.94);
+/* Coups précédents du pli : en petit sous le coup en cours, le plus récent en premier, de plus en plus estompés. */
+.pile-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 0.9rem;
+}
+.pile-history li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  opacity: 0.85;
+}
+.pile-history li:nth-child(2) {
+  opacity: 0.65;
+}
+.pile-history li:nth-child(3) {
+  opacity: 0.5;
+}
+.pile-history .pile-cards {
+  gap: 2px;
+}
+.pile-history .pile-cards .card {
+  --card-w: calc(var(--pile-w) * 0.5);
+}
+.history-name {
+  font-size: 0.72rem;
+  color: #cfe3d7;
 }
 .pile-label {
   font-weight: 600;
