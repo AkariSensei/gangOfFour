@@ -1093,10 +1093,6 @@ button.mute.on {
   filter: saturate(0.6) brightness(0.85);
   transform: translateX(calc(var(--depth) * -22px)) rotate(calc(var(--depth) * -6deg)) scale(0.94);
 }
-.pile-cards.faded {
-  opacity: 0.35;
-  filter: grayscale(0.4);
-}
 .pile-label {
   font-weight: 600;
   background: rgba(0, 0, 0, 0.35);
@@ -1806,26 +1802,65 @@ button.mute.on {
 }
 
 /* Animations : les cartes posées glissent depuis le joueur vers le centre, la main arrive carte par carte. */
+/* La combinaison part de la place du joueur en tournant un peu, puis se pose sur le tapis avec un léger rebond. */
 .fly-in {
-  animation: fly-in 0.38s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation: fly-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 .fly-in.from-bottom {
   --from: 0 32vh;
+  --spin: -6deg;
 }
 .fly-in.from-top {
   --from: 0 -28vh;
+  --spin: 8deg;
 }
 .fly-in.from-left {
   --from: -34vw 0;
+  --spin: -14deg;
 }
 .fly-in.from-right {
   --from: 34vw 0;
+  --spin: 14deg;
 }
 @keyframes fly-in {
   from {
     translate: var(--from);
+    rotate: var(--spin, 0deg);
     scale: 0.7;
     opacity: 0.4;
+  }
+  75% {
+    scale: 1.06;
+    opacity: 1;
+  }
+}
+/* Pli ramassé : le dernier coup reste un instant au centre, puis glisse vers la place de celui qui a remporté le pli. */
+.pile-cards.sweep {
+  animation: sweep 1.3s ease-in both;
+}
+.sweep.to-bottom {
+  --to: 0 30vh;
+}
+.sweep.to-top {
+  --to: 0 -26vh;
+}
+.sweep.to-left {
+  --to: -32vw 0;
+}
+.sweep.to-right {
+  --to: 32vw 0;
+}
+@keyframes sweep {
+  0%,
+  45% {
+    translate: 0 0;
+    scale: 1;
+    opacity: 1;
+  }
+  100% {
+    translate: var(--to);
+    scale: 0.45;
+    opacity: 0;
   }
 }
 .hand.dealing .card {
@@ -1842,6 +1877,11 @@ button.mute.on {
   .fly-in,
   .hand.dealing .card {
     animation: none;
+  }
+  /* Sans animation, le pli terminé reste simplement grisé au centre. */
+  .pile-cards.sweep {
+    opacity: 0.35;
+    filter: grayscale(0.4);
   }
 }
 

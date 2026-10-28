@@ -344,7 +344,11 @@ function CenterPile({ game, cut }: { game: PlayerView; cut: Cut | null }) {
     return (
       <div className="center-pile">
         {lastPlay && (game.phase === 'playing' || finished) && (
-          <div className={finished ? 'pile-cards final pop-in' : 'pile-cards faded'}>
+          <div
+            // Pli terminé : le dernier coup reste un instant, puis le pli part vers celui qui l'a remporté.
+            className={finished ? 'pile-cards final pop-in' : `pile-cards sweep to-${sideOf(game, lastPlay.playerIndex)}`}
+            key={lastPlay.combination!.cards.map((c) => c.id).join()}
+          >
             {lastPlay.combination!.cards.map((c) => (
               <CardView key={c.id} card={c} />
             ))}
