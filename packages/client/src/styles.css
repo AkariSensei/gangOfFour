@@ -195,37 +195,120 @@ input {
   margin: 0 auto;
   padding: clamp(1.5rem, 6vh, 4rem) 1rem 2rem;
 }
-.home-logo {
-  display: block;
-  width: clamp(130px, 22vh, 190px);
-  margin: 0 auto 1.25rem;
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  transform: rotate(-4deg);
+/* Écran titre : éventail des cartes maîtresses (phénix, 1 multicolore, dragon) derrière le dos de carte. */
+.home-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.home-fan {
+  --fan-w: clamp(78px, 14vh, 132px);
+  position: relative;
+  width: calc(var(--fan-w) * 2.9);
+  height: calc(var(--fan-w) * 1.62);
+  margin-bottom: 1.6rem;
+}
+.home-fan img {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: var(--fan-w);
+  margin-left: calc(var(--fan-w) / -2);
+  border-radius: 7% / 4.5%;
+  transform-origin: 50% 115%;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+.home-fan img:nth-child(1) {
+  transform: rotate(-30deg);
+}
+.home-fan img:nth-child(2) {
+  transform: rotate(-15deg);
+}
+.home-fan img:nth-child(3) {
+  transform: rotate(15deg);
+}
+.home-fan img:nth-child(4) {
+  transform: rotate(30deg);
+}
+.home-fan .home-logo {
+  width: calc(var(--fan-w) * 1.06);
+  margin-left: calc(var(--fan-w) * -0.53);
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
   animation: float 6s ease-in-out infinite;
 }
 @keyframes float {
+  0%,
+  100% {
+    transform: rotate(2deg);
+  }
   50% {
-    transform: rotate(-2deg) translateY(-6px);
+    transform: rotate(4deg) translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-fan .home-logo {
+    animation: none;
+    transform: rotate(2deg);
   }
 }
 .home h1 {
   font-family: var(--font-title);
   color: var(--page-title);
-  font-size: clamp(2.2rem, 7vw, 3.2rem);
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  letter-spacing: 0.03em;
+  line-height: 1.05;
   margin: 0;
   text-align: center;
-  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 6px 22px rgba(0, 0, 0, 0.55);
 }
 .home h1 span {
   color: var(--gold);
 }
+/* Accroche encadrée de deux filets dorés */
 .tagline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
   color: var(--page-sub);
   text-align: center;
-  margin: 0.5rem 0 1.75rem;
+  margin: 0.6rem 0 0.9rem;
 }
-/* Sur grand écran, l'accueil s'étale en colonnes : jouer, classement, dernières parties. */
+.home-hero .tagline::before,
+.home-hero .tagline::after {
+  content: '';
+  flex: none;
+  width: clamp(18px, 5vw, 56px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+.home-hero .tagline::after {
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+@media (max-width: 480px) {
+  .home-hero .tagline::before,
+  .home-hero .tagline::after {
+    display: none;
+  }
+}
+/* Panneaux de l'accueil et du salon : cuir sombre bordé de laiton, comme les places autour de la table. */
+.home .panel,
+.lobby .panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 30%),
+    linear-gradient(180deg, #21170e, #160f09);
+  border: 1px solid rgba(232, 185, 49, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.1),
+    var(--panel-shadow);
+}
+.home .panel h2 {
+  color: #f3d27a;
+}
 .recent-games {
   margin-top: 1.25rem;
   padding: 1.1rem 1.25rem;
@@ -235,6 +318,7 @@ input {
   font-size: 1.1rem;
   margin: 0 0 0.6rem;
 }
+/* Grand écran : l'écran titre en haut, puis trois colonnes autour du bloc pour jouer, au centre. */
 @media (min-width: 820px) {
   .home {
     max-width: 1240px;
@@ -251,25 +335,6 @@ input {
   }
   .home-hero {
     grid-area: hero;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2rem;
-    margin-bottom: 0.75rem;
-  }
-  .home-hero .home-logo {
-    width: 110px;
-    margin: 0;
-  }
-  .home-hero h1,
-  .home-hero .tagline {
-    text-align: left;
-  }
-  .home-hero .tagline {
-    margin-bottom: 0;
-  }
-  .home-hero .rules-link {
-    margin: 0.4rem 0 0 -0.4rem;
   }
   .home-start {
     grid-area: start;
@@ -287,10 +352,11 @@ input {
 }
 @media (min-width: 1180px) {
   .home {
-    grid-template-columns: minmax(320px, 380px) minmax(0, 1.2fr) minmax(0, 1fr);
+    max-width: 1320px;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px) minmax(0, 1fr);
     grid-template-areas:
       'hero hero hero'
-      'start rank recent';
+      'rank start recent';
     grid-template-rows: auto 1fr;
   }
 }
@@ -427,6 +493,10 @@ button.mute {
 button.mute:hover,
 button.mute.on {
   opacity: 1;
+}
+/* Sur la plaque sombre d'un adversaire, le bouton doit rester bien visible. */
+.opponent button.mute {
+  opacity: 0.8;
 }
 
 .player-list .remove-bot:hover {
@@ -1799,7 +1869,8 @@ button.mute.on {
   flex-shrink: 0;
 }
 .live-players {
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.92rem;
   overflow-wrap: anywhere;
 }
 @media (max-width: 900px), (max-height: 560px) {

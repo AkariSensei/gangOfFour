@@ -107,16 +107,21 @@ export function Home({
   return (
     <main className="home">
       <header className="home-hero">
-        <img className="home-logo" src="/cards/dos.webp" alt="" />
-        <div>
-          <h1>
-            Gang <span>of</span> Four
-          </h1>
-          <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
-          <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
-            Règles du jeu
-          </button>
+        {/* Écran titre : les cartes maîtresses du jeu en éventail derrière le dos de carte. */}
+        <div className="home-fan" aria-hidden>
+          <img src="/cards/PV.webp" alt="" />
+          <img src="/cards/1M.webp" alt="" />
+          <img src="/cards/DR.webp" alt="" />
+          <img src="/cards/PJ.webp" alt="" />
+          <img className="home-logo" src="/cards/dos.webp" alt="" />
         </div>
+        <h1>
+          Gang <span>of</span> Four
+        </h1>
+        <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+        <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
+          Règles du jeu
+        </button>
       </header>
       {rules && <Rules onClose={() => setRules(false)} />}
 
