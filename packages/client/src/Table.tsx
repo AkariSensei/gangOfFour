@@ -58,6 +58,7 @@ function Opponent({
   const p = game.players[index]!;
   const active = game.phase === 'playing' && game.currentPlayer === index;
   const giving = game.phase === 'exchange' && game.exchange?.winnerIndex === index;
+  const fan = Math.min(p.cardCount, 16);
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
       <Avatar name={p.name} look={look} bot={bot} />
@@ -74,8 +75,8 @@ function Opponent({
         </div>
       </div>
       <div className="mini-fan" aria-hidden>
-        {Array.from({ length: Math.min(p.cardCount, 16) }, (_, i) => (
-          <span key={i} className="card-back" />
+        {Array.from({ length: fan }, (_, i) => (
+          <span key={i} className="card-back" style={{ '--i': i - (fan - 1) / 2 } as CSSProperties} />
         ))}
       </div>
       {p.cardCount === 1 && game.phase === 'playing' && <span className="bubble alert">Carte !</span>}

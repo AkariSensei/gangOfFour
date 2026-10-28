@@ -599,7 +599,15 @@ button.mute.on {
   border: none;
   border-radius: 7%/4.5%;
   background: #efe3c4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+}
+/* Cartes posées sur le tapis : ombre portée plus marquée, comme posées à plat. */
+.pile-cards .card {
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 8px 18px rgba(0, 0, 0, 0.45);
 }
 .card img {
   display: block;
@@ -662,23 +670,77 @@ button.mute.on {
 .score-pill.me {
   border-color: var(--gold);
 }
+/* Le score dans un jeton ivoire à bord crénelé */
+.score-pill strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.7em;
+  height: 1.7em;
+  padding: 0 0.3em;
+  margin-left: 0.2rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: radial-gradient(circle, #f8ecc9 55%, #dcc183);
+  border: 2px dashed rgba(122, 74, 32, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.2rem 0.15rem 0.65rem;
+}
 .score-pill.leader strong::after {
   content: ' ★';
   color: var(--gold);
 }
 
+/*
+ * Table de tripot : rebord en bois veiné (fond du conteneur), tapis de feutre texturé posé dedans (::before)
+ * et filet de laiton qui court autour du tapis (::after). Les joueurs et le pli passent par-dessus.
+ */
 .felt {
+  --rail: clamp(10px, 1.9vh, 18px);
+  --felt-r: clamp(40px, 18vh, 200px);
   position: relative;
+  /* Contexte d'empilement propre : le tapis et le filet (z-index -1) restent sous les joueurs et le pli. */
+  isolation: isolate;
   min-height: 0;
-  border-radius: clamp(40px, 18vh, 200px);
+  border-radius: var(--felt-r);
   background:
-    radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.08), transparent 60%),
-    radial-gradient(ellipse, var(--felt), var(--felt-dark));
-  border: clamp(6px, 1.2vh, 12px) solid var(--wood);
+    linear-gradient(180deg, rgba(255, 226, 180, 0.16), transparent 35%, rgba(0, 0, 0, 0.3)),
+    repeating-linear-gradient(96deg, rgba(0, 0, 0, 0.1) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(84deg, rgba(255, 214, 160, 0.06) 0 1px, transparent 1px 12px),
+    linear-gradient(135deg, #774522, #4b2a12 45%, #6e3f1e 70%, #45260f);
   box-shadow:
-    inset 0 0 0 2px var(--wood-light),
-    inset 0 0 60px rgba(0, 0, 0, 0.45),
-    0 14px 40px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 rgba(255, 220, 170, 0.35),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 22px 50px rgba(0, 0, 0, 0.55);
+}
+.felt::before,
+.felt::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+.felt::before {
+  inset: var(--rail);
+  border-radius: calc(var(--felt-r) - var(--rail));
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, 0.1), transparent 55%),
+    radial-gradient(ellipse at center, #24704d, var(--felt) 45%, var(--felt-dark) 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.35),
+    inset 0 6px 18px rgba(0, 0, 0, 0.45),
+    inset 0 0 90px rgba(0, 0, 0, 0.5);
+}
+.felt::after {
+  inset: calc(var(--rail) + clamp(10px, 2.4vh, 22px));
+  border-radius: calc(var(--felt-r) - var(--rail) - clamp(10px, 2.4vh, 22px));
+  border: 1px solid rgba(232, 185, 49, 0.22);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 .avatar {
@@ -702,10 +764,16 @@ button.mute.on {
   align-items: center;
   column-gap: 0.55rem;
   row-gap: 0.35rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.8rem 0.45rem;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(2px);
+  /* Plaque en cuir sombre bordée de laiton */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 40%),
+    linear-gradient(180deg, #2b1d10, #1a110a);
+  border: 1px solid rgba(232, 185, 49, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 190, 0.12),
+    0 8px 18px rgba(0, 0, 0, 0.45);
   transition: box-shadow 0.25s ease, transform 0.25s ease;
   z-index: 2;
 }
@@ -725,17 +793,17 @@ button.mute.on {
   opacity: 0.5;
 }
 .seat-top {
-  top: clamp(8px, 2vh, 18px);
+  top: calc(var(--rail) + clamp(6px, 1.6vh, 14px));
   left: 50%;
   translate: -50% 0;
 }
 .seat-left {
-  left: clamp(8px, 2vw, 24px);
+  left: calc(var(--rail) + clamp(8px, 1.6vw, 22px));
   top: 50%;
   translate: 0 -50%;
 }
 .seat-right {
-  right: clamp(8px, 2vw, 24px);
+  right: calc(var(--rail) + clamp(8px, 1.6vw, 22px));
   top: 50%;
   translate: 0 -50%;
 }
@@ -752,12 +820,13 @@ button.mute.on {
   font-weight: 700;
   color: #fff;
 }
+/* Main d'un adversaire : petit éventail de dos de cartes, légèrement arqué. */
 .mini-fan {
   grid-column: 1 / -1;
   display: flex;
   justify-content: center;
-  padding-left: 9px;
-  min-height: 25px;
+  padding: 4px 0 2px 13px;
+  min-height: 36px;
 }
 .card-back {
   width: 17px;
@@ -766,6 +835,12 @@ button.mute.on {
   border-radius: 2px;
   background: url('/cards/dos-mini.webp') center / cover;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.mini-fan .card-back {
+  width: 22px;
+  margin-left: -13px;
+  transform-origin: 50% 160%;
+  transform: rotate(calc(var(--i, 0) * 2.5deg));
 }
 .bubble {
   position: absolute;
@@ -969,8 +1044,15 @@ button.mute.on {
 }
 
 /* Ma zone : statut, main en éventail, boutons */
+/* Ma place : un plateau de cuir au bord de la table, dans le même bois que le rebord. */
 .my-area {
-  background: rgba(0, 0, 0, 0.32);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
+    linear-gradient(180deg, #22170d, #150e08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.12),
+    0 -2px 0 #5a3519,
+    0 10px 30px rgba(0, 0, 0, 0.45);
   border-radius: var(--radius);
   padding: 0.6rem clamp(0.6rem, 1.5vw, 1.1rem) 0.75rem;
   border: 2px solid transparent;
@@ -1304,13 +1386,18 @@ button.mute.on {
     --pile-w: clamp(38px, calc(5vw + 1.5vh), 68px);
   }
   .felt {
-    border-radius: 28px;
+    --felt-r: 28px;
+    --rail: 9px;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: auto minmax(0, 1fr);
     align-items: start;
     gap: 0.5rem;
-    padding: 0.5rem;
+    padding: calc(var(--rail) + 0.5rem);
+  }
+  /* Pas de filet de laiton ici : les places passent en grille et il les traverserait. */
+  .felt::after {
+    display: none;
   }
   .players-3 .felt {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1456,8 +1543,15 @@ button.mute.on {
     text-overflow: ellipsis;
     font-size: 0.85rem;
   }
+  /* Éventail réduit : on voit encore combien de cartes il reste à chacun. */
   .mini-fan {
-    display: none;
+    min-height: 24px;
+    padding-left: 9px;
+  }
+  .mini-fan .card-back {
+    width: 13px;
+    margin-left: -9px;
+    transform: rotate(calc(var(--i, 0) * 3deg));
   }
   .hand {
     flex-wrap: wrap;
