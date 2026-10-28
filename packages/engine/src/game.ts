@@ -417,6 +417,8 @@ export interface PlayerView {
   lastCut: Cut | null;
   lastRound: RoundResult | null;
   winners: number[];
+  /** Statistiques de chaque joueur depuis le début de la partie (publiques : tout le monde a vu les manches). */
+  stats: PlayerStats[];
 }
 
 /** Ce qu'un joueur a le droit de voir : sa main, et seulement le nombre de cartes des autres. */
@@ -439,5 +441,6 @@ export function getPlayerView(state: GameState, playerIndex: number): PlayerView
     lastCut: state.lastCut ?? null,
     lastRound: state.lastRound,
     winners: state.winners,
+    stats: statsOf(state),
   };
 }

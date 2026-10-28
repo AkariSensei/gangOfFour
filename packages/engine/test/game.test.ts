@@ -331,4 +331,12 @@ describe('statistiques de la partie', () => {
     expect(state.stats![0]).toEqual({ roundsWon: 1, gangs: 1, worstRound: 0 });
     expect(state.stats![1]!.worstRound).toBe(2);
   });
+
+  it('montre les statistiques de tous les joueurs à chacun, pour le podium de fin de partie', () => {
+    let state = withHands([['g5', 'y5', 'r5', 'g5'], ['g2', 'g3'], ['y2', 'y3']]);
+    const result = applyAction(state, { type: 'play', playerIndex: 0, cardIds: state.players[0]!.hand.map((c) => c.id) });
+    if (!result.ok) throw new Error(result.error);
+    state = result.state;
+    expect(getPlayerView(state, 2).stats).toEqual(state.stats);
+  });
 });

@@ -102,7 +102,44 @@ function Scores({ game }: { game: PlayerView }) {
 /** Temps minimal d'affichage du résumé avant qu'on puisse lancer la suite, pour que chacun ait le temps de le lire. */
 const RECAP_MIN_MS = 8000;
 
-function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
+/** Fin de partie : les trois premiers sur un podium (le gagnant au centre), avec leurs chiffres de la partie. */
+function Podium({ game, seats }: { game: PlayerView; seats: RoomView['players'] }) {
+  const ranking = game.players.map((p, i) => ({ ...p, i })).sort((a, b) => a.score - b.score);
+  // Place sur le podium : à égalité de score, même marche.
+  const place = (score: number) => ranking.findIndex((p) => p.score === score) + 1;
+  const steps = [ranking[1], ranking[0], ranking[2]].filter((p) => p !== undefined);
+  return (
+    <div className="podium">
+      {steps.map((p) => {
+        const stats = game.stats[p.i];
+        const rank = place(p.score);
+        return (
+          <div key={p.id} className={`podium-step rank-${rank} ${p.i === game.you ? 'me' : ''}`}>
+            {rank === 1 && (
+              <span className="podium-crown" aria-hidden>
+                👑
+              </span>
+            )}
+            <Avatar name={p.name} look={seats[p.i]} bot={!!(seats[p.i]?.bot || seats[p.i]?.vacant)} />
+            <span className="podium-name">{p.name}</span>
+            <span className="podium-score">{p.score} pts</span>
+            {stats && (
+              <span className="podium-stats">
+                {stats.roundsWon === 0
+                  ? 'aucune manche gagnée'
+                  : `${stats.roundsWon} manche${stats.roundsWon > 1 ? 's' : ''} gagnée${stats.roundsWon > 1 ? 's' : ''}`}
+                {stats.gangs > 0 && ` · ${stats.gangs} gang${stats.gangs > 1 ? 's' : ''}`}
+              </span>
+            )}
+            <div className="podium-block">{rank}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RoundOver({ game, seats, onExit }: { game: PlayerView; seats: RoomView['players']; onExit: () => void }) {
   const r = game.lastRound!;
   const over = game.phase === 'gameOver';
   const [readUntil] = useState(() => Date.now() + RECAP_MIN_MS);
@@ -112,13 +149,11 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
   const winnerNames = game.winners.map((i) => game.players[i]!.name).join(' et ');
   return (
     <div className="overlay">
-      <div className="panel modal pop-in">
+      <div className={`panel modal pop-in ${over ? 'game-over' : ''}`}>
         {over ? (
           <>
-            <div className="trophy" aria-hidden>
-              🏆
-            </div>
             <h2>{winnerNames} gagne la partie !</h2>
+            <Podium game={game} seats={seats} />
           </>
         ) : (
           <h2>{game.players[r.winnerIndex]!.name} remporte la manche {game.round}</h2>
@@ -1012,7 +1047,7 @@ export function Table({
       )}
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown ? null : bannerText} />
-      {showSummary && game.lastRound && <RoundOver game={game} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} onExit={exit} />}
       {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );

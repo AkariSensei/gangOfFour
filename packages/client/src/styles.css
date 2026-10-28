@@ -1491,6 +1491,116 @@ button.mute.on {
   font-size: 3rem;
   line-height: 1;
 }
+
+/* Podium de fin de partie : trois marches de bois, le gagnant au centre sur la plus haute. */
+.modal.game-over {
+  width: min(600px, 100%);
+}
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.podium-step {
+  position: relative;
+  flex: 1 1 0;
+  max-width: 170px;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  animation: podium-rise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.podium-step.rank-1 {
+  animation-delay: 0.45s;
+}
+.podium-step.rank-2 {
+  animation-delay: 0.2s;
+}
+@keyframes podium-rise {
+  from {
+    translate: 0 40px;
+    opacity: 0;
+  }
+}
+.podium-step .avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 1.1rem;
+}
+.podium-step.rank-1 .avatar {
+  width: 68px;
+  height: 68px;
+  font-size: 1.4rem;
+  box-shadow:
+    0 0 0 3px var(--gold),
+    0 0 26px rgba(232, 185, 49, 0.6);
+}
+.podium-crown {
+  font-size: 1.7rem;
+  line-height: 1;
+  margin-bottom: -0.35rem;
+  animation: crown 2.4s ease-in-out 1s infinite;
+}
+@keyframes crown {
+  50% {
+    translate: 0 -4px;
+    rotate: -6deg;
+  }
+}
+.podium-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.podium-step.me .podium-name {
+  color: var(--gold);
+}
+.podium-score {
+  font-family: var(--font-title);
+  font-weight: 700;
+}
+.podium-stats {
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-height: 2.2em;
+}
+.podium-block {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  margin-top: 0.3rem;
+  border-radius: 8px 8px 0 0;
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: rgba(255, 236, 200, 0.85);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 226, 180, 0.18), transparent 40%),
+    repeating-linear-gradient(96deg, rgba(0, 0, 0, 0.1) 0 2px, transparent 2px 7px),
+    linear-gradient(135deg, #774522, #4b2a12 60%, #6e3f1e);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.35);
+}
+.podium-step.rank-1 .podium-block {
+  height: 92px;
+  color: #3a2700;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 190, 0.35), transparent 45%),
+    linear-gradient(135deg, #f3cb4d, var(--gold-dark));
+  text-shadow: 0 1px 0 rgba(255, 240, 190, 0.6);
+}
+.podium-step.rank-2 .podium-block {
+  height: 64px;
+}
+.podium-step.rank-3 .podium-block,
+.podium-step.rank-4 .podium-block {
+  height: 44px;
+}
 .hand .card.dimmed img {
   filter: brightness(0.55) saturate(0.6);
 }
