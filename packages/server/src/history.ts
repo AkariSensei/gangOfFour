@@ -114,8 +114,14 @@ export class GameHistory {
    * Badges « en direct » d'un compte en comptant la partie en cours (gangs posés, manches gagnées, pire manche…) :
    * ceux qu'on peut gagner pendant la partie, et donc annoncer dès qu'ils tombent.
    */
-  liveBadgesOfAccount(accountId: string, game: GameState, bots: number[], accounts: (string | undefined)[]): Badge[] {
-    const record = this.toRecord(game, new Date(), bots, accounts);
+  liveBadgesOfAccount(
+    accountId: string,
+    game: GameState,
+    bots: number[],
+    accounts: (string | undefined)[],
+    levels: (BotLevel | undefined)[] = [],
+  ): Badge[] {
+    const record = this.toRecord(game, new Date(), bots, accounts, levels);
     const me = record.players.find((p) => this.ranked(p) && this.owner(p) === accountId);
     return liveBadgesOf(me ? [...this.gamesOf(accountId), { record, me }] : this.gamesOf(accountId));
   }

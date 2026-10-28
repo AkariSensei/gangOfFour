@@ -34,8 +34,17 @@ const once = (id: string, icon: string, name: string, description: string, test:
 });
 
 /**
+ * Ces badges ne comptent que les parties « sérieuses » : en ligne, ou seul contre des bots tous en difficile.
+ * Les autres parties n'y entrent pas du tout (elles ne cassent pas une série non plus), pour qu'on ne puisse pas
+ * les gagner à la chaîne contre des bots faciles.
+ */
+const seriousOnly = (definitions: Definition[]) =>
+  definitions.map((d) => ({ ...d, value: (games: Game[], challenges: ChallengeStats) => d.value(games.filter(serious), challenges) }));
+
+/**
  * Badges à gagner, du plus simple au plus rare, rangés par thème. Ils comptent toutes les parties
- * (en ligne et contre les bots), sauf ceux qui parlent explicitement de jouer avec d'autres personnes ou contre les bots.
+ * (en ligne et contre les bots), sauf ceux qui parlent explicitement de jouer avec d'autres personnes ou contre les bots,
+ * et les victoires, séries et scores, qui ne comptent que les parties sérieuses (`seriousOnly`).
  */
 const BADGES: Definition[] = [
   ...themed('Parties jouées', [
@@ -62,7 +71,7 @@ const BADGES: Definition[] = [
     once('beat-hard-1', '🧠', 'Plus fort que la machine', 'Gagne une partie seul contre des bots tous en difficile.', (x) => x.me.winner && allHard(x)),
     { id: 'beat-hard-10', icon: '⚙️', name: 'Maître des machines', description: 'Gagne 10 parties seul contre des bots tous en difficile.', goal: 10, value: (g) => wins(g.filter(allHard)) },
   ]),
-  ...themed('Victoires', [
+  ...themed('Victoires', seriousOnly([
     { id: 'first-win', icon: '🏆', name: 'Premier sang', description: 'Gagne une partie.', goal: 1, value: (g) => wins(g) },
     { id: 'wins-5', icon: '🌱', name: 'Prometteur', description: 'Gagne 5 parties.', goal: 5, value: (g) => wins(g) },
     { id: 'wins-25', icon: '🎩', name: 'Chef de gang', description: 'Gagne 25 parties.', goal: 25, value: (g) => wins(g) },
@@ -70,13 +79,13 @@ const BADGES: Definition[] = [
     { id: 'wins-150', icon: '🦁', name: 'Le Boss', description: 'Gagne 150 parties.', goal: 150, value: (g) => wins(g) },
     once('win-3', '🥉', 'Trio gagnant', 'Gagne une partie à 3 joueurs.', (x) => x.me.winner && x.record.players.length === 3),
     once('win-4', '🍀', 'Carré gagnant', 'Gagne une partie à 4 joueurs.', (x) => x.me.winner && x.record.players.length === 4),
-  ]),
-  ...themed('Séries', [
+  ])),
+  ...themed('Séries', seriousOnly([
     { id: 'streak-2', icon: '✌️', name: 'Doublé', description: '2 victoires d’affilée.', goal: 2, value: (g) => streak(g, (x) => x.me.winner) },
     { id: 'streak-4', icon: '🔥', name: 'En série', description: '4 victoires d’affilée.', goal: 4, value: (g) => streak(g, (x) => x.me.winner) },
     { id: 'streak-7', icon: '⚡', name: 'Intouchable', description: '7 victoires d’affilée.', goal: 7, value: (g) => streak(g, (x) => x.me.winner) },
     { id: 'streak-10', icon: '💎', name: 'Invincible', description: '10 victoires d’affilée.', goal: 10, value: (g) => streak(g, (x) => x.me.winner) },
-  ]),
+  ])),
   ...themed('Places', [
     { id: 'second-10', icon: '🥈', name: 'Éternel second', description: 'Finis 10 parties à la deuxième place.', goal: 10, value: (g) => g.filter((x) => rank(x) === 2).length },
     { id: 'last-10', icon: '🏮', name: 'Lanterne rouge', description: 'Finis 10 parties à la dernière place.', goal: 10, value: (g) => g.filter(last).length },
@@ -98,7 +107,7 @@ const BADGES: Definition[] = [
     { id: 'fireworks', icon: '🎆', name: 'Feu d’artifice', description: 'Pose 3 gangs dans une même partie.', goal: 3, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
     { id: 'bouquet', icon: '💐', name: 'Bouquet final', description: 'Pose 5 gangs dans une même partie.', goal: 5, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
   ]),
-  ...themed('Scores', [
+  ...themed('Scores', seriousOnly([
     once('perfect', '💯', 'Parfait', 'Gagne une partie sans prendre un seul point.', (x) => x.me.winner && x.me.score === 0),
     once('clean-win', '🛡️', 'Sans une égratignure', 'Gagne une partie avec moins de 10 points.', (x) => x.me.winner && x.me.score < 10),
     once('photo-finish', '📸', 'Photo finish', 'Gagne une partie avec un seul point d’avance.', (x) => x.me.winner && margin(x) === 1),
@@ -106,7 +115,7 @@ const BADGES: Definition[] = [
     once('cold-shower', '🚿', 'Douche froide', 'Prends 40 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 40),
     once('scapegoat', '🐐', 'Bouc émissaire', 'Prends 80 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 80),
     once('castaway', '⚓', 'Naufragé', 'Finis une partie avec 150 points ou plus.', (x) => x.me.score >= 150),
-  ]),
+  ])),
   ...themed('Défi du jour', [
     { id: 'challenge-1', icon: '📆', name: 'Relève le gant', description: 'Joue ton premier défi du jour.', goal: 1, value: (_g, c) => c.played },
     { id: 'challenge-win-1', icon: '🎲', name: 'Défi relevé', description: 'Gagne un défi du jour.', goal: 1, value: (_g, c) => c.wins },
@@ -137,6 +146,8 @@ const wins = (games: Game[]) => games.filter((g) => g.me.winner).length;
 const humans = (g: Game) => g.record.players.filter((p) => !p.bot).length;
 /** Seul contre des bots, tous réglés en difficile. */
 const allHard = (g: Game) => humans(g) < 2 && g.record.players.filter((p) => p.bot).every((p) => p.botLevel === 'hard');
+/** Partie sérieuse : en ligne (au moins deux personnes), ou seul contre des bots tous en difficile. */
+const serious = (g: Game) => humans(g) >= 2 || allHard(g);
 /** Parties en ligne : au moins deux personnes à la table. */
 const online = (games: Game[]) => games.filter((g) => humans(g) >= 2);
 /** Place à la fin de la partie (1 = le score le plus bas ; à égalité, même place). */

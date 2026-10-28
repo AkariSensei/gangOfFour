@@ -118,7 +118,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       new Date(),
       botSeats(room),
       room.seats.map((s) => s.account),
-      room.seats.map((s) => (s.bot ? (s.level ?? 'normal') : undefined)),
+      botLevels(room),
     );
     io.emit('stats:changed');
   }
@@ -134,6 +134,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     io.emit('stats:changed');
   }
 
+  /** Niveau de chaque bot de la table (ajouté par l'hôte), pour l'historique et les badges. */
+  const botLevels = (room: Room) => room.seats.map((s) => (s.bot ? (s.level ?? 'normal') : undefined));
   const botSeats = (room: Room) => room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
   const won = (b: Badge) => b.value >= b.goal;
 
@@ -153,7 +155,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const had = (seen[accountId] ??= history.badgesOfAccount(accountId).filter(won).map((b) => b.id));
       // Pendant un défi, rien ne s'annonce en direct : la manche ne compte pas pour les badges des parties.
       if (room.challenge && !room.recorded) continue;
-      const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts);
+      const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts, botLevels(room));
       const fresh = now.filter((b) => won(b) && !had.includes(b.id));
       if (fresh.length === 0) continue;
       had.push(...fresh.map((b) => b.id));

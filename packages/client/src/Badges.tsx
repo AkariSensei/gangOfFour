@@ -162,7 +162,8 @@ export function BadgesPage({
       <p className="muted small badges-hint">
         📌 Épingle jusqu'à 3 badges pour les montrer sur ta fiche
         {showcase.length === 0 ? ' : sans choix, ce sont tes 3 badges les plus rares.' : ` (${showcase.length} / 3).`} Le
-        pourcentage indique la part des joueurs qui ont obtenu le badge.
+        pourcentage indique la part des joueurs qui ont obtenu le badge. Victoires, séries et scores ne comptent que les parties en
+        ligne, ou seul contre des bots tous en difficile.
       </p>
       {!badges ? (
         <p className="muted">Chargement…</p>

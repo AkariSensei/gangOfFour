@@ -150,14 +150,17 @@ describe('GameHistory', () => {
     ];
     history.record(second);
     history.record(finished({ Alice: 90, Bruno: 50, Chloé: 60 }));
-    // Seule contre des bots : compte pour les badges de victoire, pas pour « Bon collègue ».
-    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2]);
+    // Seule contre des bots moyens : compte pour « Habitué », pas pour les victoires ni « Bon collègue ».
+    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'normal', 'normal']);
+    // Seule contre des bots tous difficiles : la victoire compte.
+    history.record(finished({ Alice: 5, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'hard']);
     const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
     expect(badges('Alice')).toMatchObject({
       'first-win': '1/1',
-      'games-25': '4/25',
+      'games-25': '5/25',
       'online-25': '3/25',
       'wins-25': '3/25',
+      perfect: '0/1',
       'streak-4': '2/4',
       'gang-1': '1/1',
       'gang-25': '4/25',
