@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { BotLevel, ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatPanel, KickButton, MuteButton } from './Chat';
-import { errorLabel } from './labels';
+import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket } from './socket';
 
 /** Scores de fin de partie proposés à l'hôte (le serveur accepte les mêmes). */
@@ -12,7 +12,6 @@ const TURN_SECONDS = [0, 30, 60];
 /** Emplacement des quatre places autour de la table, dans l'ordre d'arrivée à partir de la sienne. */
 const SEATS = ['bottom', 'left', 'top', 'right'] as const;
 /** Niveaux de bot proposés à l'hôte. */
-const LEVEL_LABELS: Record<BotLevel, string> = { easy: 'Facile', normal: 'Moyen', hard: 'Difficile' };
 const BOT_LEVELS = Object.entries(LEVEL_LABELS) as [BotLevel, string][];
 
 export function Lobby({

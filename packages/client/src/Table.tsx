@@ -1,10 +1,10 @@
 import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatMessage, Look, RoomView } from '../../server/src/protocol';
+import type { BotLevel, ChatMessage, Look, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
-import { cardLabel, combinationLabel, errorLabel } from './labels';
+import { LEVEL_LABELS, cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert } from './turnAlert';
 import { useAutoPass } from './autoPass';
@@ -35,6 +35,7 @@ function Opponent({
   seat,
   connected,
   bot,
+  level,
   away,
   look,
   move,
@@ -47,6 +48,8 @@ function Opponent({
   seat: Seat;
   connected: boolean;
   bot: boolean;
+  /** Niveau d'un vrai bot (pas d'un bot qui remplace un absent). */
+  level?: BotLevel;
   away: boolean;
   look?: Look;
   move?: TrickEntry;
@@ -66,6 +69,7 @@ function Opponent({
         <div className="opponent-name">
           {p.name}
           {game.dealer === index && <span className="tag">donneur</span>}
+          {level && <span className={`tag level-${level}`}>{LEVEL_LABELS[level].toLowerCase()}</span>}
           {away ? <span className="tag">🤖 bot</span> : !connected && <span className="tag">hors ligne</span>}
           {onMute ? <MuteButton name={p.name} muted={muted} onClick={onMute} /> : muted && <span className="tag">🔇</span>}
           {onKick && <KickButton name={p.name} onKick={onKick} />}
@@ -905,6 +909,7 @@ export function Table({
             seat={seat}
             connected={room.players[index]?.connected ?? true}
             bot={!!(room.players[index]?.bot || room.players[index]?.vacant)}
+            level={room.players[index]?.bot ? room.players[index]?.level : undefined}
             away={room.players[index]?.away ?? false}
             look={room.players[index]}
             move={moves.get(index)}

@@ -1884,11 +1884,18 @@ button.mute.on {
     height: 32px;
     font-size: 0.75rem;
   }
+  /* Les étiquettes (niveau du bot, donneur…) passent sous le nom plutôt que de déborder de la place. */
   .opponent-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.3rem;
     max-width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
     font-size: 0.85rem;
+  }
+  .opponent-name .tag {
+    margin-left: 0;
   }
   /* Éventail réduit : on voit encore combien de cartes il reste à chacun. */
   .mini-fan {

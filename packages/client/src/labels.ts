@@ -1,5 +1,8 @@
 import type { ActionError, Card, CombinationType } from '@gof/engine';
-import type { RoomError } from '../../server/src/protocol';
+import type { BotLevel, RoomError } from '../../server/src/protocol';
+
+/** Niveaux de bot, affichés dans le salon et sur la table. */
+export const LEVEL_LABELS: Record<BotLevel, string> = { easy: 'Facile', normal: 'Moyen', hard: 'Difficile' };
 
 export const COMBINATION_LABELS: Record<CombinationType, string> = {
   single: 'Carte seule',
