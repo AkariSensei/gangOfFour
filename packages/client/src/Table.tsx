@@ -558,8 +558,16 @@ export function Table({
   const exchange = game.exchange;
   const mustGive = game.phase === 'exchange' && exchange?.winnerIndex === me;
   const mustCut = game.phase === 'cut' && game.dealer === me;
-  useTurnAlert(myTurn || mustGive || mustCut);
   const { autoPass, toggleAutoPass } = useAutoPass(room, game.players[me]?.id);
+  // Cartes qui peuvent battre la table, pour mettre les autres en retrait (règle « Carte ! » comprise).
+  const playable = useMemo(() => {
+    if (!myTurn || !game.table) return null;
+    const nextPlayer = game.players[(me + game.direction + n) % n]!;
+    return playableCards(game.hand, game.table.combination, nextPlayer.cardCount === 1);
+  }, [myTurn, game.table, game.hand, game.players, game.direction, me, n]);
+  // Rien ne passe et la passe auto est active : le serveur passe tout seul, inutile d'annoncer le tour.
+  const passingAlone = autoPass && playable?.size === 0;
+  useTurnAlert((myTurn && !passingAlone) || mustGive || mustCut);
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   useEffect(() => {
@@ -575,7 +583,9 @@ export function Table({
   const myAction = myTurn || mustGive || mustCut;
   // L'annonce change de texte à chaque nouveau tour (le compteur de cartes jouées la relance).
   const bannerText = myTurn
-    ? game.table
+    ? passingAlone
+      ? null
+      : game.table
       ? 'À toi de jouer !'
       : 'À toi d’ouvrir !'
     : mustGive
@@ -711,13 +721,6 @@ export function Table({
   }
   const selectedCards = selected.map((id) => game.hand.find((c) => c.id === id)).filter((c): c is Card => !!c);
 
-  // Cartes qui peuvent battre la table, pour mettre les autres en retrait (règle « Carte ! » comprise).
-  const playable = useMemo(() => {
-    if (!myTurn || !game.table) return null;
-    const nextPlayer = game.players[(me + game.direction + n) % n]!;
-    return playableCards(game.hand, game.table.combination, nextPlayer.cardCount === 1);
-  }, [myTurn, game.table, game.hand, game.players, game.direction, me, n]);
-
   const hint = useMemo(() => {
     if (planned?.type === 'pass') return { text: 'Passe prévue : tu passeras dès que ce sera ton tour', ok: true };
     if (planned?.type === 'play') return { text: 'Coup prévu : il partira dès que ce sera ton tour (s\'il passe encore)', ok: true };
@@ -828,6 +831,8 @@ export function Table({
       : `${game.players[exchange!.winnerIndex]!.name} choisit une carte à rendre à ${game.players[exchange!.loserIndex]!.name}…`;
   } else if (game.phase !== 'playing') {
     status = 'Fin de la manche';
+  } else if (myTurn && passingAlone) {
+    status = 'Rien ne passe : tu passes automatiquement…';
   } else if (myTurn) {
     status = game.mustPlayMultiOne ? 'À toi ! Ouvre la partie avec le 1 multicolore.' : 'À toi de jouer !';
   } else {
@@ -919,7 +924,7 @@ export function Table({
           </div>
         </section>
       ) : (
-        <section className={`my-area ${myTurn || mustGive ? 'active' : ''}`}>
+        <section className={`my-area ${(myTurn && !passingAlone) || mustGive ? 'active' : ''}`}>
           {myAction && secondsLeft !== null && (
             <div className="turn-timer" aria-hidden>
               <div
@@ -930,7 +935,7 @@ export function Table({
           )}
           <div className="my-bar">
             <div className="status">
-              {(myTurn || mustGive) && <span className="dot" aria-hidden />}
+              {((myTurn && !passingAlone) || mustGive) && <span className="dot" aria-hidden />}
               {status}
               {secondsLeft !== null && (
                 <span

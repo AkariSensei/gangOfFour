@@ -21,7 +21,7 @@ function firstCombination(hand: Card[]): string[] | null {
   return null;
 }
 
-/** Le joueur ne peut rien poser sur la table : le serveur le fera passer tout seul. */
+/** Le joueur ne peut rien poser sur la table : il n'a plus qu'à passer. */
 export function isStuck(view: PlayerView): boolean {
   if (view.phase !== 'playing' || !view.table) return false;
   const n = view.players.length;
@@ -47,8 +47,12 @@ export async function playBotTurn(players: Client[]): Promise<void> {
     await client.emitWithAck('game:giveCard', { cardId: hand[0]!.id });
     return;
   }
-  // Rien ne passe : le serveur passe à sa place, il n'y a qu'à attendre.
-  if (isStuck(client.game!)) return;
+  // Rien ne passe : il passe (la passe automatique du serveur est coupée par défaut).
+  if (isStuck(client.game!)) {
+    const result = await client.emitWithAck('game:pass');
+    if (!result.ok) throw new Error(result.error);
+    return;
+  }
   if (mustPlayMultiOne) {
     await client.emitWithAck('game:play', { cardIds: ['m1'] });
     return;

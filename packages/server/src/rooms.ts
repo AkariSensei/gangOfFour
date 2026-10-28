@@ -30,8 +30,8 @@ export interface Seat {
   away?: boolean;
   avatar?: string;
   color?: string;
-  /** Le joueur a coupé la passe automatique : il passe lui-même même quand rien ne passe. */
-  manualPass?: boolean;
+  /** Le joueur a activé la passe automatique (coupée par défaut) : il passe tout seul quand rien ne passe. */
+  autoPass?: boolean;
   /** Compte du joueur assis : il ne peut pas prendre un second siège dans le même salon. */
   account?: string;
   /** Joueur exclu en pleine partie : un bot tient le siège jusqu'à ce qu'un nouvel humain le prenne. */
@@ -308,14 +308,14 @@ export class RoomManager {
 
   /**
    * Le joueur humain dont c'est le tour et qui ne peut rien poser sur la table (toute sa main est grisée) :
-   * il passera tout seul, sauf s'il a coupé l'option. Jamais quand il ouvre le pli, puisqu'il peut alors tout jouer.
+   * il passera tout seul s'il a activé l'option (coupée par défaut). Jamais quand il ouvre le pli, puisqu'il peut alors tout jouer.
    */
   stuckToPass(code: string): Seat | null {
     const room = this.get(code);
     const game = room?.game;
     if (!room || !game || room.paused || game.phase !== 'playing' || !game.table) return null;
     const seat = room.seats[game.currentPlayer];
-    if (!seat || seat.bot || seat.away || seat.manualPass) return null;
+    if (!seat || seat.bot || seat.away || !seat.autoPass) return null;
     const n = game.players.length;
     const next = game.players[(game.currentPlayer + game.direction + n) % n]!;
     const hand = game.players[game.currentPlayer]!.hand;
@@ -326,8 +326,8 @@ export class RoomManager {
   setAutoPass(code: string, playerId: string, enabled: boolean): Result {
     const seat = this.get(code)?.seats.find((s) => s.playerId === playerId && !s.bot);
     if (!seat) return { ok: false, error: 'notInRoom' };
-    if (enabled) delete seat.manualPass;
-    else seat.manualPass = true;
+    if (enabled) seat.autoPass = true;
+    else delete seat.autoPass;
     return { ok: true };
   }
 
@@ -409,7 +409,7 @@ export class RoomManager {
         connected: s.connected,
         bot: s.bot ?? false,
         away: s.away ?? false,
-        autoPass: !s.manualPass,
+        autoPass: s.autoPass ?? false,
         vacant: s.vacant ?? false,
         muted: room.muted?.includes(s.playerId) ?? false,
         ...cleanLook(s),

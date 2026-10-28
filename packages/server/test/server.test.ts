@@ -6,7 +6,7 @@ import { type PlayerView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type ClientToServerEvents, type GameServer, type GameServerOptions, type RoomView, type ServerToClientEvents, createGameServer } from '../src';
-import { isStuck, playBotTurn } from '../scripts/bot';
+import { playBotTurn } from '../scripts/bot';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: PlayerView };
 
@@ -135,7 +135,7 @@ describe('serveur de jeu', () => {
       g.phase === 'roundOver' ||
       (g.phase === 'cut' && g.dealer === g.you) ||
       (g.phase === 'exchange' && g.exchange?.winnerIndex === g.you) ||
-      (g.phase === 'playing' && g.currentPlayer === g.you && !isStuck(g));
+      (g.phase === 'playing' && g.currentPlayer === g.you);
     const humans = [alice, chloe2];
     const done = () => alice.game!.round > 1 || alice.game!.phase === 'gameOver';
     for (let steps = 0; !done(); steps++) {
@@ -563,7 +563,7 @@ describe('serveur de jeu', () => {
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
   });
 
-  it('fait passer tout seul un joueur qui ne peut rien poser (s\'il le veut), mais jamais quand il ouvre', async () => {
+  it('fait passer tout seul un joueur qui ne peut rien poser (s\'il l\'a activé), mais jamais quand il ouvre', async () => {
     await start({ botDelayMs: 50 });
     const { code, players } = await lobby(3);
     await players[0]!.emitWithAck('game:start', {});
@@ -578,14 +578,15 @@ describe('serveur de jeu', () => {
     game.players[0]!.hand = cards('rD', 'g2a', 'g3a');
     game.players[next]!.hand = cards('g1a', 'y4a', 'r6b');
     game.players[last]!.hand = cards('y7a', 'r8a', 'g9b');
-    // Le joueur suivant a coupé l'option : le serveur le laisse décider.
-    expect((await players[next]!.emitWithAck('game:autoPass', { enabled: false })).ok).toBe(true);
-    await waitFor(() => players[0]!.room!.players[next]!.autoPass === false);
+    // L'option est coupée par défaut : le serveur laisse le joueur suivant décider.
+    expect(players[0]!.room!.players.every((p) => p.autoPass === false)).toBe(true);
+    expect((await players[last]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
+    await waitFor(() => players[0]!.room!.players[last]!.autoPass === true);
     expect((await players[0]!.emitWithAck('game:play', { cardIds: ['rD'] })).ok).toBe(true);
     const now = () => server.rooms.get(code)!.game!;
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(now().currentPlayer).toBe(next);
-    // Il la réactive : les deux autres passent sans rien faire, et Alice reprend la main pour ouvrir.
+    // Il l'active à son tour : les deux autres passent sans rien faire, et Alice reprend la main pour ouvrir.
     expect((await players[next]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
     await waitFor(() => now().table === null && now().currentPlayer === 0, 2000);
     expect(now().trick.map((e) => e.combination === null)).toEqual([false, true, true]);

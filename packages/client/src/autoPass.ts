@@ -4,16 +4,17 @@ import { socket } from './socket';
 
 const AUTO_PASS_KEY = 'gof-auto-pass';
 
+/** Coupée par défaut : seul un joueur qui l'a activée lui-même passe tout seul. */
 function readAutoPassSetting(): boolean {
   try {
-    return localStorage.getItem(AUTO_PASS_KEY) !== 'off';
+    return localStorage.getItem(AUTO_PASS_KEY) === 'on';
   } catch {
-    return true;
+    return false;
   }
 }
 
 /**
- * Passe automatique quand toute la main est grisée : choix mémorisé dans le navigateur, et envoyé au serveur
+ * Passe automatique quand toute la main est grisée (coupée par défaut) : choix mémorisé dans le navigateur, et envoyé au serveur
  * dès que le siège ne l'a pas encore (nouvelle partie, reconnexion…).
  */
 export function useAutoPass(room: RoomView, myId: string | undefined) {
