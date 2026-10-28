@@ -101,7 +101,8 @@ export function analyzeCombination(cards: Card[]): Combination | null {
   }
 
   if (color) {
-    return { type: 'flush', cards, rank: [...sortedDesc.map((c) => c.value), COLOR_RANK[color]] };
+    // La plus haute carte décide, puis sa couleur (comme pour une carte seule), puis les cartes suivantes.
+    return { type: 'flush', cards, rank: [top.value, COLOR_RANK[color], ...sortedDesc.slice(1).map((c) => c.value)] };
   }
 
   if (straight) {

@@ -93,6 +93,19 @@ describe('canBeat', () => {
     expect(canBeat(combo('r3', 'r4', 'r5', 'g6', 'r7'), combo('g3', 'g4', 'g5', 'y6', 'r7'))).toBe(false);
   });
 
+  it('départage les couleurs par la plus haute carte, puis sa couleur, avant les cartes suivantes', () => {
+    const red10 = combo('r2', 'r4', 'r5', 'r6', 'r10');
+    const green10 = combo('g3', 'g5', 'g7', 'g8', 'g10');
+    const yellow10 = combo('y1', 'y2', 'y3', 'y4', 'y10');
+    // Une couleur au 10 vert ne passe pas sur une couleur au 10 rouge, même avec de plus hautes cartes ensuite…
+    expect(canBeat(green10, red10)).toBe(false);
+    // … et une couleur au 10 jaune passe sur une couleur au 10 vert.
+    expect(canBeat(yellow10, green10)).toBe(true);
+    expect(canBeat(combo('g1', 'g2', 'g3', 'g4', 'g9'), red10)).toBe(false);
+    // Même plus haute carte dans la même couleur (les cartes existent en double) : les suivantes départagent.
+    expect(canBeat(combo('r3', 'r4', 'r5', 'r7', 'r10'), red10)).toBe(true);
+  });
+
   it('suit la hiérarchie des combinaisons de cinq cartes', () => {
     const straight = combo('g6', 'y7', 'r8', 'g9', 'g10');
     const flush = combo('g1', 'g3', 'g5', 'g7', 'g9');
