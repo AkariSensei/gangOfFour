@@ -51,6 +51,12 @@ export function MyBadges({ name }: { name: string }) {
   }, [name]);
 
   if (!badges) return null;
+  // Une cinquantaine de badges : sur l'accueil, ceux obtenus, puis les trois les plus proches d'être gagnés.
+  const won = badges.filter(done);
+  const next = badges
+    .filter((b) => !done(b))
+    .sort((a, b) => b.value / b.goal - a.value / a.goal)
+    .slice(0, 3);
   return (
     <section className="panel my-badges">
       <button className="my-badges-open" onClick={() => setOpen(true)} title="Voir mes badges">
@@ -60,12 +66,18 @@ export function MyBadges({ name }: { name: string }) {
         </span>
       </button>
       <div className="badge-strip">
-        {badges.map((b) => (
-          <span key={b.id} className={done(b) ? 'won' : ''} title={`${b.name} : ${b.description}`}>
+        {won.map((b) => (
+          <span key={b.id} className="won" title={`${b.name} : ${b.description}`}>
+            {b.icon}
+          </span>
+        ))}
+        {next.map((b) => (
+          <span key={b.id} title={`Prochain : ${b.name} (${b.value} / ${b.goal}) : ${b.description}`}>
             {b.icon}
           </span>
         ))}
       </div>
+      {next.length > 0 && <p className="muted small badge-next">Prochains : {next.map((b) => b.name).join(', ')}</p>}
       {open && <Profile name={name} onClose={() => setOpen(false)} />}
     </section>
   );

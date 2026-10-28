@@ -2557,6 +2557,9 @@ button.danger {
   filter: none;
   opacity: 1;
 }
+.badge-next {
+  margin: 0.5rem 0 0;
+}
 
 /* Règles du jeu, illustrées avec les cartes */
 .rules-link {

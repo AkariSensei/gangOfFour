@@ -173,6 +173,33 @@ describe('GameHistory', () => {
     expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', castaway: '1/1', 'clean-win': '0/1', 'streak-4': '1/4' });
   });
 
+  it('calcule les badges de places, d\'écart, d\'horaires et de partenaires', () => {
+    const history = new GameHistory();
+    // Samedi 31 octobre 2026, 7 h 30 à Paris (6 h 30 UTC) : Alice gagne d'un point, Bruno finit dernier.
+    history.record(finished({ Alice: 20, Bruno: 90, Chloé: 21 }), new Date('2026-10-31T06:30:00Z'));
+    // Lundi 2 novembre, 12 h 30 à Paris : Alice gagne sans un point, avec 85 points d'avance.
+    history.record(finished({ Alice: 0, Bruno: 85, David: 100, Emma: 120 }), new Date('2026-11-02T11:30:00Z'));
+    // Lundi 2 novembre, 22 h à Paris : Alice deuxième.
+    history.record(finished({ Alice: 40, Bruno: 30, Chloé: 101 }), new Date('2026-11-02T21:00:00Z'));
+    const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
+    expect(badges('Alice')).toMatchObject({
+      'photo-finish': '1/1',
+      perfect: '1/1',
+      crushing: '1/1',
+      'second-10': '1/10',
+      'early-bird': '1/1',
+      'lunch-10': '1/10',
+      'night-owl': '1/1',
+      weekend: '1/1',
+      'days-20': '2/20',
+      'friends-10': '4/10',
+      'win-3': '1/1',
+      'win-4': '1/1',
+      'streak-2': '2/2',
+    });
+    expect(badges('Bruno')).toMatchObject({ 'last-10': '1/10', 'bad-streak-5': '2/5', 'friends-10': '4/10' });
+  });
+
   it('sépare les parties en ligne de celles jouées seul contre des bots', () => {
     const history = new GameHistory();
     // En ligne : deux personnes (et un bot) ; seul contre les bots : une personne et deux bots.
