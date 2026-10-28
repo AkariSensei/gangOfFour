@@ -20,8 +20,6 @@ import { type PlayerAction, type Room, RoomManager, type Result } from './rooms'
 export const ABANDONED_ROOM_DELAY_MS = 2 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
 export const ABANDONED_LOBBY_DELAY_MS = 15 * 1000;
-/** Partie en pause et sans personne : gardée plus longtemps, le temps d'une réunion ou d'un déjeuner. */
-export const PAUSED_ROOM_DELAY_MS = 3 * 60 * 60 * 1000;
 /** Temps laissé à un joueur parti en pleine partie avant qu'un bot ne joue à sa place. */
 export const AWAY_DELAY_MS = 60 * 1000;
 /** Chat : longueur maximale d'un message, et nombre de messages par connexion sur la fenêtre donnée. */
@@ -328,7 +326,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       setTimeout(() => {
         if (rooms.isAbandoned(code)) closeRoom(code);
         cleanupTimers.delete(code);
-      }, rooms.get(code)?.paused ? PAUSED_ROOM_DELAY_MS : rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
+      }, rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
     );
   }
 

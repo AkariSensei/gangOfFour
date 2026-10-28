@@ -698,14 +698,13 @@ describe('serveur de jeu', () => {
     await waitFor(() => JSON.stringify(server.rooms.get(code)!.game) !== before, 2000);
   });
 
-  it("garde plus longtemps une partie en pause que tout le monde a quittée", async () => {
+  it('ferme aussi une partie en pause que tout le monde a quittée', async () => {
     await start({ abandonDelayMs: 50 });
     const { code, players } = await lobby(3);
     await players[0]!.emitWithAck('game:start', {});
     expect(await players[0]!.emitWithAck('room:pause', { paused: true })).toEqual({ ok: true });
     players.forEach((p) => p.disconnect());
-    await new Promise((r) => setTimeout(r, 200));
-    expect(server.rooms.get(code)).toBeDefined();
+    await waitFor(() => !server.rooms.get(code));
   });
 
   it('ne lance pas de minuteur par défaut', async () => {
