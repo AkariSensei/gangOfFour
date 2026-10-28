@@ -49,8 +49,24 @@ function isConsecutive(values: number[]): boolean {
   return sorted.every((v, i) => i === 0 || v === sorted[i - 1]! + 1);
 }
 
+/**
+ * Ordre d'affichage des cartes d'une combinaison, quel que soit l'ordre où le joueur les a choisies : par valeur
+ * croissante (puis par couleur), et pour un full le brelan à gauche, la paire à droite.
+ */
+function displayOrder(combination: Combination): Card[] {
+  const sorted = [...combination.cards].sort(compareCards);
+  if (combination.type !== 'fullHouse') return sorted;
+  const trioValue = combination.rank[0];
+  return [...sorted.filter((c) => c.value === trioValue), ...sorted.filter((c) => c.value !== trioValue)];
+}
+
 /** Reconnaît la combinaison formée par des cartes, ou renvoie null si elle est invalide. */
 export function analyzeCombination(cards: Card[]): Combination | null {
+  const combination = recognize(cards);
+  return combination && { ...combination, cards: displayOrder(combination) };
+}
+
+function recognize(cards: Card[]): Combination | null {
   const n = cards.length;
   if (n === 0) return null;
 

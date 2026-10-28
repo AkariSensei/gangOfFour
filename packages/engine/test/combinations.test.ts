@@ -93,6 +93,13 @@ describe('canBeat', () => {
     expect(canBeat(combo('r3', 'r4', 'r5', 'g6', 'r7'), combo('g3', 'g4', 'g5', 'y6', 'r7'))).toBe(false);
   });
 
+  it("range les cartes par valeur, quel que soit l'ordre choisi, et le brelan d'un full avant sa paire", () => {
+    expect(combo('g7', 'r3', 'y5', 'g4', 'g6').cards.map((c) => c.value)).toEqual([3, 4, 5, 6, 7]);
+    expect(combo('r9', 'g3', 'y9', 'g9', 'r3').cards.map((c) => c.value)).toEqual([9, 9, 9, 3, 3]);
+    expect(combo('r2', 'y2', 'g2', 'r8', 'g8').cards.map((c) => c.value)).toEqual([2, 2, 2, 8, 8]);
+    expect(combo('r5', 'g5', 'y5').cards.map((c) => c.color)).toEqual(['green', 'yellow', 'red']);
+  });
+
   it('départage les couleurs par la plus haute carte, puis sa couleur, avant les cartes suivantes', () => {
     const red10 = combo('r2', 'r4', 'r5', 'r6', 'r10');
     const green10 = combo('g3', 'g5', 'g7', 'g8', 'g10');
