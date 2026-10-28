@@ -11,6 +11,8 @@ export interface Badge {
   description: string;
   value: number;
   goal: number;
+  /** Part des joueurs qui ont obtenu ce badge, en pourcentage (dans la fiche d'un joueur). */
+  percent?: number;
 }
 
 /** Une partie vue par un joueur : la partie, et sa ligne à lui. */
@@ -121,6 +123,11 @@ const BADGES: Definition[] = [
     { id: 'days-20', icon: '📅', name: 'Fidèle', description: 'Joue 20 jours différents.', goal: 20, value: (g) => new Set(g.map((x) => paris(x).day)).size },
   ]),
 ];
+
+/** Identifiants de tous les badges, pour vérifier ceux qu'un joueur choisit de montrer sur sa fiche. */
+export const BADGE_IDS = new Set(BADGES.map((b) => b.id));
+/** Nombre de badges qu'un joueur montre sur sa fiche. */
+export const SHOWCASE_SIZE = 3;
 
 const sum = (games: Game[], f: (g: Game) => number) => games.reduce((total, g) => total + f(g), 0);
 const max = (games: Game[], f: (g: Game) => number) => Math.max(0, ...games.map(f));

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
-import { type Badge, badgesOf, liveBadgesOf } from './badges';
+import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import type { BotLevel } from './bot';
 import { type ChallengeStats, NO_CHALLENGE } from './challenges';
 
@@ -43,6 +43,8 @@ export interface PlayerProfile {
   /** Dernières parties, de la plus récente à la plus ancienne. */
   recent: { finishedAt: string; score: number; winner: boolean; rank: number; players: number }[];
   badges: Badge[];
+  /** Badges montrés sur sa fiche : ceux qu'il a choisis, complétés par ses plus rares. */
+  showcase: Badge[];
 }
 
 export interface LeaderboardEntry {
@@ -65,7 +67,7 @@ const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 
 /** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
 export interface AccountNames {
-  get(id: string | undefined): { name?: string } | undefined;
+  get(id: string | undefined): { name?: string; showcase?: string[] } | undefined;
   byName(name: string): { id: string } | undefined;
 }
 
@@ -81,7 +83,7 @@ export class GameHistory {
     private file?: string,
     private accounts?: AccountNames,
     /** Défis du jour, qui donnent eux aussi des badges. */
-    private challenges?: { statsOf(account: string): ChallengeStats },
+    private challenges?: { statsOf(account: string): ChallengeStats; players(): string[] },
   ) {
     if (!file) return;
     try {
@@ -277,6 +279,22 @@ export class GameHistory {
     return badgesOf(this.gamesOf(accountId), this.challengesOf(accountId));
   }
 
+  /**
+   * Part des joueurs (tous ceux qui ont une partie au classement ou un défi terminé) qui ont obtenu chaque badge,
+   * en pourcentage arrondi : plus il est bas, plus le badge est rare.
+   */
+  badgeRarity(): Record<string, number> {
+    const owners = new Set([
+      ...this.counted.flatMap((r) => r.players.filter((p) => this.ranked(p)).map((p) => this.owner(p))),
+      ...(this.challenges?.players() ?? []),
+    ]);
+    const counts: Record<string, number> = {};
+    for (const owner of owners) {
+      for (const b of badgesOf(this.gamesOf(owner), this.challengesOf(owner))) if (b.value >= b.goal) counts[b.id] = (counts[b.id] ?? 0) + 1;
+    }
+    return Object.fromEntries(badgesOf([]).map((b) => [b.id, owners.size ? Math.round((100 * (counts[b.id] ?? 0)) / owners.size) : 0]));
+  }
+
   private challengesOf(owner: string): ChallengeStats {
     return owner.startsWith('pseudo:') ? NO_CHALLENGE : (this.challenges?.statsOf(owner) ?? NO_CHALLENGE);
   }
@@ -288,6 +306,11 @@ export class GameHistory {
     const challenges = this.challengesOf(owner);
     if (games.length === 0 && challenges.played === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
+    const rarity = this.badgeRarity();
+    const badges = badgesOf(games, challenges).map((b) => ({ ...b, percent: rarity[b.id] ?? 0 }));
+    const earned = badges.filter((b) => b.value >= b.goal);
+    const chosen = (this.accounts?.get(owner)?.showcase ?? []).flatMap((id) => earned.filter((b) => b.id === id));
+    const rarest = [...earned].sort((a, b) => a.percent - b.percent).filter((b) => !chosen.includes(b));
     return {
       name: games.length > 0 ? this.displayName(games[games.length - 1]!.me) : (this.accounts?.get(owner)?.name ?? name),
       games: games.length,
@@ -308,7 +331,8 @@ export class GameHistory {
           rank: 1 + record.players.filter((p) => p.score < me.score).length,
           players: record.players.length,
         })),
-      badges: badgesOf(games, challenges),
+      badges,
+      showcase: [...chosen, ...rarest].slice(0, SHOWCASE_SIZE),
     };
   }
 }

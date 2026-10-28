@@ -4,12 +4,36 @@ import { socket } from './socket';
 
 const done = (b: Badge) => b.value >= b.goal;
 
-/** Grille des badges d'un joueur : obtenus en couleur, les autres en pointillés avec leur progression. */
-export function BadgeGrid({ badges }: { badges: Badge[] }) {
+/** Choix des badges montrés sur sa fiche : ceux épinglés, et de quoi épingler ou retirer un badge obtenu. */
+export interface ShowcasePicker {
+  pinned: string[];
+  onToggle: (id: string) => void;
+}
+
+/**
+ * Grille des badges d'un joueur : obtenus en couleur, les autres en pointillés avec leur progression. En haut à
+ * droite, la part des joueurs qui l'ont obtenu ; sur sa propre page, une punaise pour le montrer sur sa fiche.
+ */
+export function BadgeGrid({ badges, picker }: { badges: Badge[]; picker?: ShowcasePicker }) {
   return (
     <ul className="badges">
       {badges.map((b) => (
         <li key={b.id} className={done(b) ? 'badge won' : 'badge'}>
+          {b.percent !== undefined && (
+            <span className="badge-rarity" title="Part des joueurs qui ont obtenu ce badge">
+              {b.percent} %
+            </span>
+          )}
+          {picker && done(b) && (
+            <button
+              className={`badge-pin ${picker.pinned.includes(b.id) ? 'on' : ''}`}
+              onClick={() => picker.onToggle(b.id)}
+              aria-pressed={picker.pinned.includes(b.id)}
+              title={picker.pinned.includes(b.id) ? 'Retirer de ma fiche' : 'Montrer sur ma fiche'}
+            >
+              📌
+            </button>
+          )}
           <span className="badge-icon" aria-hidden>
             {b.icon}
           </span>
@@ -43,7 +67,7 @@ function byTheme(badges: Badge[]): [string, Badge[]][] {
 }
 
 /** Grille des badges rangée par thème, avec le compte de badges obtenus dans chaque thème. */
-export function ThemedBadgeGrid({ badges }: { badges: Badge[] }) {
+export function ThemedBadgeGrid({ badges, picker }: { badges: Badge[]; picker?: ShowcasePicker }) {
   return (
     <div className="badge-themes">
       {byTheme(badges).map(([theme, list]) => (
@@ -54,7 +78,7 @@ export function ThemedBadgeGrid({ badges }: { badges: Badge[] }) {
               {list.filter(done).length} / {list.length}
             </span>
           </h3>
-          <BadgeGrid badges={list} />
+          <BadgeGrid badges={list} picker={picker} />
         </section>
       ))}
     </div>
@@ -82,12 +106,28 @@ type Filter = 'all' | 'won' | 'todo';
  * Page « Mes badges » : tous les badges du joueur, par thème, avec leur description et leur progression.
  * Elle remplace l'accueil ; le bouton Retour (ou celui du navigateur) y ramène.
  */
-export function BadgesPage({ badges, onClose }: { badges: Badge[] | null; onClose: () => void }) {
+export function BadgesPage({
+  badges,
+  showcase,
+  onShowcase,
+  onClose,
+}: {
+  badges: Badge[] | null;
+  /** Badges épinglés sur sa fiche. */
+  showcase: string[];
+  onShowcase: (ids: string[]) => void;
+  onClose: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>('all');
   const shown = useMemo(
     () => (badges ?? []).filter((b) => filter === 'all' || (filter === 'won' ? done(b) : !done(b))),
     [badges, filter],
   );
+  // Trois badges au plus sur la fiche : épingler un quatrième remplace le plus ancien.
+  const picker: ShowcasePicker = {
+    pinned: showcase,
+    onToggle: (id) => onShowcase(showcase.includes(id) ? showcase.filter((x) => x !== id) : [...showcase, id].slice(-3)),
+  };
   const wonCount = badges?.filter(done).length ?? 0;
   const total = badges?.length ?? 0;
   return (
@@ -119,12 +159,17 @@ export function BadgesPage({ badges, onClose }: { badges: Badge[] | null; onClos
           </button>
         ))}
       </div>
+      <p className="muted small badges-hint">
+        📌 Épingle jusqu'à 3 badges pour les montrer sur ta fiche
+        {showcase.length === 0 ? ' : sans choix, ce sont tes 3 badges les plus rares.' : ` (${showcase.length} / 3).`} Le
+        pourcentage indique la part des joueurs qui ont obtenu le badge.
+      </p>
       {!badges ? (
         <p className="muted">Chargement…</p>
       ) : shown.length === 0 ? (
         <p className="muted">{filter === 'won' ? 'Aucun badge pour l’instant : joue une partie pour commencer !' : 'Tous les badges sont obtenus, bravo !'}</p>
       ) : (
-        <ThemedBadgeGrid badges={shown} />
+        <ThemedBadgeGrid badges={shown} picker={picker} />
       )}
     </main>
   );

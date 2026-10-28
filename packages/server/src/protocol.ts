@@ -113,6 +113,8 @@ export interface AccountView extends Look {
   /** Pseudo unique ; vide tant que le joueur ne l'a pas choisi. */
   name: string;
   admin: boolean;
+  /** Badges choisis pour sa fiche. */
+  showcase: string[];
 }
 
 /** Ligne de la liste des comptes, vue par l'admin. */
@@ -133,6 +135,8 @@ export interface ClientToServerEvents {
   'account:google': (payload: { credential: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
   'account:update': (payload: { name: string } & Look, ack: Ack<{ account: AccountView }>) => void;
   'account:signOut': (ack: Ack) => void;
+  /** Choisit les badges (trois au plus) montrés sur sa fiche ; une liste vide revient aux plus rares. */
+  'account:showcase': (payload: { badgeIds: string[] }, ack: Ack<{ account: AccountView }>) => void;
   'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
   'admin:update': (payload: { id: string; name?: string; blocked?: boolean }, ack: Ack) => void;
   /** L'admin retire un compte du classement (ses parties jouées jusqu'ici ne comptent plus). */

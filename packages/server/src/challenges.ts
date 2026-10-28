@@ -91,6 +91,11 @@ export class ChallengeStore {
     }
   }
 
+  /** Comptes qui ont terminé au moins un défi. */
+  players(): string[] {
+    return [...new Set(this.results.filter(finished).map((r) => r.account))];
+  }
+
   /** Essai de ce joueur pour ce jour, terminé ou non. */
   attempt(account: string, day: string): ChallengeResult | undefined {
     return this.results.find((r) => r.account === account && r.day === day);

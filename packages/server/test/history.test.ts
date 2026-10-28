@@ -285,4 +285,31 @@ describe('GameHistory', () => {
     play({ Alice: 10, Bob: 50, Bot: 90 });
     expect(history.leaderboard()[0]).toMatchObject({ name: 'Alice', wins: 1, games: 1 });
   });
+
+  it('donne la part des joueurs qui ont obtenu chaque badge', () => {
+    const history = new GameHistory();
+    // Quatre joueurs à la table, une seule gagnante : tous ont « Bienvenue », un sur quatre « Premier sang ».
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60, David: 70 }));
+    const percent = Object.fromEntries(history.profile('Bruno')!.badges.map((b) => [b.id, b.percent]));
+    expect(percent).toMatchObject({ 'games-1': 100, 'first-win': 25, 'games-25': 0 });
+  });
+
+  it('montre sur la fiche les badges choisis, complétés par les plus rares, trois au plus', () => {
+    const accounts = new AccountStore();
+    accounts.signIn({ sub: 'a', email: 'a@exemple.fr' });
+    accounts.update('a', { name: 'Alice' });
+    const history = new GameHistory(undefined, accounts);
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }), new Date(), [], ['a']);
+    history.record(finished({ Alice: 0, Bruno: 50, Chloé: 60 }), new Date(), [], ['a']);
+    const showcase = () => history.profile('Alice')!.showcase.map((b) => b.id);
+    // Sans choix : les plus rares d'abord (« Doublé » et « Parfait » n'appartiennent qu'à elle, « Bienvenue » à tous).
+    expect(showcase()).toHaveLength(3);
+    expect(showcase()).not.toContain('games-1');
+    // Un badge pas encore obtenu ne se montre pas, même choisi.
+    accounts.update('a', { showcase: ['games-1', 'games-25', 'inconnu'] });
+    expect(accounts.get('a')!.showcase).toEqual(['games-1', 'games-25']);
+    expect(showcase()[0]).toBe('games-1');
+    expect(showcase()).toHaveLength(3);
+    expect(showcase()).not.toContain('games-25');
+  });
 });

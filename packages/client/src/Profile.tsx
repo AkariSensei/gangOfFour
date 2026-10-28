@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
-import { ThemedBadgeGrid } from './Badges';
+import { BadgeGrid } from './Badges';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -36,7 +36,7 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
             <aside className="profile-side">
               <div className="profile-stats">
                 <Stat value={profile.wins} label={`victoire${profile.wins > 1 ? 's' : ''} sur ${profile.games}`} />
-                <Stat value={`${Math.round((100 * profile.wins) / profile.games)} %`} label="de victoires" />
+                <Stat value={`${profile.games ? Math.round((100 * profile.wins) / profile.games) : 0} %`} label="de victoires" />
                 <Stat value={profile.averageScore} label="score moyen" />
                 <Stat value={profile.bestScore} label="meilleur score" />
                 <Stat
@@ -65,7 +65,7 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
               <h3>
                 Badges · {profile.badges.filter((b) => b.value >= b.goal).length} / {profile.badges.length}
               </h3>
-              <ThemedBadgeGrid badges={profile.badges} />
+              {profile.showcase.length === 0 ? <p className="muted">Pas encore de badge.</p> : <BadgeGrid badges={profile.showcase} />}
             </div>
           </div>
         )}

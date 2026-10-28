@@ -129,7 +129,14 @@ export function Home({
     );
   }
 
-  if (badgesOpen && account?.name) return <BadgesPage badges={badges} onClose={closeBadges} />;
+  async function setShowcase(badgeIds: string[]) {
+    const result = await socket.emitWithAck('account:showcase', { badgeIds });
+    if (result.ok) me.setAccount(result.account);
+  }
+
+  if (badgesOpen && account?.name) {
+    return <BadgesPage badges={badges} showcase={account.showcase ?? []} onShowcase={(ids) => void setShowcase(ids)} onClose={closeBadges} />;
+  }
 
   return (
     <main className="home">

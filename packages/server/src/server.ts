@@ -517,6 +517,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (result.ok) history.claim(account.name!, account.id);
       ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
     });
+    on('account:showcase', (payload, ack) => {
+      const account = me();
+      if (!account) return ack({ ok: false, error: 'notSignedIn' });
+      const result = accounts.update(account.id, { showcase: payload.badgeIds });
+      ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
+    });
     on('account:signOut', (_payload, ack) => {
       leaveCurrent();
       socket.data.accountId = undefined;

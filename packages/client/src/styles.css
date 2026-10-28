@@ -2514,8 +2514,9 @@ button.danger {
 
 /* Badges : grille dans la fiche joueur et sur la page « Mes badges » */
 /* La fiche prend tout l'écran : les chiffres à gauche, les badges sur toute la largeur restante. */
+/* La fiche ne montre que trois badges : pas besoin de toute la largeur. */
 .modal.profile {
-  width: min(1600px, 100%);
+  width: min(1100px, 100%);
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
 }
@@ -2561,6 +2562,53 @@ button.danger {
   border-radius: 12px;
   border: 1.5px dashed var(--line-strong);
   text-align: left;
+  position: relative;
+}
+/* Rareté du badge (part des joueurs qui l'ont), en haut à droite ; le titre lui laisse la place. */
+.badge-rarity {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.badge.won .badge-rarity {
+  color: var(--gold);
+  border-color: rgba(232, 185, 49, 0.45);
+}
+.badge:has(.badge-rarity) strong {
+  padding-right: 2.8rem;
+}
+/* Punaise pour montrer le badge sur sa fiche, en bas à droite. */
+.badge-pin {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.3rem;
+  padding: 0.1rem 0.3rem;
+  min-height: 0;
+  font-size: 0.85rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.badge-pin:hover {
+  opacity: 0.9;
+}
+.badge-pin.on {
+  filter: none;
+  opacity: 1;
+  border-color: rgba(232, 185, 49, 0.6);
+  background: rgba(232, 185, 49, 0.12);
+}
+.badges-hint {
+  margin: 0 0 0.75rem;
 }
 .badge.won {
   border: 1px solid var(--line);

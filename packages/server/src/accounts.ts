@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { BADGE_IDS, SHOWCASE_SIZE } from './badges';
 import type { GoogleIdentity } from './google';
 import type { AccountView, Look, RoomError } from './protocol';
 import { cleanLook, cleanName } from './rooms';
@@ -14,6 +15,8 @@ export interface Account extends Look {
   name?: string;
   /** Compte bloqué par l'admin : il ne peut plus jouer. */
   blocked?: boolean;
+  /** Badges que le joueur a choisi de montrer sur sa fiche (trois au plus) ; sans choix, ses plus rares. */
+  showcase?: string[];
   createdAt: string;
 }
 
@@ -72,7 +75,14 @@ export class AccountStore {
   }
 
   view(account: Account): AccountView {
-    return { id: account.id, email: account.email, name: account.name ?? '', ...cleanLook(account), admin: this.isAdmin(account) };
+    return {
+      id: account.id,
+      email: account.email,
+      name: account.name ?? '',
+      ...cleanLook(account),
+      admin: this.isAdmin(account),
+      showcase: account.showcase ?? [],
+    };
   }
 
   list(): Account[] {
@@ -92,7 +102,7 @@ export class AccountStore {
   }
 
   /** Modifie un compte : pseudo, apparence, ou blocage (ce dernier par l'admin seulement). */
-  update(id: string, change: { name?: unknown; look?: unknown; blocked?: boolean }): Result {
+  update(id: string, change: { name?: unknown; look?: unknown; blocked?: boolean; showcase?: unknown }): Result {
     const account = this.get(id);
     if (!account) return { ok: false, error: 'accountNotFound' };
     if (change.name !== undefined) {
@@ -106,6 +116,12 @@ export class AccountStore {
       delete account.avatar;
       delete account.color;
       Object.assign(account, cleanLook(change.look));
+    }
+    if (change.showcase !== undefined) {
+      const ids = Array.isArray(change.showcase) ? change.showcase.filter((id): id is string => typeof id === 'string' && BADGE_IDS.has(id)) : [];
+      const showcase = [...new Set(ids)].slice(0, SHOWCASE_SIZE);
+      if (showcase.length > 0) account.showcase = showcase;
+      else delete account.showcase;
     }
     if (change.blocked !== undefined) {
       if (change.blocked) account.blocked = true;
