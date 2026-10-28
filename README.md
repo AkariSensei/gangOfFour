@@ -39,7 +39,7 @@ Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minute
 
 Classement : deux onglets, « En ligne » (au moins deux personnes à la table : `leaderboard`, `monthly` dans `stats:get`) et « Contre les bots » (une personne seule contre des bots : `botLeaderboard`, `botMonthly`). Le record de série ne compte que les parties en ligne. Le classement suit les comptes.
 
-Badges : calculés depuis l'historique (fiche du joueur, `stats:player`). À la fin d'une partie, le serveur envoie à chaque joueur de la table les badges qu'il vient d'obtenir (`badges:won`), affichés en bas à droite de l'écran. Les parties jouées avant les comptes reviennent au premier compte qui prend le même pseudo (ou que l'admin renomme ainsi).
+Badges : calculés depuis l'historique (fiche du joueur, `stats:player`). Chaque badge est annoncé au joueur dès qu'il est gagné (`badges:won`), en bas à droite de l'écran : pendant la partie pour ceux qui en dépendent (gangs, manches gagnées, pire manche, longueur de la partie), à la fin pour les autres (victoires, places, parties jouées, horaires). Les parties jouées avant les comptes reviennent au premier compte qui prend le même pseudo (ou que l'admin renomme ainsi).
 
 ## Règles implémentées dans le moteur
 

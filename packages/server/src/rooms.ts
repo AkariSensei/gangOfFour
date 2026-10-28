@@ -48,6 +48,8 @@ export interface Room {
   game: GameState | null;
   /** La partie terminée a déjà été ajoutée à l'historique. */
   recorded?: boolean;
+  /** Badges déjà obtenus ou déjà annoncés pendant la partie en cours, par compte (vidé à chaque nouvelle partie). */
+  announced?: Record<string, string[]>;
   /** Temps laissé à chaque joueur pour agir, en secondes ; 0 ou absent : pas de minuteur. */
   turnSeconds?: number;
   /** Joueurs que l'hôte ou l'admin a privés de chat dans ce salon. */
@@ -364,6 +366,7 @@ export class RoomManager {
       { targetScore: TARGET_SCORES.includes(options.targetScore!) ? options.targetScore! : DEFAULT_TARGET_SCORE },
     );
     room.turnSeconds = TURN_SECONDS.includes(options.turnSeconds!) ? options.turnSeconds : 0;
+    delete room.announced;
     return { ok: true };
   }
 
@@ -380,6 +383,7 @@ export class RoomManager {
       room.game.config,
     );
     room.recorded = false;
+    delete room.announced;
     delete room.paused;
     return { ok: true };
   }

@@ -11,7 +11,7 @@ import { createStaticHandler } from './static';
 import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
 import { chooseBotAction } from './bot';
 import { DEFAULT_LIMITS, type Limits, RateLimiter, clientIp } from './limits';
-import { type PlayerAction, RoomManager, type Result } from './rooms';
+import { type PlayerAction, type Room, RoomManager, type Result } from './rooms';
 
 /** Délai avant de supprimer un salon dont tous les joueurs sont partis. */
 export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
@@ -106,23 +106,32 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
-    const bots = room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
-    // Badges de chaque compte avant la partie, pour annoncer ceux qu'elle vient de faire gagner.
-    const players = [...new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))];
-    const before = new Map(players.map((id) => [id, new Set(history.badgesOfAccount(id).filter(won).map((b) => b.id))]));
-    history.record(room.game, new Date(), bots, room.seats.map((s) => s.account));
+    history.record(room.game, new Date(), botSeats(room), room.seats.map((s) => s.account));
     io.emit('stats:changed');
-    void announceBadges(code, before);
   }
 
+  const botSeats = (room: Room) => room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
   const won = (b: Badge) => b.value >= b.goal;
 
-  /** Envoie à chaque joueur de la table les badges qu'il vient d'obtenir (sur tous ses onglets ouverts dans le salon). */
-  async function announceBadges(code: string, before: Map<string, Set<string>>) {
-    const sockets = await io.in(code).fetchSockets();
-    for (const [accountId, had] of before) {
-      const fresh = history.badgesOfAccount(accountId).filter((b) => won(b) && !had.has(b.id));
+  /**
+   * Annonce chaque badge dès qu'il est gagné, comme un succès : pendant la partie pour ceux qui en dépendent
+   * (un gang posé, une manche gagnée…), et à la fin pour les autres (victoire, places, parties jouées…).
+   * Chaque badge n'est annoncé qu'une fois par partie (`room.announced`), sur tous les onglets du joueur ouverts dans le salon.
+   */
+  function announceBadges(room: Room, sockets: { data: SocketData; emit: (event: 'badges:won', badges: Badge[]) => unknown }[]) {
+    const game = room.game;
+    if (!game) return;
+    const seen = (room.announced ??= {});
+    const bots = botSeats(room);
+    const seatAccounts = room.seats.map((s) => s.account);
+    for (const accountId of new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))) {
+      // Première fois qu'on regarde ce joueur dans cette partie : ce qu'il avait déjà ne s'annonce pas.
+      const had = (seen[accountId] ??= history.badgesOfAccount(accountId).filter(won).map((b) => b.id));
+      const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts);
+      const fresh = now.filter((b) => won(b) && !had.includes(b.id));
       if (fresh.length === 0) continue;
+      had.push(...fresh.map((b) => b.id));
+      saved.schedule();
       for (const s of sockets) if (s.data.accountId === accountId && !s.data.spectator) s.emit('badges:won', fresh);
     }
   }
@@ -273,6 +282,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
       if (gameView) socket.emit('game:state', gameView);
     }
+    announceBadges(room, sockets);
   }
 
   const awayTimers = new Map<string, NodeJS.Timeout>();

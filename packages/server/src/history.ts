@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
-import { type Badge, badgesOf } from './badges';
+import { type Badge, badgesOf, liveBadgesOf } from './badges';
 
 export interface GameRecord {
   finishedAt: string;
@@ -90,7 +90,24 @@ export class GameHistory {
    * `accounts` : compte de chaque siège, pour que le classement suive la personne et pas le pseudo.
    */
   record(game: GameState, finishedAt = new Date(), bots: number[] = [], accounts: (string | undefined)[] = []): GameRecord {
-    const record: GameRecord = {
+    const record = this.toRecord(game, finishedAt, bots, accounts);
+    this.records.push(record);
+    this.save();
+    return record;
+  }
+
+  /**
+   * Badges « en direct » d'un compte en comptant la partie en cours (gangs posés, manches gagnées, pire manche…) :
+   * ceux qu'on peut gagner pendant la partie, et donc annoncer dès qu'ils tombent.
+   */
+  liveBadgesOfAccount(accountId: string, game: GameState, bots: number[], accounts: (string | undefined)[]): Badge[] {
+    const record = this.toRecord(game, new Date(), bots, accounts);
+    const me = record.players.find((p) => this.ranked(p) && this.owner(p) === accountId);
+    return liveBadgesOf(me ? [...this.gamesOf(accountId), { record, me }] : this.gamesOf(accountId));
+  }
+
+  private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[]): GameRecord {
+    return {
       finishedAt: finishedAt.toISOString(),
       rounds: game.round,
       players: game.players.map((p, i) => ({
@@ -102,9 +119,6 @@ export class GameHistory {
         ...(game.stats?.[i] ?? {}),
       })),
     };
-    this.records.push(record);
-    this.save();
-    return record;
   }
 
   /** Parties qui comptent : celles d'après la dernière remise à zéro. */

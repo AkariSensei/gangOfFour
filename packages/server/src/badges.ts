@@ -141,6 +141,21 @@ function streak(games: Game[], test: (g: Game) => boolean): number {
 }
 
 /** Badges d'un joueur à partir de ses parties, de la plus ancienne à la plus récente. */
-export function badgesOf(games: Game[]): Badge[] {
-  return BADGES.map(({ value, ...badge }) => ({ ...badge, value: Math.min(value(games), badge.goal) }));
+export function badgesOf(games: Game[], definitions = BADGES): Badge[] {
+  return definitions.map(({ value, ...badge }) => ({ ...badge, value: Math.min(value(games), badge.goal) }));
+}
+
+/**
+ * Badges qu'on peut gagner pendant une partie, au moment même où ça arrive : ils ne dépendent que de ce que
+ * la partie a déjà accumulé (gangs, manches gagnées, pire manche, nombre de manches), qui ne fait que monter.
+ * Les autres (victoires, places, parties jouées, horaires…) attendent la fin de la partie.
+ */
+const LIVE = new Set(['hot-hand', 'masterclass', 'steamroller', 'bulldozer', 'marathon', 'ultra-trail', 'gang-1', 'gang-25', 'gang-100', 'fireworks', 'bouquet', 'cold-shower', 'scapegoat']);
+
+/** Badges « en direct » d'un joueur, en comptant la partie en cours parmi ses parties. */
+export function liveBadgesOf(games: Game[]): Badge[] {
+  return badgesOf(
+    games,
+    BADGES.filter((b) => LIVE.has(b.id)),
+  );
 }

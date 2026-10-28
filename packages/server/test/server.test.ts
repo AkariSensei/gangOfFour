@@ -567,6 +567,30 @@ describe('serveur de jeu', () => {
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
   });
 
+  it('annonce un badge au moment où il est gagné, en pleine partie (un gang posé)', async () => {
+    await start();
+    const { code, players } = await lobby(3);
+    const badges: string[][] = players.map(() => []);
+    players.forEach((p, i) => p.on('badges:won', (won) => badges[i]!.push(...won.map((b) => b.id))));
+    await players[0]!.emitWithAck('game:start', {});
+    await waitFor(() => players.every((p) => p.game));
+    // Partie arrangée : Alice ouvre un nouveau pli et a un gang de 5 en main.
+    const game = server.rooms.get(code)!.game!;
+    const deck = createDeck();
+    const cards = (...ids: string[]) => ids.map((id) => deck.find((c) => c.id === id)!);
+    Object.assign(game, { phase: 'playing', currentPlayer: 0, table: null, trick: [], passed: [false, false, false], mustPlayMultiOne: false, exchange: null });
+    game.players[0]!.hand = cards('g5a', 'y5a', 'r5a', 'g5b', 'g2a', 'g3a');
+    expect((await players[0]!.emitWithAck('game:play', { cardIds: ['g5a', 'y5a', 'r5a', 'g5b'] })).ok).toBe(true);
+    await waitFor(() => badges[0]!.includes('gang-1'));
+    expect(server.rooms.get(code)!.game!.phase).toBe('playing');
+    // Une seule annonce, même quand la table est rediffusée ensuite, et rien pour ceux qui n'ont pas posé de gang.
+    expect((await players[1]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
+    await waitFor(() => players[0]!.room!.players[1]!.autoPass === true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(badges[0]).toEqual(['gang-1']);
+    expect(badges[1]).toEqual([]);
+  });
+
   it('laisse le gagnant choisir sans minuteur la carte qu\'il rend pendant l\'échange', async () => {
     await start({ turnSecondMs: 10 });
     const { players } = await lobby(3);
