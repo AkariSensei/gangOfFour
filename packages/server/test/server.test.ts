@@ -487,7 +487,9 @@ describe('serveur de jeu', () => {
 
     const stats = await human.emitWithAck('stats:get');
     expect(stats.ok && stats.recent).toHaveLength(1);
-    expect(stats.ok && stats.leaderboard.map((e) => e.name)).toEqual(['Alice']);
+    // Seule contre des bots : la partie compte dans le classement « contre les bots », pas dans celui en ligne.
+    expect(stats.ok && stats.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
+    expect(stats.ok && stats.leaderboard).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
 
     // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.

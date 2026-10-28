@@ -143,7 +143,17 @@ export interface ClientToServerEvents {
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
-  'stats:get': (ack: Ack<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[]; streak: WinStreak | null }>) => void;
+  /** `leaderboard` et `monthly` : parties en ligne ; `botLeaderboard` et `botMonthly` : parties seul contre des bots. */
+  'stats:get': (
+    ack: Ack<{
+      leaderboard: LeaderboardEntry[];
+      monthly: LeaderboardEntry[];
+      botLeaderboard: LeaderboardEntry[];
+      botMonthly: LeaderboardEntry[];
+      recent: GameRecord[];
+      streak: WinStreak | null;
+    }>,
+  ) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
 }
 

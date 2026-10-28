@@ -599,9 +599,20 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
-    on('stats:get', (_payload, ack) =>
-      ack({ ok: true, leaderboard: history.leaderboard(), monthly: history.leaderboard(10, monthOf(new Date())), recent: history.recent(), streak: history.bestStreak() }),
-    );
+    // Deux classements : les parties en ligne (au moins deux personnes) et celles jouées seul contre des bots.
+    // Le record de série ne compte que les parties en ligne.
+    on('stats:get', (_payload, ack) => {
+      const month = monthOf(new Date());
+      ack({
+        ok: true,
+        leaderboard: history.leaderboard(10, undefined, 'online'),
+        monthly: history.leaderboard(10, month, 'online'),
+        botLeaderboard: history.leaderboard(10, undefined, 'bots'),
+        botMonthly: history.leaderboard(10, month, 'bots'),
+        recent: history.recent(),
+        streak: history.bestStreak('online'),
+      });
+    });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 
     socket.on('disconnect', () => {

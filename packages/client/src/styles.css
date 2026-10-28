@@ -645,10 +645,19 @@ button.mute.on {
   gap: 0.5rem;
   margin-bottom: 0.6rem;
 }
-.leaderboard-head .segmented button {
+.leaderboard-head .segmented button,
+.ranking-mode button {
   font-size: 0.85rem;
   padding: 0.25rem 0.75rem;
   min-height: 0;
+}
+/* En ligne / contre les bots : sur toute la largeur, sous le titre. */
+.segmented.ranking-mode {
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+.ranking-mode button {
+  flex: 1;
 }
 .leaderboard h3 {
   font-size: 0.8rem;

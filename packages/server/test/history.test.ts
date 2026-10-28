@@ -157,6 +157,28 @@ describe('GameHistory', () => {
     expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', 'clean-win': '0/1' });
   });
 
+  it('sépare les parties en ligne de celles jouées seul contre des bots', () => {
+    const history = new GameHistory();
+    // En ligne : deux personnes (et un bot) ; seul contre les bots : une personne et deux bots.
+    history.record(finished({ Alice: 10, Bob: 50, 'Robot Ada': 90 }), new Date(), [2], ['a', 'b']);
+    history.record(finished({ Alice: 60, 'Robot Ada': 5, 'Robot Alan': 90 }), new Date(), [1, 2], ['a']);
+    history.record(finished({ Chloé: 0, 'Robot Ada': 50, 'Robot Alan': 90 }), new Date(), [1, 2], ['c']);
+    expect(history.leaderboard(10, undefined, 'online').map((e) => [e.name, e.games, e.wins])).toEqual([
+      ['Alice', 1, 1],
+      ['Bob', 1, 0],
+    ]);
+    expect(history.leaderboard(10, undefined, 'bots').map((e) => [e.name, e.games, e.wins])).toEqual([
+      ['Chloé', 1, 1],
+      ['Alice', 1, 0],
+    ]);
+    // Sans précision, toutes les parties comptent.
+    expect(history.leaderboard().find((e) => e.name === 'Alice')).toMatchObject({ games: 2, wins: 1 });
+    // Le record de série ne compte que les parties du type demandé.
+    history.record(finished({ Chloé: 0, 'Robot Ada': 50, 'Robot Alan': 90 }), new Date(), [1, 2], ['c']);
+    expect(history.bestStreak('bots')).toEqual({ name: 'Chloé', wins: 2 });
+    expect(history.bestStreak('online')).toBeNull();
+  });
+
   it('garde la plus longue série de victoires d\'un compte', () => {
     const history = new GameHistory();
     expect(history.bestStreak()).toBeNull();

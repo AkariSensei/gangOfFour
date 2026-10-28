@@ -9,14 +9,26 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'sh
 
 /** Classement du bureau et dernières parties : deux blocs de l'accueil. */
 export function Leaderboard() {
-  const [stats, setStats] = useState<{ leaderboard: LeaderboardEntry[]; monthly: LeaderboardEntry[]; recent: GameRecord[]; streak: WinStreak | null } | null>(null);
+  const [stats, setStats] = useState<{
+    leaderboard: LeaderboardEntry[];
+    monthly: LeaderboardEntry[];
+    botLeaderboard: LeaderboardEntry[];
+    botMonthly: LeaderboardEntry[];
+    recent: GameRecord[];
+    streak: WinStreak | null;
+  } | null>(null);
   const [shown, setShown] = useState<string | null>(null);
   const [tab, setTab] = useState<'month' | 'all'>('month');
+  // Parties en ligne (au moins deux personnes) ou jouées seul contre des bots : deux classements séparés.
+  const [mode, setMode] = useState<'online' | 'bots'>('online');
 
   useEffect(() => {
     const load = async () => {
       const result = await socket.emitWithAck('stats:get');
-      if (result.ok) setStats({ leaderboard: result.leaderboard, monthly: result.monthly, recent: result.recent, streak: result.streak });
+      if (result.ok) {
+        const { ok: _ok, ...rest } = result;
+        setStats(rest);
+      }
     };
     if (socket.connected) void load();
     socket.on('connect', load);
@@ -27,10 +39,10 @@ export function Leaderboard() {
     };
   }, []);
 
-  if (!stats || stats.leaderboard.length === 0) return null;
+  if (!stats || (stats.leaderboard.length === 0 && stats.botLeaderboard.length === 0)) return null;
 
   const month = monthFormat.format(new Date());
-  const ranking = tab === 'month' ? stats.monthly : stats.leaderboard;
+  const ranking = mode === 'online' ? (tab === 'month' ? stats.monthly : stats.leaderboard) : tab === 'month' ? stats.botMonthly : stats.botLeaderboard;
 
   return (
     <>
@@ -50,9 +62,25 @@ export function Leaderboard() {
             ))}
           </div>
         </div>
+        <div className="segmented ranking-mode" role="tablist" aria-label="Type de parties">
+          {(
+            [
+              ['online', '👥 En ligne'],
+              ['bots', '🤖 Contre les bots'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? 'on' : ''} onClick={() => setMode(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
         {shown && <Profile name={shown} onClose={() => setShown(null)} />}
         <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>
-        {ranking.length === 0 && <p className="muted">Aucune partie terminée en {month} pour l'instant.</p>}
+        {ranking.length === 0 && (
+          <p className="muted">
+            Aucune partie {mode === 'online' ? 'en ligne' : 'contre les bots'} terminée {tab === 'month' ? `en ${month} ` : ''}pour l'instant.
+          </p>
+        )}
         <ol className="ranking">
           {ranking.map((e, i) => (
             <li key={e.name}>
@@ -71,7 +99,7 @@ export function Leaderboard() {
             </li>
           ))}
         </ol>
-        {stats.streak && (
+        {stats.streak && mode === 'online' && (
           <p className="streak" title="Record du bureau : plus longue série de victoires d'affilée">
             🔥 Record :{' '}
             <button className="who" onClick={() => setShown(stats.streak!.name)}>
@@ -97,6 +125,7 @@ export function Leaderboard() {
                   <span className="muted">
                     · {r.players.length} joueurs · {r.rounds} manche
                     {r.rounds > 1 ? 's' : ''}
+                    {r.players.filter((p) => !p.bot).length < 2 && ' · 🤖 contre les bots'}
                   </span>
                 </span>
               </li>

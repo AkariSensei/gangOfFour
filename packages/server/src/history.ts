@@ -48,6 +48,9 @@ export interface LeaderboardEntry {
   averageScore: number;
 }
 
+/** Parties en ligne (au moins deux personnes) ou jouées seul contre des bots. */
+export type RankingMode = 'online' | 'bots';
+
 /** Plus longue série de victoires d'affilée d'un compte. */
 export interface WinStreak {
   name: string;
@@ -107,6 +110,16 @@ export class GameHistory {
   /** Parties qui comptent : celles d'après la dernière remise à zéro. */
   private get counted(): GameRecord[] {
     return this.records.filter((r) => !r.archived);
+  }
+
+  /** Partie en ligne : au moins deux personnes différentes à la table. Sinon, une personne seule contre des bots. */
+  private online(record: GameRecord): boolean {
+    return new Set(record.players.filter((p) => !p.bot).map((p) => this.owner(p))).size >= 2;
+  }
+
+  /** Parties qui comptent pour ce classement : toutes, seulement en ligne, ou seulement contre les bots. */
+  private ofMode(mode?: RankingMode): GameRecord[] {
+    return mode ? this.counted.filter((r) => this.online(r) === (mode === 'online')) : this.counted;
   }
 
   /** Ce joueur compte-t-il dans le classement, les records et les badges ? */
@@ -184,10 +197,11 @@ export class GameHistory {
   /**
    * Classement par victoires, puis taux de victoire, puis score moyen (le plus bas est le meilleur).
    * `month` (« 2026-10 ») ne compte que les parties finies ce mois-là, à l'heure de Paris.
+   * `mode` sépare les parties en ligne de celles jouées seul contre des bots (sans : toutes).
    */
-  leaderboard(limit = 10, month?: string): LeaderboardEntry[] {
+  leaderboard(limit = 10, month?: string, mode?: RankingMode): LeaderboardEntry[] {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
-    for (const record of this.counted) {
+    for (const record of this.ofMode(mode)) {
       if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
       for (const p of record.players) {
         if (!this.ranked(p)) continue;
@@ -210,10 +224,10 @@ export class GameHistory {
    * Record du bureau : la plus longue série de parties gagnées d'affilée par un compte (une victoire partagée compte).
    * À égalité, le record reste à celui qui l'a atteint en premier. Null tant que personne n'a gagné deux fois de suite.
    */
-  bestStreak(): WinStreak | null {
+  bestStreak(mode?: RankingMode): WinStreak | null {
     const current = new Map<string, number>();
     let best: { player: GameRecord['players'][number]; wins: number } | null = null;
-    for (const record of this.counted) {
+    for (const record of this.ofMode(mode)) {
       for (const p of record.players) {
         if (!this.ranked(p) || !p.account) continue;
         const wins = p.winner ? (current.get(p.account) ?? 0) + 1 : 0;
