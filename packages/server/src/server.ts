@@ -13,10 +13,13 @@ import { chooseBotAction } from './bot';
 import { DEFAULT_LIMITS, type Limits, RateLimiter, clientIp } from './limits';
 import { type PlayerAction, type Room, RoomManager, type Result } from './rooms';
 
-/** Délai avant de supprimer un salon dont tous les joueurs sont partis. */
-export const ABANDONED_ROOM_DELAY_MS = 10 * 60 * 1000;
+/**
+ * Délai avant de supprimer une partie dont tous les joueurs ont fermé leur onglet (le temps de recharger la page).
+ * Un joueur qui clique sur « Quitter » en dernier ferme le salon tout de suite.
+ */
+export const ABANDONED_ROOM_DELAY_MS = 2 * 60 * 1000;
 /** Délai plus court pour un salon dont la partie n'a pas commencé : rien à perdre à le fermer. */
-export const ABANDONED_LOBBY_DELAY_MS = 60 * 1000;
+export const ABANDONED_LOBBY_DELAY_MS = 15 * 1000;
 /** Partie en pause et sans personne : gardée plus longtemps, le temps d'une réunion ou d'un déjeuner. */
 export const PAUSED_ROOM_DELAY_MS = 3 * 60 * 60 * 1000;
 /** Temps laissé à un joueur parti en pleine partie avant qu'un bot ne joue à sa place. */
@@ -303,15 +306,22 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     );
   }
 
+  /** Ferme un salon : il disparaît des parties en cours et ne peut plus être rejoint. */
+  function closeRoom(code: string) {
+    clearTimeout(cleanupTimers.get(code));
+    cleanupTimers.delete(code);
+    rooms.delete(code);
+    saved.schedule();
+  }
+
   function scheduleCleanup(code: string) {
     clearTimeout(cleanupTimers.get(code));
     if (!rooms.isAbandoned(code)) return;
     cleanupTimers.set(
       code,
       setTimeout(() => {
-        if (rooms.isAbandoned(code)) rooms.delete(code);
+        if (rooms.isAbandoned(code)) closeRoom(code);
         cleanupTimers.delete(code);
-        saved.schedule();
       }, rooms.get(code)?.paused ? PAUSED_ROOM_DELAY_MS : rooms.get(code)?.game ? abandonDelay : lobbyAbandonDelay),
     );
   }
@@ -413,9 +423,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       }
       if (!code || !playerId) return;
       rooms.leave(code, playerId);
-      if (rooms.get(code)?.game) scheduleAway(code, playerId);
       void socket.leave(code);
       socket.data = { ip: socket.data.ip, accountId: socket.data.accountId };
+      // Le dernier vrai joueur s'en va : le salon (partie lancée ou non) est fermé tout de suite.
+      if (rooms.isAbandoned(code)) return closeRoom(code);
+      if (rooms.get(code)?.game) scheduleAway(code, playerId);
       scheduleCleanup(code);
       void broadcast(code);
     }

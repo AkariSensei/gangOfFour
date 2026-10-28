@@ -240,6 +240,35 @@ describe('serveur de jeu', () => {
     await waitFor(() => server.rooms.get(code) === undefined);
   });
 
+  it('ferme tout de suite un salon que le dernier vrai joueur quitte, et ne montre que les parties avec un vrai joueur', async () => {
+    await start({ abandonDelayMs: 60_000, lobbyAbandonDelayMs: 60_000 });
+    // Salon d'attente : l'hôte seul avec des bots s'en va, le salon disparaît.
+    const waiting = await lobby(1);
+    expect((await waiting.players[0]!.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await waiting.players[0]!.emitWithAck('room:leave')).ok).toBe(true);
+    expect(server.rooms.get(waiting.code)).toBeUndefined();
+
+    // Partie lancée : tant qu'un joueur reste, elle continue ; quand le dernier quitte, elle est supprimée.
+    const playing = await lobby(2);
+    expect((await playing.players[0]!.emitWithAck('room:addBot')).ok).toBe(true);
+    await waitFor(() => playing.players[0]!.room?.players.length === 3);
+    await playing.players[0]!.emitWithAck('game:start', {});
+    await waitFor(() => playing.players.every((p) => p.game));
+    expect((await playing.players[0]!.emitWithAck('room:leave')).ok).toBe(true);
+    expect(server.rooms.get(playing.code)).toBeDefined();
+    const watcher = connect();
+    const live = async () => {
+      const result = await watcher.emitWithAck('rooms:live');
+      return result.ok ? result.rooms.map((r) => r.code) : [];
+    };
+    expect(await live()).toEqual([playing.code]);
+    // Le dernier joueur ferme son onglet : la partie reste un moment pour qu'il puisse revenir, mais n'est plus listée.
+    playing.players[1]!.disconnect();
+    await waitFor(() => server.rooms.isAbandoned(playing.code));
+    expect(server.rooms.get(playing.code)).toBeDefined();
+    expect(await live()).toEqual([]);
+  });
+
   it('ferme vite un salon abandonné avant la partie, mais garde une partie en cours', async () => {
     await start({ abandonDelayMs: 60_000, lobbyAbandonDelayMs: 50 });
     const waiting = await lobby(3);

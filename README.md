@@ -35,7 +35,7 @@ Le client se connecte en Socket.IO. Toutes les commandes répondent par un accus
 - `room:rejoin { code, token }` : reprendre son siège après une déconnexion (le client garde le jeton).
 - `room:leave`, `game:start` (hôte uniquement), `game:play { cardIds }`, `game:pass`, `game:giveCard { cardId }`, `game:nextRound`.
 
-Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minutes. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules), `GOOGLE_CLIENT_ID` (client OAuth « Application Web » de la console Google Cloud, avec le site en origine JavaScript autorisée), `ADMIN_EMAIL` (adresse Google de l'admin). Les comptes sont gardés dans `data/comptes.json` (`ACCOUNTS_FILE`).
+Un salon est fermé dès que son dernier vrai joueur clique sur « Quitter » ; si tous ferment leur onglet, il est supprimé après 15 secondes avant la partie, 2 minutes pendant (le temps de recharger la page). Les parties en cours listées sur l'accueil (`rooms:live`) sont seulement celles où un vrai joueur est encore connecté. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules), `GOOGLE_CLIENT_ID` (client OAuth « Application Web » de la console Google Cloud, avec le site en origine JavaScript autorisée), `ADMIN_EMAIL` (adresse Google de l'admin). Les comptes sont gardés dans `data/comptes.json` (`ACCOUNTS_FILE`).
 
 Classement : deux onglets, « En ligne » (au moins deux personnes à la table : `leaderboard`, `monthly` dans `stats:get`) et « Contre les bots » (une personne seule contre des bots : `botLeaderboard`, `botMonthly`). Le record de série ne compte que les parties en ligne. Le classement suit les comptes.
 

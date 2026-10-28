@@ -68,7 +68,7 @@ dans `gangoffour/` (en remplaçant l'ancien), puis **Web → Sites → Redémarr
   (console Google Cloud → Google Auth Platform → Clients, type « Application Web », origine JavaScript autorisée
   `https://gangoffour.alwaysdata.net`) et `ADMIN_EMAIL=ton.adresse@gmail.com`. Règles de confidentialité à indiquer
   à Google : `https://gangoffour.alwaysdata.net/confidentialite.html`.
-- Un salon dont tous les joueurs sont partis est supprimé au bout de 10 minutes.
+- Un salon est fermé dès que son dernier joueur le quitte ; si tous ont fermé leur onglet, au bout de 15 secondes avant la partie et de 2 minutes pendant.
 - **Journaux** : dossier `admin/logs/sites` (en SFTP) ou **Web → Sites → Journaux**. Au démarrage, le serveur écrit
   « Interface servie depuis … » si l'interface a bien été trouvée.
 - Si l'interface et le serveur sont un jour séparés sur deux adresses, ajoute `CORS_ORIGIN=https://adresse-de-l-interface`

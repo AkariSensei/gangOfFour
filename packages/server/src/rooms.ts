@@ -433,8 +433,9 @@ export class RoomManager {
 
   /** Parties en cours (ni en attente de joueurs, ni terminées), pour les spectateurs. */
   live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number; open: boolean }[] {
+    // Seulement les parties où au moins un vrai joueur est encore là : pas celles que les bots jouent seuls.
     return this.all().flatMap((room) =>
-      room.game && room.game.phase !== 'gameOver'
+      room.game && room.game.phase !== 'gameOver' && !this.isAbandoned(room.code)
         ? [
             {
               code: room.code,
