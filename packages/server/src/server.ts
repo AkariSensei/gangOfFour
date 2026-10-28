@@ -168,7 +168,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
   /**
    * Minuteur de tour : quand un humain doit agir, il a `turnSeconds` secondes ; ensuite le serveur agit pour lui
-   * (il passe, ou joue comme un bot s'il doit ouvrir, couper ou rendre une carte). Renvoie le temps restant.
+   * (il passe, ou joue comme un bot s'il doit ouvrir ou couper). Sauf pendant l'échange. Renvoie le temps restant.
    */
   function updateTurnTimer(code: string): number | null {
     const room = rooms.get(code);
@@ -177,7 +177,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const current = turnTimers.get(code);
     // Le tour est identifié par la manche, la phase, le pli et le joueur : tant qu'il ne change pas, le temps court.
     const turn = game && seat ? `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` : '';
-    const active = !!room?.turnSeconds && !!seat && !seat.bot && !seat.away && !rooms.isAbandoned(code);
+    // Pas de minuteur pendant l'échange : le gagnant prend le temps de choisir la carte qu'il rend.
+    const active = !!room?.turnSeconds && !!seat && !seat.bot && !seat.away && !rooms.isAbandoned(code) && game?.phase !== 'exchange';
     if (!active) {
       clearTimeout(current?.timer);
       turnTimers.delete(code);

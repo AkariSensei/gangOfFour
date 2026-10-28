@@ -563,6 +563,25 @@ describe('serveur de jeu', () => {
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
   });
 
+  it('laisse le gagnant choisir sans minuteur la carte qu\'il rend pendant l\'échange', async () => {
+    await start({ turnSecondMs: 10 });
+    const { players } = await lobby(3);
+    expect((await players[0]!.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => players.every((p) => p.game));
+    const code = players[0]!.room!.code;
+    const game = server.rooms.get(code)!.game!;
+    // Échange arrangé : Alice a gagné la manche et doit rendre une carte à Bruno.
+    const given = game.players[1]!.hand[0]!;
+    Object.assign(game, { phase: 'exchange', currentPlayer: 0, exchange: { winnerIndex: 0, loserIndex: 1, loserCard: given } });
+    // Une diffusion pour que tout le monde voie l'échange.
+    expect((await players[0]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
+    await waitFor(() => players.every((p) => p.game!.phase === 'exchange'));
+    expect(players.every((p) => p.room!.turnRemainingMs === null)).toBe(true);
+    // Bien plus que les 30 « secondes » (300 ms ici) : personne n'a joué à la place d'Alice.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(server.rooms.get(code)!.game!.phase).toBe('exchange');
+  });
+
   it('fait passer tout seul un joueur qui ne peut rien poser (s\'il l\'a activé), mais jamais quand il ouvre', async () => {
     await start({ botDelayMs: 50 });
     const { code, players } = await lobby(3);
