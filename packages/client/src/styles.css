@@ -1903,7 +1903,7 @@ button.mute.on {
   .hand {
     flex-wrap: wrap;
     row-gap: 0.6rem;
-    --overlap: 0.28;
+    --overlap: 0.38; /* 8 cartes par rangée : une main de 16 tient sur deux rangées */
   }
   .controls button {
     padding: 0.55rem 0.8rem;
