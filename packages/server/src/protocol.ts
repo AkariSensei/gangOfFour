@@ -1,4 +1,5 @@
 import type { ActionError, PlayerView } from '@gof/engine';
+import type { Badge } from './badges';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
@@ -174,4 +175,6 @@ export interface ServerToClientEvents {
   'room:kicked': () => void;
   /** Le classement a changé (partie finie, remise à zéro…) : l'accueil le recharge. */
   'stats:changed': () => void;
+  /** Badges que ce joueur vient d'obtenir avec la partie qui se termine. */
+  'badges:won': (badges: Badge[]) => void;
 }

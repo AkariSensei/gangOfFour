@@ -36,6 +36,50 @@ export function BadgeGrid({ badges }: { badges: Badge[] }) {
   );
 }
 
+/** Durée d'affichage d'une annonce de badge. */
+const TOAST_MS = 8000;
+
+/**
+ * Annonces des badges qu'on vient d'obtenir, en bas à droite de l'écran : icône, titre et description.
+ * Elles arrivent une à une, s'en vont d'elles-mêmes, et un clic les ferme.
+ */
+export function BadgeToasts() {
+  const [toasts, setToasts] = useState<(Badge & { key: string })[]>([]);
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const onWon = (badges: Badge[]) =>
+      badges.forEach((b, i) => {
+        const key = `${b.id}-${Date.now()}`;
+        timers.push(setTimeout(() => setToasts((t) => [...t, { ...b, key }]), i * 600));
+        timers.push(setTimeout(() => setToasts((t) => t.filter((x) => x.key !== key)), i * 600 + TOAST_MS));
+      });
+    socket.on('badges:won', onWon);
+    return () => {
+      socket.off('badges:won', onWon);
+      timers.forEach(clearTimeout);
+    };
+  }, []);
+
+  if (toasts.length === 0) return null;
+  return (
+    <div className="badge-toasts" role="status" aria-live="polite">
+      {toasts.map((b) => (
+        <button key={b.key} className="badge-toast" onClick={() => setToasts((t) => t.filter((x) => x.key !== b.key))} title="Fermer">
+          <span className="badge-toast-icon" aria-hidden>
+            {b.icon}
+          </span>
+          <span className="badge-toast-text">
+            <small>Nouveau badge !</small>
+            <strong>{b.name}</strong>
+            <span>{b.description}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Mes badges sur l'accueil : une rangée d'icônes, la grille complète dans ma fiche. */
 export function MyBadges({ name }: { name: string }) {
   const [badges, setBadges] = useState<Badge[] | null>(null);

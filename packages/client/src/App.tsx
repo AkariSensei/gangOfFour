@@ -1,3 +1,4 @@
+import { BadgeToasts } from './Badges';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { Table } from './Table';
@@ -20,6 +21,7 @@ export function App() {
     <div className="app">
       {!connected && <div className="banner">{errorLabel('disconnected')}</div>}
       {screen}
+      <BadgeToasts />
     </div>
   );
 }

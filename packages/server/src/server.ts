@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { AccountStore } from './accounts';
+import type { Badge } from './badges';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -106,8 +107,24 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
     const bots = room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
+    // Badges de chaque compte avant la partie, pour annoncer ceux qu'elle vient de faire gagner.
+    const players = [...new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))];
+    const before = new Map(players.map((id) => [id, new Set(history.badgesOfAccount(id).filter(won).map((b) => b.id))]));
     history.record(room.game, new Date(), bots, room.seats.map((s) => s.account));
     io.emit('stats:changed');
+    void announceBadges(code, before);
+  }
+
+  const won = (b: Badge) => b.value >= b.goal;
+
+  /** Envoie à chaque joueur de la table les badges qu'il vient d'obtenir (sur tous ses onglets ouverts dans le salon). */
+  async function announceBadges(code: string, before: Map<string, Set<string>>) {
+    const sockets = await io.in(code).fetchSockets();
+    for (const [accountId, had] of before) {
+      const fresh = history.badgesOfAccount(accountId).filter((b) => won(b) && !had.has(b.id));
+      if (fresh.length === 0) continue;
+      for (const s of sockets) if (s.data.accountId === accountId && !s.data.spectator) s.emit('badges:won', fresh);
+    }
   }
 
   const botTimers = new Map<string, NodeJS.Timeout>();

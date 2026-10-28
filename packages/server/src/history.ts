@@ -238,13 +238,22 @@ export class GameHistory {
     return best && { name: this.displayName(best.player), wins: best.wins };
   }
 
-  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
-  profile(name: string): PlayerProfile | null {
-    const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
-    const games = this.counted.flatMap((record) => {
+  /** Parties d'un joueur (compte, ou « pseudo:… » d'avant les comptes), de la plus ancienne à la plus récente. */
+  private gamesOf(owner: string) {
+    return this.counted.flatMap((record) => {
       const me = record.players.find((p) => this.ranked(p) && this.owner(p) === owner);
       return me ? [{ record, me }] : [];
     });
+  }
+
+  /** Badges d'un compte, pour repérer ceux qu'une partie vient de lui faire gagner. */
+  badgesOfAccount(accountId: string): Badge[] {
+    return badgesOf(this.gamesOf(accountId));
+  }
+
+  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
+  profile(name: string): PlayerProfile | null {
+    const games = this.gamesOf(this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`);
     if (games.length === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
     return {

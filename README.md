@@ -37,7 +37,9 @@ Le client se connecte en Socket.IO. Toutes les commandes répondent par un accus
 
 Un salon dont tous les joueurs sont déconnectés est supprimé après 10 minutes. Variables d'environnement : `PORT` et `IP` (fournies par alwaysData), `CORS_ORIGIN` (origines autorisées, séparées par des virgules), `GOOGLE_CLIENT_ID` (client OAuth « Application Web » de la console Google Cloud, avec le site en origine JavaScript autorisée), `ADMIN_EMAIL` (adresse Google de l'admin). Les comptes sont gardés dans `data/comptes.json` (`ACCOUNTS_FILE`).
 
-Classement : deux onglets, « En ligne » (au moins deux personnes à la table : `leaderboard`, `monthly` dans `stats:get`) et « Contre les bots » (une personne seule contre des bots : `botLeaderboard`, `botMonthly`). Le record de série ne compte que les parties en ligne. Le classement suit les comptes. Les parties jouées avant les comptes reviennent au premier compte qui prend le même pseudo (ou que l'admin renomme ainsi).
+Classement : deux onglets, « En ligne » (au moins deux personnes à la table : `leaderboard`, `monthly` dans `stats:get`) et « Contre les bots » (une personne seule contre des bots : `botLeaderboard`, `botMonthly`). Le record de série ne compte que les parties en ligne. Le classement suit les comptes.
+
+Badges : calculés depuis l'historique (fiche du joueur, `stats:player`). À la fin d'une partie, le serveur envoie à chaque joueur de la table les badges qu'il vient d'obtenir (`badges:won`), affichés en bas à droite de l'écran. Les parties jouées avant les comptes reviennent au premier compte qui prend le même pseudo (ou que l'admin renomme ainsi).
 
 ## Règles implémentées dans le moteur
 

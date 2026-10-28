@@ -464,11 +464,12 @@ describe('serveur de jeu', () => {
     expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
     await waitFor(() => human.room?.players.length === 3);
     expect(human.room!.players.map((p) => p.bot)).toEqual([false, true, true]);
+    const badges: string[] = [];
+    human.on('badges:won', (won) => badges.push(...won.map((b) => b.id)));
     await human.emitWithAck('game:start', {});
     await waitFor(() => !!human.game);
 
-    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls,
-    // et le serveur fait passer l'humain quand il ne peut rien poser.
+    // L'humain n'agit que quand c'est à lui (ou pour lancer la manche suivante) ; les bots enchaînent seuls.
     const seats = [human, human, human];
     const humanMustAct = (g: PlayerView) =>
       g.phase === 'roundOver' ||
@@ -491,6 +492,9 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
     expect(stats.ok && stats.leaderboard).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
+    // Sa première partie terminée lui fait gagner « Bienvenue », annoncé tout de suite (une seule fois).
+    await waitFor(() => badges.includes('games-1'));
+    expect(badges.filter((id) => id === 'games-1')).toHaveLength(1);
 
     // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
     const target = server.rooms.get(code)!.game!.config.targetScore;
