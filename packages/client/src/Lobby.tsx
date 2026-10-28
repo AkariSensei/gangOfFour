@@ -9,6 +9,8 @@ import { socket } from './socket';
 const TARGET_SCORES = [50, 100, 200];
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];
+/** Emplacement des quatre places autour de la table, dans l'ordre d'arrivée à partir de la sienne. */
+const SEATS = ['bottom', 'left', 'top', 'right'] as const;
 
 export function Lobby({
   room,
@@ -29,6 +31,10 @@ export function Lobby({
   const [targetScore, setTargetScore] = useState(100);
   const [turnSeconds, setTurnSeconds] = useState(0);
   const isHost = room.hostId === session.playerId;
+  // Places dans l'ordre d'arrivée, en commençant par la sienne (en bas) ; les places vides restent à la fin.
+  const mine = Math.max(0, room.players.findIndex((p) => p.id === session.playerId));
+  const seated = [...room.players.slice(mine), ...room.players.slice(0, mine)];
+  const seats = Array.from({ length: 4 }, (_, i) => seated[i]);
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
@@ -74,43 +80,54 @@ export function Lobby({
   return (
     <main className="lobby">
       <div className="panel">
-        <p className="muted">Code du salon</p>
-        <div className="room-code">{room.code}</div>
-        <button onClick={copy}>{copied ? 'Lien copié !' : 'Copier le lien d\'invitation'}</button>
-
-        <h2>Joueurs ({room.players.length}/4)</h2>
-        <ul className="player-list">
-          {room.players.map((p) => (
-            <li key={p.id} className={p.connected ? '' : 'offline'}>
-              <Avatar name={p.name} look={p} bot={p.bot} />
-              {p.name}
-              {p.bot && <span className="tag">bot</span>}
-              {p.id === room.hostId && <span className="tag">hôte</span>}
-              {p.id === session.playerId && <span className="tag you">toi</span>}
-              {(isHost || admin) && !p.bot && p.id !== session.playerId ? (
-                <>
-                  <MuteButton name={p.name} muted={p.muted} onClick={() => mute(p.id, !p.muted)} />
-                  <KickButton name={p.name} onKick={() => kick(p.id)} />
-                </>
+        {/* La table vue de dessus : sa propre place en bas, les autres autour, le code du salon sur le tapis. */}
+        <div className="lobby-table">
+          <div className="lobby-felt">
+            <p className="muted">Code du salon</p>
+            <div className="room-code">{room.code}</div>
+            <button onClick={copy}>{copied ? 'Lien copié !' : "Copier le lien d'invitation"}</button>
+            <h2>Joueurs ({room.players.length}/4)</h2>
+          </div>
+          <ul className="lobby-seats">
+            {seats.map((p, i) =>
+              p ? (
+                <li key={p.id} className={`lobby-seat at-${SEATS[i]} ${p.connected ? '' : 'offline'}`}>
+                  <Avatar name={p.name} look={p} bot={p.bot} />
+                  <span className="lobby-seat-name">{p.name}</span>
+                  <span className="lobby-seat-tags">
+                    {p.bot && <span className="tag">bot</span>}
+                    {p.id === room.hostId && <span className="tag">hôte</span>}
+                    {p.id === session.playerId && <span className="tag you">toi</span>}
+                    {(isHost || admin) && !p.bot && p.id !== session.playerId ? (
+                      <>
+                        <MuteButton name={p.name} muted={p.muted} onClick={() => mute(p.id, !p.muted)} />
+                        <KickButton name={p.name} onKick={() => kick(p.id)} />
+                      </>
+                    ) : (
+                      p.muted && <span className="tag">🔇</span>
+                    )}
+                    {p.bot && isHost && (
+                      <button className="remove-bot" aria-label={`Retirer ${p.name}`} onClick={() => removeBot(p.id)}>
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </li>
               ) : (
-                p.muted && <span className="tag">🔇</span>
-              )}
-              {p.bot && isHost && (
-                <button className="remove-bot" aria-label={`Retirer ${p.name}`} onClick={() => removeBot(p.id)}>
-                  ✕
-                </button>
-              )}
-            </li>
-          ))}
-          {Array.from({ length: 4 - room.players.length }, (_, i) => (
-            <li key={`empty-${i}`} className="empty">
-              En attente…
-            </li>
-          ))}
-        </ul>
-        {isHost && room.players.length < 4 && (
-          <button onClick={addBot}>🤖 Ajouter un bot</button>
-        )}
+                <li key={`libre-${i}`} className={`lobby-seat empty at-${SEATS[i]}`}>
+                  <span className="lobby-seat-name">Place libre</span>
+                  {isHost ? (
+                    <button className="link small" onClick={addBot}>
+                      🤖 Ajouter un bot
+                    </button>
+                  ) : (
+                    <span className="muted small">En attente…</span>
+                  )}
+                </li>
+              ),
+            )}
+          </ul>
+        </div>
 
         {isHost && (
           <div className="target-score">
