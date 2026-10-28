@@ -133,28 +133,44 @@ describe('GameHistory', () => {
 
   it('calcule les badges d\'un joueur', () => {
     const history = new GameHistory();
-    const first = finished({ Alice: 15, Bruno: 104, Chloé: 60 });
-    first.round = 11;
+    const first = finished({ Alice: 5, Bruno: 160, Chloé: 60 });
+    first.round = 21;
     first.stats = [
-      { roundsWon: 6, gangs: 1, worstRound: 10 },
+      { roundsWon: 60, gangs: 3, worstRound: 10 },
       { roundsWon: 0, gangs: 0, worstRound: 80 },
       { roundsWon: 1, gangs: 0, worstRound: 18 },
     ];
     history.record(first);
-    history.record(finished({ Alice: 30, Bruno: 50, Chloé: 60 }));
+    const second = finished({ Alice: 15, Bruno: 50, Chloé: 60 });
+    second.round = 4;
+    second.stats = [
+      { roundsWon: 50, gangs: 1, worstRound: 10 },
+      { roundsWon: 0, gangs: 0, worstRound: 20 },
+      { roundsWon: 0, gangs: 0, worstRound: 20 },
+    ];
+    history.record(second);
     history.record(finished({ Alice: 90, Bruno: 50, Chloé: 60 }));
+    // Seule contre des bots : compte pour les badges de victoire, pas pour « Bon collègue ».
+    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2]);
     const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
     expect(badges('Alice')).toMatchObject({
       'first-win': '1/1',
-      'games-10': '3/10',
-      'streak-3': '2/3',
+      'games-25': '4/25',
+      'online-25': '3/25',
+      'wins-25': '3/25',
+      'streak-4': '2/4',
       'gang-1': '1/1',
+      'gang-25': '4/25',
+      fireworks: '3/3',
       'clean-win': '1/1',
-      steamroller: '5/5',
-      marathon: '10/10',
+      steamroller: '100/100',
+      marathon: '20/20',
+      blitz: '1/1',
+      'full-table': '0/1',
       scapegoat: '0/1',
+      castaway: '0/1',
     });
-    expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', 'clean-win': '0/1' });
+    expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', castaway: '1/1', 'clean-win': '0/1', 'streak-4': '1/4' });
   });
 
   it('sépare les parties en ligne de celles jouées seul contre des bots', () => {
