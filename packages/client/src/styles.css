@@ -76,6 +76,14 @@ button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* Bouton principal indisponible : gris lisible plutôt qu'un or terni, qui passait pour du brun. */
+button.primary:disabled {
+  opacity: 1;
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--muted);
+  box-shadow: none;
+}
 button.primary {
   background: linear-gradient(180deg, #f3cb4d, var(--gold));
   border-color: var(--gold-dark);
@@ -94,18 +102,22 @@ button.ghost {
   color: inherit;
   border-color: rgba(255, 255, 255, 0.25);
 }
+/* Action secondaire : petit bouton discret plutôt qu'un lien souligné. */
 button.link {
-  border: none;
-  background: none;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
   color: inherit;
   font-weight: 500;
-  padding: 0.25rem 0.4rem;
+  padding: 0.3rem 0.85rem;
+}
+button.link:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 button.link.small {
-  font-size: 0.85rem;
-  opacity: 0.85;
+  font-size: 0.82rem;
+  padding: 0.22rem 0.7rem;
 }
 button.icon {
   background: rgba(255, 255, 255, 0.08);
@@ -1049,8 +1061,9 @@ button.mute.on {
   }
 }
 
+/* Chevauchement des cartes de la main : assez faible pour que la valeur reste lisible (un 10 entier). */
 .hand {
-  --overlap: 0.3;
+  --overlap: 0.2;
   display: flex;
   justify-content: center;
   padding: calc(var(--card-w) * 0.32) 0 0.3rem calc(var(--card-w) * var(--overlap));
@@ -1119,19 +1132,21 @@ button.mute.on {
   animation: pop-in 0.2s ease;
 }
 
+/* L'annonce se pose sur la main, pas au centre : le pli à battre reste visible. */
 .turn-banner {
   position: fixed;
   inset: 0;
   z-index: 18;
   display: grid;
-  place-items: center;
+  place-items: end center;
   padding: 1rem;
+  padding-bottom: max(1.5rem, calc(var(--card-w) * 0.5));
   cursor: pointer;
 }
 .turn-banner-box {
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: clamp(1.8rem, 6vw, 3.4rem);
+  font-size: clamp(1.5rem, 4.5vw, 2.6rem);
   color: #2a1d02;
   background: linear-gradient(180deg, #f6d567, var(--gold));
   border: 3px solid var(--gold-dark);
@@ -1142,7 +1157,7 @@ button.mute.on {
   justify-items: center;
   gap: 0.5rem;
   text-align: center;
-  box-shadow: 0 0 0 9999px rgba(5, 12, 8, 0.45), 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 9999px rgba(5, 12, 8, 0.3), 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: banner-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
 }
 @keyframes banner-pop {
@@ -1237,6 +1252,14 @@ button.mute.on {
   border-radius: 0;
   padding: 0.35rem 0.8rem;
   background: transparent;
+  white-space: nowrap;
+}
+/* Petit écran : l'intitulé passe au-dessus du choix, qui garde toute la largeur. */
+@media (max-width: 480px) {
+  .target-score {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
 }
 .segmented button.on {
   background: var(--gold);
@@ -1337,7 +1360,7 @@ button.mute.on {
     width: 24px;
   }
   .hand {
-    --overlap: 0.42;
+    --overlap: 0.3;
   }
   .hand .card {
     transform: translateY(var(--sel, 0px));
@@ -1362,10 +1385,58 @@ button.mute.on {
     height: auto;
     min-height: 100dvh;
   }
+  /* En-tête compact : les points des adversaires sont déjà sur leur place, seul le sien reste en haut. */
+  .table-header {
+    gap: 0.35rem 0.5rem;
+  }
+  .header-left {
+    flex-wrap: wrap;
+    gap: 0.15rem 0.5rem;
+    flex: 1 1 100%;
+  }
+  .round {
+    font-size: 0.95rem;
+  }
+  .direction {
+    font-size: 0.78rem;
+  }
   .scores {
     order: 3;
-    width: 100%;
-    justify-content: flex-start;
+  }
+  .score-pill:not(.me) {
+    display: none;
+  }
+  .header-right {
+    gap: 0.4rem;
+    margin-left: auto;
+  }
+  .header-right button.icon {
+    padding: 0.2rem 0.45rem;
+  }
+  .header-right button.link {
+    padding: 0.2rem 0.65rem;
+    font-size: 0.85rem;
+  }
+  .results th,
+  .results td {
+    padding: 0.4rem 0.25rem;
+  }
+  .results th {
+    font-size: 0.62rem;
+  }
+  .results .player-name {
+    white-space: nowrap;
+    max-width: 5.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .leftover {
+    gap: 0;
+    padding-left: 9px;
+    max-width: 104px;
+  }
+  .leftover img {
+    margin-left: -9px;
   }
   .opponent {
     grid-template-columns: auto;
@@ -1391,7 +1462,7 @@ button.mute.on {
   .hand {
     flex-wrap: wrap;
     row-gap: 0.6rem;
-    --overlap: 0.38;
+    --overlap: 0.28;
   }
   .controls button {
     padding: 0.55rem 0.8rem;

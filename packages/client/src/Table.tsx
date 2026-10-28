@@ -136,7 +136,7 @@ function RoundOver({ game, onExit }: { game: PlayerView; onExit: () => void }) {
             {ranking.map((p, rank) => (
               <tr key={p.id} className={p.i === game.you ? 'me' : ''}>
                 <td className="rank">{rank + 1}</td>
-                <td>{p.name}</td>
+                <td className="player-name">{p.name}</td>
                 <td>
                   <div className="leftover">
                     {r.hands[p.i]!.length === 0
