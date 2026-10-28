@@ -3,6 +3,7 @@ import type { LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
 import { BadgesPage, useMyBadges } from './Badges';
+import { DailyChallenge } from './Challenge';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
 import { errorLabel } from './labels';
@@ -169,6 +170,7 @@ export function Home({
           )}
         </section>
         {admin && <AdminPanel onClose={() => setAdmin(false)} />}
+        <DailyChallenge canPlay={!!account?.name} onEnter={onEnter} />
         <LiveRooms onWatch={onEnter} />
       </div>
 

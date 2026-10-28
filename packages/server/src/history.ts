@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { type Badge, badgesOf, liveBadgesOf } from './badges';
 import type { BotLevel } from './bot';
+import { type ChallengeStats, NO_CHALLENGE } from './challenges';
 
 export interface GameRecord {
   finishedAt: string;
@@ -79,6 +80,8 @@ export class GameHistory {
   constructor(
     private file?: string,
     private accounts?: AccountNames,
+    /** Défis du jour, qui donnent eux aussi des badges. */
+    private challenges?: { statsOf(account: string): ChallengeStats },
   ) {
     if (!file) return;
     try {
@@ -271,20 +274,26 @@ export class GameHistory {
 
   /** Badges d'un compte, pour repérer ceux qu'une partie vient de lui faire gagner. */
   badgesOfAccount(accountId: string): Badge[] {
-    return badgesOf(this.gamesOf(accountId));
+    return badgesOf(this.gamesOf(accountId), this.challengesOf(accountId));
   }
 
-  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
+  private challengesOf(owner: string): ChallengeStats {
+    return owner.startsWith('pseudo:') ? NO_CHALLENGE : (this.challenges?.statsOf(owner) ?? NO_CHALLENGE);
+  }
+
+  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué (ni relevé de défi). */
   profile(name: string): PlayerProfile | null {
-    const games = this.gamesOf(this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`);
-    if (games.length === 0) return null;
+    const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
+    const games = this.gamesOf(owner);
+    const challenges = this.challengesOf(owner);
+    if (games.length === 0 && challenges.played === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
     return {
-      name: this.displayName(games[games.length - 1]!.me),
+      name: games.length > 0 ? this.displayName(games[games.length - 1]!.me) : (this.accounts?.get(owner)?.name ?? name),
       games: games.length,
       wins: games.filter((g) => g.me.winner).length,
-      averageScore: Math.round(sum((g) => g.me.score) / games.length),
-      bestScore: Math.min(...games.map((g) => g.me.score)),
+      averageScore: games.length > 0 ? Math.round(sum((g) => g.me.score) / games.length) : 0,
+      bestScore: games.length > 0 ? Math.min(...games.map((g) => g.me.score)) : 0,
       roundsPlayed: sum((g) => g.record.rounds),
       roundsWon: sum((g) => g.me.roundsWon ?? 0),
       gangs: sum((g) => g.me.gangs ?? 0),
@@ -299,7 +308,7 @@ export class GameHistory {
           rank: 1 + record.players.filter((p) => p.score < me.score).length,
           players: record.players.length,
         })),
-      badges: badgesOf(games),
+      badges: badgesOf(games, challenges),
     };
   }
 }

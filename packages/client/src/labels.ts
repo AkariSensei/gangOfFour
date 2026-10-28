@@ -55,6 +55,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   muted: 'Ton chat a été coupé dans ce salon.',
   kicked: 'Tu as été exclu de ce salon.',
   paused: 'La partie est en pause.',
+  challengeAlreadyPlayed: 'Tu as déjà relevé le défi du jour : reviens demain !',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 

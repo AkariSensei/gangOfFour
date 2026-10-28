@@ -707,6 +707,64 @@ describe('serveur de jeu', () => {
     await waitFor(() => !server.rooms.get(code));
   });
 
+  it('fait relever le défi du jour une seule fois, sur la même donne pour tous, sans spectateur', async () => {
+    await start();
+    const [alice, bruno, curieux] = [connect('Alice'), connect('Bruno'), connect('Curieux')];
+    const first = await alice.emitWithAck('challenge:start');
+    if (!first.ok) throw new Error(first.error);
+    expect(await bruno.emitWithAck('challenge:start')).toMatchObject({ ok: true });
+    await waitFor(() => !!alice.game && !!bruno.game);
+    expect(alice.game!.hand).toEqual(bruno.game!.hand);
+    expect(alice.room!.challenge).toEqual({ day: expect.any(String), moves: 0 });
+    expect(alice.room!.players.filter((p) => p.bot).map((p) => p.level)).toEqual(['hard', 'hard', 'hard']);
+
+    expect(await alice.emitWithAck('challenge:start')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
+    expect(await curieux.emitWithAck('room:watch', { code: first.code })).toEqual({ ok: false, error: 'roomNotFound' });
+    expect(await curieux.emitWithAck('rooms:live')).toEqual({ ok: true, rooms: [] });
+    expect(await curieux.emitWithAck('challenge:get')).toMatchObject({ ok: true, challenge: { mine: null, today: [] } });
+    expect(await alice.emitWithAck('challenge:get')).toMatchObject({ ok: true, challenge: { mine: { finished: false } } });
+  });
+
+  it('termine le défi avec la manche, le classe à part et annonce ses badges', async () => {
+    await start({ botDelayMs: 0 });
+    const alice = connect('Alice');
+    const won: string[] = [];
+    alice.on('badges:won', (badges) => won.push(...badges.map((b) => b.id)));
+    await alice.emitWithAck('challenge:start');
+    const over = () => alice.game?.phase === 'gameOver';
+    for (let steps = 0; !over(); steps++) {
+      expect(steps).toBeLessThan(500);
+      await waitFor(() => over() || (alice.game?.phase === 'playing' && alice.game.currentPlayer === 0), 5000);
+      if (over()) break;
+      const before = JSON.stringify(alice.game);
+      await playBotTurn([alice]);
+      await waitFor(() => JSON.stringify(alice.game) !== before);
+    }
+    const result = await alice.emitWithAck('challenge:get');
+    if (!result.ok) throw new Error(result.error);
+    const mine = result.challenge.mine!;
+    expect(mine).toMatchObject({ finished: true, rank: 1, moves: alice.room!.challenge!.moves, cardsLeft: alice.game!.hand.length });
+    expect(mine.won).toBe(alice.game!.lastRound!.winnerIndex === 0);
+    expect(result.challenge.today).toEqual([{ rank: 1, name: 'Alice', won: mine.won, moves: mine.moves, cardsLeft: mine.cardsLeft }]);
+    expect(result.challenge.overall).toEqual([{ name: 'Alice', played: 1, wins: mine.won ? 1 : 0, bestStreak: 1 }]);
+    // Le défi n'entre pas dans l'historique des parties, et la revanche est refusée.
+    expect(server.history.recent()).toEqual([]);
+    expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
+    await waitFor(() => won.includes('challenge-1'));
+    expect(won.includes('challenge-win-1')).toBe(!!mine.won);
+  }, 30000);
+
+  it("consomme l'essai du jour quand le joueur quitte le défi en cours", async () => {
+    await start();
+    const alice = connect('Alice');
+    await alice.emitWithAck('challenge:start');
+    await waitFor(() => !!alice.game);
+    await alice.emitWithAck('room:leave');
+    const result = await alice.emitWithAck('challenge:get');
+    expect(result).toMatchObject({ ok: true, challenge: { mine: { finished: true, won: false, cardsLeft: 16 } } });
+    expect(await alice.emitWithAck('challenge:start')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
+  });
+
   it('ne lance pas de minuteur par défaut', async () => {
     await start();
     const { players } = await lobby(3);

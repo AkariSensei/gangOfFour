@@ -3,6 +3,7 @@ import { createServer as createHttpServer, type Server as HttpServer } from 'nod
 import { Server } from 'socket.io';
 import { AccountStore } from './accounts';
 import type { Badge } from './badges';
+import { ChallengeStore, dayOf, seedOf } from './challenges';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -61,6 +62,8 @@ export interface GameServerOptions {
   staticDir?: string;
   /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
   historyFile?: string;
+  /** Fichier JSON des défis du jour ; sans fichier, ils restent en mémoire. */
+  challengesFile?: string;
   /** Journal des erreurs (une ligne JSON par erreur), relevé par la surveillance GitHub. */
   errorsFile?: string;
   /** Durée d'une « seconde » du minuteur de tour, en millisecondes (raccourcie dans les tests). */
@@ -96,7 +99,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   });
   const rooms = new RoomManager();
   const accounts = new AccountStore(options.accountsFile, options.adminEmail);
-  const history = new GameHistory(options.historyFile, accounts);
+  const challenges = new ChallengeStore(options.challengesFile, accounts);
+  const history = new GameHistory(options.historyFile, accounts, challenges);
   const verifyGoogle = options.verifyGoogle ?? (options.googleClientId ? googleVerifier(options.googleClientId) : undefined);
   const errors = new ErrorLog(options.errorsFile);
   const saved = new SavedRooms(options.roomsFile, () => rooms.all());
@@ -107,6 +111,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
+    // Un défi ne compte pas dans l'historique (ni les classements et badges des parties) : il a les siens.
+    if (room.challenge) return finishChallenge(room);
     history.record(
       room.game,
       new Date(),
@@ -114,6 +120,17 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       room.seats.map((s) => s.account),
       room.seats.map((s) => (s.bot ? (s.level ?? 'normal') : undefined)),
     );
+    io.emit('stats:changed');
+  }
+
+  /** Termine l'essai du défi : à la fin de la manche, ou quand le joueur abandonne la table avant. */
+  function finishChallenge(room: Room) {
+    const seat = room.seats.find((s) => !s.bot);
+    const game = room.game;
+    if (!room.challenge || !seat?.account || !game) return;
+    const index = room.seats.indexOf(seat);
+    const won = game.phase === 'gameOver' && game.lastRound?.winnerIndex === index;
+    challenges.finish(seat.account, room.challenge.day, { won, moves: room.challenge.moves, cardsLeft: game.players[index]?.hand.length ?? 0 });
     io.emit('stats:changed');
   }
 
@@ -134,6 +151,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     for (const accountId of new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))) {
       // Première fois qu'on regarde ce joueur dans cette partie : ce qu'il avait déjà ne s'annonce pas.
       const had = (seen[accountId] ??= history.badgesOfAccount(accountId).filter(won).map((b) => b.id));
+      // Pendant un défi, rien ne s'annonce en direct : la manche ne compte pas pour les badges des parties.
+      if (room.challenge && !room.recorded) continue;
       const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts);
       const fresh = now.filter((b) => won(b) && !had.includes(b.id));
       if (fresh.length === 0) continue;
@@ -312,6 +331,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
   /** Ferme un salon : il disparaît des parties en cours et ne peut plus être rejoint. */
   function closeRoom(code: string) {
+    // Défi abandonné en cours de route : l'essai du jour est consommé, avec les cartes restées en main.
+    const room = rooms.get(code);
+    if (room?.challenge && !room.recorded) {
+      room.recorded = true;
+      finishChallenge(room);
+    }
     clearTimeout(cleanupTimers.get(code));
     cleanupTimers.delete(code);
     rooms.delete(code);
@@ -543,6 +568,28 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       return allowed.ok ? enter(rooms.create(name, account, account.id), ack) : ack(allowed);
     });
+    on('challenge:start', (_payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      const { account, name } = seated;
+      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
+      if (!allowed.ok) return ack(allowed);
+      const now = new Date();
+      if (!challenges.start(account.id, now)) return ack({ ok: false, error: 'challengeAlreadyPlayed' });
+      const day = dayOf(now);
+      return enter(rooms.createChallenge(name, account, account.id, day, seedOf(day)), ack);
+    });
+    on('challenge:get', (_payload, ack) => {
+      const day = dayOf(new Date());
+      const account = me();
+      const attempt = account && challenges.attempt(account.id, day);
+      const mine = attempt
+        ? attempt.finishedAt
+          ? { finished: true, won: attempt.won, moves: attempt.moves, cardsLeft: attempt.cardsLeft, rank: challenges.rankOf(attempt.account, day) ?? undefined }
+          : { finished: false }
+        : null;
+      ack({ ok: true, challenge: { day, mine, today: challenges.ranking(day), overall: challenges.overall() } });
+    });
     on('room:join', (payload, ack) => {
       const seated = player();
       if (!seated.ok) return ack(seated);
@@ -558,6 +605,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const room = rooms.get(text(payload.code));
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
+      // Regarder un défi dévoilerait la donne du jour.
+      if (room.challenge) return ack({ ok: false, error: 'roomNotFound' });
       if (socket.data.code) leaveCurrent();
       socket.data = { ip: socket.data.ip, accountId: socket.data.accountId, code: room.code, spectator: true };
       await socket.join(room.code);

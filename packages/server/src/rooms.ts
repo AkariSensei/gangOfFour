@@ -61,6 +61,8 @@ export interface Room {
   kicked?: string[];
   /** Partie mise en pause par l'hôte ou l'admin : personne ne joue et aucun minuteur ne tourne. */
   paused?: boolean;
+  /** Défi du jour : une seule manche, seul contre trois bots difficiles, sur la donne du jour. */
+  challenge?: { day: string; moves: number };
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -117,6 +119,30 @@ export class RoomManager {
     const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null };
     const session = this.seat(room, name, look, account);
     room.hostId = session.playerId;
+    this.rooms.set(room.code, room);
+    return { ok: true, ...session };
+  }
+
+  /**
+   * Défi du jour : le joueur s'assoit à la place du donneur face à trois bots difficiles, et la manche démarre aussitôt
+   * sur la donne du jour (`seed`). Le score de fin à 1 point termine la partie avec la manche. Personne ne peut
+   * rejoindre ni regarder la table, pour ne pas dévoiler la donne.
+   */
+  createChallenge(rawName: unknown, look: unknown, account: string, day: string, seed: number): Result<Session> {
+    const name = cleanName(rawName);
+    if (!name) return { ok: false, error: 'invalidName' };
+    const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null, challenge: { day, moves: 0 } };
+    const session = this.seat(room, name, look, account);
+    room.hostId = session.playerId;
+    for (const botName of BOT_NAMES) {
+      room.seats.push({ playerId: randomUUID(), token: randomUUID(), name: botName, connected: true, bot: true, level: 'hard' });
+    }
+    room.game = createGame(
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      seed,
+      { targetScore: 1 },
+    );
+    room.turnSeconds = 0;
     this.rooms.set(room.code, room);
     return { ok: true, ...session };
   }
@@ -381,6 +407,7 @@ export class RoomManager {
     if (!room.game) return { ok: false, error: 'gameNotStarted' };
     if (!room.seats.some((s) => s.playerId === playerId && !s.bot)) return { ok: false, error: 'notInRoom' };
     if (room.game.phase !== 'gameOver') return { ok: false, error: 'wrongPhase' };
+    if (room.challenge) return { ok: false, error: 'challengeAlreadyPlayed' };
     room.game = createGame(
       room.seats.map((s) => ({ id: s.playerId, name: s.name })),
       seed,
@@ -404,6 +431,7 @@ export class RoomManager {
     const result = applyAction(room.game, engineAction);
     if (!result.ok) return result;
     room.game = result.state;
+    if (room.challenge && action.type === 'play' && !room.seats[playerIndex]!.bot) room.challenge.moves += 1;
     return { ok: true };
   }
 
@@ -428,6 +456,7 @@ export class RoomManager {
       turnRemainingMs: null,
       spectators: 0,
       paused: room.paused ?? false,
+      ...(room.challenge ? { challenge: room.challenge } : {}),
     };
   }
 
@@ -440,7 +469,7 @@ export class RoomManager {
   live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number; open: boolean }[] {
     // Seulement les parties où au moins un vrai joueur est encore là : pas celles que les bots jouent seuls.
     return this.all().flatMap((room) =>
-      room.game && room.game.phase !== 'gameOver' && !this.isAbandoned(room.code)
+      room.game && room.game.phase !== 'gameOver' && !room.challenge && !this.isAbandoned(room.code)
         ? [
             {
               code: room.code,

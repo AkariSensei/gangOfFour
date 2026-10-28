@@ -1,11 +1,13 @@
 import type { ActionError, PlayerView } from '@gof/engine';
 import type { Badge } from './badges';
 import type { BotLevel } from './bot';
+import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
 export type { Badge } from './badges';
 export type { BotLevel } from './bot';
+export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
@@ -43,6 +45,17 @@ export interface RoomView {
   spectators: number;
   /** L'hôte a mis la partie en pause : personne ne joue, le minuteur est gelé. */
   paused: boolean;
+  /** Défi du jour (une seule manche contre trois bots difficiles) : son jour et les coups joués jusqu'ici. */
+  challenge?: { day: string; moves: number };
+}
+
+/** Le défi du jour vu par un joueur : son essai, et les classements. */
+export interface ChallengeView {
+  day: string;
+  /** Son essai du jour : absent s'il n'a pas encore joué, sans résultat tant que la manche est en cours. */
+  mine: { finished: boolean; won?: boolean; moves?: number; cardsLeft?: number; rank?: number } | null;
+  today: ChallengeRankEntry[];
+  overall: ChallengeOverallEntry[];
 }
 
 /** Partie en cours, proposée sur l'accueil à ceux qui veulent la regarder. */
@@ -79,7 +92,8 @@ export type RoomError =
   | 'accountNotFound'
   | 'muted'
   | 'kicked'
-  | 'paused';
+  | 'paused'
+  | 'challengeAlreadyPlayed';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -160,6 +174,10 @@ export interface ClientToServerEvents {
     }>,
   ) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
+  /** Défi du jour : son essai et les classements (sans compte, `mine` est null). */
+  'challenge:get': (ack: Ack<{ challenge: ChallengeView }>) => void;
+  /** Relève le défi du jour : une seule fois par jour, la manche démarre aussitôt. */
+  'challenge:start': (ack: Ack<Session>) => void;
 }
 
 /** Message du chat d'un salon : relayé aux joueurs présents, jamais enregistré. */

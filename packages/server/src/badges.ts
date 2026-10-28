@@ -1,3 +1,4 @@
+import { type ChallengeStats, NO_CHALLENGE } from './challenges';
 import type { GameRecord } from './history';
 
 /** Un badge d'un joueur : `value` sur `goal`, obtenu dès que `value` atteint `goal`. */
@@ -15,7 +16,7 @@ export interface Badge {
 /** Une partie vue par un joueur : la partie, et sa ligne à lui. */
 type Game = { record: GameRecord; me: GameRecord['players'][number] };
 
-type Definition = { theme?: string; id: string; icon: string; name: string; description: string; goal: number; value: (games: Game[]) => number };
+type Definition = { theme?: string; id: string; icon: string; name: string; description: string; goal: number; value: (games: Game[], challenges: ChallengeStats) => number };
 
 /** Range des badges sous un thème (pour la page des badges). */
 const themed = (theme: string, definitions: Definition[]) => definitions.map((d) => ({ ...d, theme }));
@@ -104,6 +105,14 @@ const BADGES: Definition[] = [
     once('scapegoat', '🐐', 'Bouc émissaire', 'Prends 80 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 80),
     once('castaway', '⚓', 'Naufragé', 'Finis une partie avec 150 points ou plus.', (x) => x.me.score >= 150),
   ]),
+  ...themed('Défi du jour', [
+    { id: 'challenge-1', icon: '📆', name: 'Relève le gant', description: 'Joue ton premier défi du jour.', goal: 1, value: (_g, c) => c.played },
+    { id: 'challenge-win-1', icon: '🎲', name: 'Défi relevé', description: 'Gagne un défi du jour.', goal: 1, value: (_g, c) => c.wins },
+    { id: 'challenge-win-10', icon: '🧩', name: 'Casse-tête', description: 'Gagne 10 défis du jour.', goal: 10, value: (_g, c) => c.wins },
+    { id: 'challenge-streak-7', icon: '🔁', name: 'Rituel', description: 'Joue le défi 7 jours d’affilée.', goal: 7, value: (_g, c) => c.bestStreak },
+    { id: 'challenge-podium', icon: '🏅', name: 'Podium du jour', description: 'Finis une journée de défi dans les trois premiers (au moins 3 joueurs).', goal: 1, value: (_g, c) => c.podiums },
+    { id: 'challenge-first', icon: '🌟', name: 'Numéro 1 du jour', description: 'Finis une journée de défi à la première place (au moins 3 joueurs).', goal: 1, value: (_g, c) => c.firsts },
+  ]),
   ...themed('Moments', [
     once('early-bird', '🌅', 'Lève-tôt', 'Termine une partie avant 9 h.', (x) => paris(x).hour < 9),
     { id: 'lunch-10', icon: '🥪', name: 'Pause déj', description: 'Termine 10 parties entre midi et 14 h.', goal: 10, value: (g) => g.filter((x) => paris(x).hour >= 12 && paris(x).hour < 14).length },
@@ -160,9 +169,9 @@ function streak(games: Game[], test: (g: Game) => boolean): number {
   return best;
 }
 
-/** Badges d'un joueur à partir de ses parties, de la plus ancienne à la plus récente. */
-export function badgesOf(games: Game[], definitions = BADGES): Badge[] {
-  return definitions.map(({ value, theme = '', ...badge }) => ({ ...badge, theme, value: Math.min(value(games), badge.goal) }));
+/** Badges d'un joueur à partir de ses parties (de la plus ancienne à la plus récente) et de ses défis du jour. */
+export function badgesOf(games: Game[], challenges: ChallengeStats = NO_CHALLENGE, definitions = BADGES): Badge[] {
+  return definitions.map(({ value, theme = '', ...badge }) => ({ ...badge, theme, value: Math.min(value(games, challenges), badge.goal) }));
 }
 
 /**
@@ -176,6 +185,7 @@ const LIVE = new Set(['hot-hand', 'masterclass', 'steamroller', 'bulldozer', 'ma
 export function liveBadgesOf(games: Game[]): Badge[] {
   return badgesOf(
     games,
+    NO_CHALLENGE,
     BADGES.filter((b) => LIVE.has(b.id)),
   );
 }

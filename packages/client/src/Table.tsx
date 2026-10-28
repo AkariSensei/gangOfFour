@@ -143,7 +143,34 @@ function Podium({ game, seats }: { game: PlayerView; seats: RoomView['players'] 
   );
 }
 
-function RoundOver({ game, seats, onExit }: { game: PlayerView; seats: RoomView['players']; onExit: () => void }) {
+/** Fin du défi du jour : manche gagnée en N coups, ou cartes restées en main. */
+function ChallengeOutcome({ game, moves }: { game: PlayerView; moves: number }) {
+  const won = game.lastRound?.winnerIndex === game.you;
+  const left = game.lastRound?.hands[game.you]?.length ?? 0;
+  return (
+    <div className={`challenge-outcome ${won ? 'won' : 'lost'}`}>
+      <h2>{won ? '🎉 Défi relevé !' : '😬 Défi raté'}</h2>
+      <p>
+        {won
+          ? `Tu as vidé ta main en ${moves} coup${moves > 1 ? 's' : ''}.`
+          : `Il te restait ${left} carte${left > 1 ? 's' : ''} en main.`}{' '}
+        Ta place du jour est dans le classement du défi, sur l'accueil. Prochain défi demain !
+      </p>
+    </div>
+  );
+}
+
+function RoundOver({
+  game,
+  seats,
+  challenge,
+  onExit,
+}: {
+  game: PlayerView;
+  seats: RoomView['players'];
+  challenge?: RoomView['challenge'];
+  onExit: () => void;
+}) {
   const r = game.lastRound!;
   const over = game.phase === 'gameOver';
   const [readUntil] = useState(() => Date.now() + RECAP_MIN_MS);
@@ -154,7 +181,9 @@ function RoundOver({ game, seats, onExit }: { game: PlayerView; seats: RoomView[
   return (
     <div className="overlay">
       <div className={`panel modal pop-in ${over ? 'game-over' : ''}`}>
-        {over ? (
+        {over && challenge && game.you >= 0 ? (
+          <ChallengeOutcome game={game} moves={challenge.moves} />
+        ) : over ? (
           <>
             <h2>{winnerNames} gagne la partie !</h2>
             <Podium game={game} seats={seats} />
@@ -194,12 +223,12 @@ function RoundOver({ game, seats, onExit }: { game: PlayerView; seats: RoomView[
         </table>
         {over ? (
           <div className="end-actions">
-            {game.you >= 0 && (
+            {game.you >= 0 && !challenge && (
               <button className="primary big" disabled={wait > 0} onClick={() => socket.emitWithAck('game:rematch')}>
                 Revanche{suffix}
               </button>
             )}
-            <button className={game.you >= 0 ? 'big' : 'primary big'} onClick={onExit}>
+            <button className={game.you >= 0 && !challenge ? 'big' : 'primary big'} onClick={onExit}>
               Retour à l'accueil
             </button>
           </div>
@@ -816,7 +845,10 @@ export function Table({
   }
 
   function leave() {
-    if (spectator || confirm('Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.')) void exit();
+    const question = room.challenge
+      ? "Abandonner le défi du jour ? Ton essai compte quand même, avec les cartes qu'il te reste."
+      : 'Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.';
+    if (spectator || game.phase === 'gameOver' || confirm(question)) void exit();
   }
 
   // Le spectateur voit tous les joueurs autour de la table ; un joueur voit les autres à partir de sa place.
@@ -853,10 +885,16 @@ export function Table({
     <main className={`table-screen players-${n}${room.paused ? ' paused' : ''}`}>
       <header className="table-header">
         <div className="header-left">
-          <span className="round">Manche {game.round}</span>
-          <span className="direction" title="La partie s'arrête quand un joueur atteint ce score">
-            en {game.targetScore} pts
-          </span>
+          {room.challenge ? (
+            <span className="round">Défi du jour</span>
+          ) : (
+            <>
+              <span className="round">Manche {game.round}</span>
+              <span className="direction" title="La partie s'arrête quand un joueur atteint ce score">
+                en {game.targetScore} pts
+              </span>
+            </>
+          )}
           <span className="direction" title="Sens de jeu de la manche">
             {game.direction === 1 ? '↺ antihoraire' : '↻ horaire'}
           </span>
@@ -1057,7 +1095,7 @@ export function Table({
       )}
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown ? null : bannerText} />
-      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} challenge={room.challenge} onExit={exit} />}
       {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );

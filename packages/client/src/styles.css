@@ -2878,3 +2878,64 @@ button.danger {
     font-size: 0.75rem;
   }
 }
+
+/* Défi du jour sur l'accueil, et son résultat en fin de manche */
+.daily-challenge {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.challenge-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+.challenge-head h2 {
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  margin: 0;
+}
+.daily-challenge p {
+  margin: 0;
+}
+.daily-challenge > button.primary {
+  justify-self: start;
+}
+.challenge-mine.won strong {
+  color: #9be0b4;
+}
+.challenge-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.daily-challenge .segmented {
+  display: flex;
+}
+.daily-challenge .segmented button {
+  flex: 1;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.75rem;
+  min-height: 0;
+}
+.daily-challenge .ranking {
+  margin: 0;
+}
+.challenge-outcome {
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+.challenge-outcome h2 {
+  margin-bottom: 0.35rem;
+}
+.challenge-outcome.won h2 {
+  color: var(--gold);
+}
+.challenge-outcome p {
+  margin: 0;
+  color: #cfe3d7;
+}
