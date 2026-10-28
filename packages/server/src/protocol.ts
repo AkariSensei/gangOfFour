@@ -1,9 +1,11 @@
 import type { ActionError, PlayerView } from '@gof/engine';
 import type { Badge } from './badges';
+import type { BotLevel } from './bot';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
 export type { Badge } from './badges';
+export type { BotLevel } from './bot';
 
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
@@ -24,10 +26,12 @@ export interface RoomView {
     name: string;
     connected: boolean;
     bot: boolean;
+    /** Niveau d'un bot ajouté par l'hôte. */
+    level?: BotLevel;
     away: boolean;
     muted: boolean;
     vacant: boolean;
-    /** Le joueur passe tout seul quand aucune de ses cartes ne peut battre la table (son choix, activé par défaut). */
+    /** Le joueur passe tout seul quand aucune de ses cartes ne peut battre la table (son choix, coupé par défaut). */
     autoPass: boolean;
   } & Look)[];
   started: boolean;
@@ -128,7 +132,7 @@ export interface ClientToServerEvents {
   'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;
   'rooms:live': (ack: Ack<{ rooms: LiveRoom[] }>) => void;
   'chat:send': (payload: { text: string }, ack: Ack) => void;
-  'room:addBot': (ack: Ack) => void;
+  'room:addBot': (payload: { level?: BotLevel }, ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin coupe (ou rend) le chat d'un joueur du salon. */
   'room:mute': (payload: { playerId: string; muted: boolean }, ack: Ack) => void;

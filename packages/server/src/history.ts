@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { type Badge, badgesOf, liveBadgesOf } from './badges';
+import type { BotLevel } from './bot';
 
 export interface GameRecord {
   finishedAt: string;
@@ -13,6 +14,8 @@ export interface GameRecord {
     score: number;
     winner: boolean;
     bot?: boolean;
+    /** Niveau du bot (parties enregistrées depuis l'ajout des niveaux). */
+    botLevel?: BotLevel;
     /** Compte du joueur (absent des parties jouées avant les comptes, ou d'un siège en plus de l'admin). */
     account?: string;
     /** Statistiques de la partie (absentes des parties enregistrées avant leur ajout). */
@@ -89,8 +92,14 @@ export class GameHistory {
    * `bots` : indices des joueurs tenus par l'ordinateur, gardés dans l'historique mais pas dans le classement.
    * `accounts` : compte de chaque siège, pour que le classement suive la personne et pas le pseudo.
    */
-  record(game: GameState, finishedAt = new Date(), bots: number[] = [], accounts: (string | undefined)[] = []): GameRecord {
-    const record = this.toRecord(game, finishedAt, bots, accounts);
+  record(
+    game: GameState,
+    finishedAt = new Date(),
+    bots: number[] = [],
+    accounts: (string | undefined)[] = [],
+    levels: (BotLevel | undefined)[] = [],
+  ): GameRecord {
+    const record = this.toRecord(game, finishedAt, bots, accounts, levels);
     this.records.push(record);
     this.save();
     return record;
@@ -106,7 +115,7 @@ export class GameHistory {
     return liveBadgesOf(me ? [...this.gamesOf(accountId), { record, me }] : this.gamesOf(accountId));
   }
 
-  private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[]): GameRecord {
+  private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[], levels: (BotLevel | undefined)[] = []): GameRecord {
     return {
       finishedAt: finishedAt.toISOString(),
       rounds: game.round,
@@ -114,7 +123,7 @@ export class GameHistory {
         name: p.name,
         score: p.score,
         winner: game.winners.includes(i),
-        ...(bots.includes(i) ? { bot: true } : {}),
+        ...(bots.includes(i) ? { bot: true, ...(levels[i] ? { botLevel: levels[i] } : {}) } : {}),
         ...(accounts[i] ? { account: accounts[i] } : {}),
         ...(game.stats?.[i] ?? {}),
       })),

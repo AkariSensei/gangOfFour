@@ -109,7 +109,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
-    history.record(room.game, new Date(), botSeats(room), room.seats.map((s) => s.account));
+    history.record(
+      room.game,
+      new Date(),
+      botSeats(room),
+      room.seats.map((s) => s.account),
+      room.seats.map((s) => (s.bot ? (s.level ?? 'normal') : undefined)),
+    );
     io.emit('stats:changed');
   }
 
@@ -178,7 +184,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const seat = rooms.botToAct(code);
     if (!room?.game || !seat) return;
     const index = room.seats.indexOf(seat);
-    const choice = chooseBotAction(room.game, index);
+    const choice = chooseBotAction(room.game, index, Math.random, seat.level);
     if (!choice) return;
     const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
     let result = rooms.act(code, seat.playerId, action as PlayerAction);
@@ -623,7 +629,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       void broadcast(code);
       scheduleBots(code);
     });
-    on('room:addBot', (_payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId)));
+    on('room:addBot', (payload, ack) => handle(ack, (code, playerId) => rooms.addBot(code, playerId, payload.level)));
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
       handle(ack, (code, playerId) =>

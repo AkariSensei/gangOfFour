@@ -55,6 +55,9 @@ const BADGES: Definition[] = [
   ...themed('Contre les bots', [
     { id: 'bots-wins-10', icon: '🤖', name: 'Dompteur de robots', description: 'Gagne 10 parties seul contre des bots.', goal: 10, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
     { id: 'bots-wins-50', icon: '🦾', name: 'Terminator', description: 'Gagne 50 parties seul contre des bots.', goal: 50, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
+    { id: 'hard-games-25', icon: '🔧', name: 'Mécano', description: 'Joue 25 parties contre au moins un bot difficile.', goal: 25, value: (g) => g.filter((x) => x.record.players.some((p) => p.botLevel === 'hard')).length },
+    once('beat-hard-1', '🧠', 'Plus fort que la machine', 'Gagne une partie seul contre des bots tous en difficile.', (x) => x.me.winner && allHard(x)),
+    { id: 'beat-hard-10', icon: '⚙️', name: 'Maître des machines', description: 'Gagne 10 parties seul contre des bots tous en difficile.', goal: 10, value: (g) => wins(g.filter(allHard)) },
   ]),
   ...themed('Victoires', [
     { id: 'first-win', icon: '🏆', name: 'Premier sang', description: 'Gagne une partie.', goal: 1, value: (g) => wins(g) },
@@ -116,6 +119,8 @@ const wins = (games: Game[]) => games.filter((g) => g.me.winner).length;
 
 /** Nombre de personnes (pas de bots) à la table de cette partie. */
 const humans = (g: Game) => g.record.players.filter((p) => !p.bot).length;
+/** Seul contre des bots, tous réglés en difficile. */
+const allHard = (g: Game) => humans(g) < 2 && g.record.players.filter((p) => p.bot).every((p) => p.botLevel === 'hard');
 /** Parties en ligne : au moins deux personnes à la table. */
 const online = (games: Game[]) => games.filter((g) => humans(g) >= 2);
 /** Place à la fin de la partie (1 = le score le plus bas ; à égalité, même place). */

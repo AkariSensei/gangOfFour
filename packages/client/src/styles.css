@@ -539,6 +539,44 @@ input {
   font-size: 0.78rem;
   padding: 0.2rem 0.6rem;
 }
+/* Ajouter un bot : un bouton par niveau, de couleur croissante. */
+.bot-levels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.bot-levels small {
+  width: 100%;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.lobby-seat.empty .bot-levels button {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.74rem;
+}
+.bot-levels .level-easy,
+.tag.level-easy {
+  border-color: rgba(79, 180, 119, 0.6);
+  color: #9be0b4;
+}
+.bot-levels .level-normal,
+.tag.level-normal {
+  border-color: rgba(232, 185, 49, 0.6);
+  color: #f3d27a;
+}
+.bot-levels .level-hard,
+.tag.level-hard {
+  border-color: rgba(209, 69, 59, 0.7);
+  color: #ffb4ad;
+}
+.tag.level-easy,
+.tag.level-normal,
+.tag.level-hard {
+  border: 1px solid;
+  background: transparent;
+}
 .lobby-seat button.mute {
   opacity: 0.8;
 }

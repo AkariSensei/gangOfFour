@@ -200,6 +200,16 @@ describe('GameHistory', () => {
     expect(badges('Bruno')).toMatchObject({ 'last-10': '1/10', 'bad-streak-5': '2/5', 'friends-10': '4/10' });
   });
 
+  it('retient le niveau des bots, et en tire les badges contre les bots difficiles', () => {
+    const history = new GameHistory();
+    history.record(finished({ Alice: 10, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'hard']);
+    history.record(finished({ Alice: 10, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'easy']);
+    expect(history.recent(1)[0]!.players.map((p) => p.botLevel)).toEqual([undefined, 'hard', 'easy']);
+    const badges = Object.fromEntries(history.profile('Alice')!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
+    // Seule la première partie était contre des bots tous difficiles ; les deux avaient au moins un bot difficile.
+    expect(badges).toMatchObject({ 'beat-hard-1': '1/1', 'beat-hard-10': '1/10', 'hard-games-25': '2/25' });
+  });
+
   it('sépare les parties en ligne de celles jouées seul contre des bots', () => {
     const history = new GameHistory();
     // En ligne : deux personnes (et un bot) ; seul contre les bots : une personne et deux bots.

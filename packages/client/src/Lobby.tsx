@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ChatMessage, RoomView, Session } from '../../server/src/protocol';
+import type { BotLevel, ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatPanel, KickButton, MuteButton } from './Chat';
 import { errorLabel } from './labels';
@@ -11,6 +11,9 @@ const TARGET_SCORES = [50, 100, 200];
 const TURN_SECONDS = [0, 30, 60];
 /** Emplacement des quatre places autour de la table, dans l'ordre d'arrivée à partir de la sienne. */
 const SEATS = ['bottom', 'left', 'top', 'right'] as const;
+/** Niveaux de bot proposés à l'hôte. */
+const LEVEL_LABELS: Record<BotLevel, string> = { easy: 'Facile', normal: 'Moyen', hard: 'Difficile' };
+const BOT_LEVELS = Object.entries(LEVEL_LABELS) as [BotLevel, string][];
 
 export function Lobby({
   room,
@@ -42,8 +45,8 @@ export function Lobby({
     if (!result.ok) setError(errorLabel(result.error));
   }
 
-  async function addBot() {
-    const result = await socket.emitWithAck('room:addBot');
+  async function addBot(level: BotLevel) {
+    const result = await socket.emitWithAck('room:addBot', { level });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -95,7 +98,7 @@ export function Lobby({
                   <Avatar name={p.name} look={p} bot={p.bot} />
                   <span className="lobby-seat-name">{p.name}</span>
                   <span className="lobby-seat-tags">
-                    {p.bot && <span className="tag">bot</span>}
+                    {p.bot && <span className={`tag level-${p.level ?? 'normal'}`}>bot {LEVEL_LABELS[p.level ?? 'normal'].toLowerCase()}</span>}
                     {p.id === room.hostId && <span className="tag">hôte</span>}
                     {p.id === session.playerId && <span className="tag you">toi</span>}
                     {(isHost || admin) && !p.bot && p.id !== session.playerId ? (
@@ -117,9 +120,14 @@ export function Lobby({
                 <li key={`libre-${i}`} className={`lobby-seat empty at-${SEATS[i]}`}>
                   <span className="lobby-seat-name">Place libre</span>
                   {isHost ? (
-                    <button className="link small" onClick={addBot}>
-                      🤖 Ajouter un bot
-                    </button>
+                    <span className="bot-levels" role="group" aria-label="Ajouter un bot">
+                      <small>🤖 Ajouter un bot</small>
+                      {BOT_LEVELS.map(([level, label]) => (
+                        <button key={level} className={`link small level-${level}`} onClick={() => addBot(level)}>
+                          {label}
+                        </button>
+                      ))}
+                    </span>
                   ) : (
                     <span className="muted small">En attente…</span>
                   )}

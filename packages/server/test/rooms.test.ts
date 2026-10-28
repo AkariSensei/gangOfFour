@@ -147,6 +147,8 @@ describe('RoomManager', () => {
     expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: false, error: 'roomFull' });
     const bots = rooms.get(host.code)!.seats.filter((s) => s.bot);
     expect(bots.map((b) => b.name)).toEqual(['Robot Ada', 'Robot Alan']);
+    // Sans niveau précisé, un bot est moyen ; le niveau se voit dans la vue du salon.
+    expect(rooms.roomView(rooms.get(host.code)!).players.filter((p) => p.bot).map((p) => p.level)).toEqual(['normal', 'normal']);
 
     expect(rooms.removeBot(host.code, host.playerId, others[0]!.playerId)).toEqual({ ok: true });
     expect(rooms.get(host.code)!.seats).toHaveLength(4); // un humain ne se retire pas comme un bot
@@ -155,6 +157,14 @@ describe('RoomManager', () => {
 
     expect(rooms.start(host.code, host.playerId)).toEqual({ ok: true });
     expect(rooms.addBot(host.code, host.playerId)).toEqual({ ok: false, error: 'gameAlreadyStarted' });
+  });
+
+  it('donne à chaque bot le niveau choisi par l\'hôte, et moyen pour un niveau inconnu', () => {
+    const { rooms, host } = roomWith(1);
+    expect(rooms.addBot(host.code, host.playerId, 'hard')).toEqual({ ok: true });
+    expect(rooms.addBot(host.code, host.playerId, 'easy')).toEqual({ ok: true });
+    expect(rooms.addBot(host.code, host.playerId, 'expert')).toEqual({ ok: true });
+    expect(rooms.get(host.code)!.seats.filter((s) => s.bot).map((s) => s.level)).toEqual(['hard', 'easy', 'normal']);
   });
 
   it('ne donne jamais l\'hôte à un bot, et supprime un salon où il ne reste que des bots', () => {

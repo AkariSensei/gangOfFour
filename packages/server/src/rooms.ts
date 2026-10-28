@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView, playableCards } from '@gof/engine';
+import { BOT_LEVELS, type BotLevel } from './bot';
 import { AVATARS, COLORS, type Look, type RoomError, type RoomView, type Session } from './protocol';
 
 export const MAX_PLAYERS = 4;
@@ -26,6 +27,8 @@ export interface Seat {
   connected: boolean;
   /** Siège tenu par l'ordinateur, ajouté par l'hôte pour compléter la table. */
   bot?: boolean;
+  /** Niveau du bot (moyen si absent). */
+  level?: BotLevel;
   /** Joueur parti en pleine partie depuis un moment : un bot joue à sa place jusqu'à son retour. */
   away?: boolean;
   avatar?: string;
@@ -201,14 +204,15 @@ export class RoomManager {
   }
 
   /** L'hôte ajoute un bot sur un siège libre, avant la partie. */
-  addBot(code: string, playerId: string): Result {
+  addBot(code: string, playerId: string, level: unknown = 'normal'): Result {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
     if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
     if (room.seats.length >= MAX_PLAYERS) return { ok: false, error: 'roomFull' };
     const name = BOT_NAMES.find((n) => !room.seats.some((s) => s.name === n)) ?? 'Robot';
-    room.seats.push({ playerId: randomUUID(), token: randomUUID(), name, connected: true, bot: true });
+    const botLevel = BOT_LEVELS.includes(level as BotLevel) ? (level as BotLevel) : 'normal';
+    room.seats.push({ playerId: randomUUID(), token: randomUUID(), name, connected: true, bot: true, level: botLevel });
     return { ok: true };
   }
 
@@ -412,6 +416,7 @@ export class RoomManager {
         name: s.name,
         connected: s.connected,
         bot: s.bot ?? false,
+        ...(s.bot ? { level: s.level ?? 'normal' } : {}),
         away: s.away ?? false,
         autoPass: s.autoPass ?? false,
         vacant: s.vacant ?? false,

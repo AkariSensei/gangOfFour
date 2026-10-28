@@ -244,13 +244,13 @@ describe('serveur de jeu', () => {
     await start({ abandonDelayMs: 60_000, lobbyAbandonDelayMs: 60_000 });
     // Salon d'attente : l'hôte seul avec des bots s'en va, le salon disparaît.
     const waiting = await lobby(1);
-    expect((await waiting.players[0]!.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await waiting.players[0]!.emitWithAck('room:addBot', {})).ok).toBe(true);
     expect((await waiting.players[0]!.emitWithAck('room:leave')).ok).toBe(true);
     expect(server.rooms.get(waiting.code)).toBeUndefined();
 
     // Partie lancée : tant qu'un joueur reste, elle continue ; quand le dernier quitte, elle est supprimée.
     const playing = await lobby(2);
-    expect((await playing.players[0]!.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await playing.players[0]!.emitWithAck('room:addBot', {})).ok).toBe(true);
     await waitFor(() => playing.players[0]!.room?.players.length === 3);
     await playing.players[0]!.emitWithAck('game:start', {});
     await waitFor(() => playing.players.every((p) => p.game));
@@ -489,8 +489,8 @@ describe('serveur de jeu', () => {
     await start({ botDelayMs: 0 });
     const { code, players } = await lobby(1);
     const human = players[0]!;
-    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
-    expect((await human.emitWithAck('room:addBot')).ok).toBe(true);
+    expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
+    expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
     await waitFor(() => human.room?.players.length === 3);
     expect(human.room!.players.map((p) => p.bot)).toEqual([false, true, true]);
     const badges: string[] = [];
