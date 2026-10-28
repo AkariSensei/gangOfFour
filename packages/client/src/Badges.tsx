@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Badge } from '../../server/src/protocol';
-import { Profile } from './Profile';
 import { socket } from './socket';
 
 const done = (b: Badge) => b.value >= b.goal;
@@ -33,6 +32,101 @@ export function BadgeGrid({ badges }: { badges: Badge[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Badges rangés par thème, dans l'ordre où le serveur les donne. */
+function byTheme(badges: Badge[]): [string, Badge[]][] {
+  const themes = new Map<string, Badge[]>();
+  for (const b of badges) themes.set(b.theme, [...(themes.get(b.theme) ?? []), b]);
+  return [...themes];
+}
+
+/** Grille des badges rangée par thème, avec le compte de badges obtenus dans chaque thème. */
+export function ThemedBadgeGrid({ badges }: { badges: Badge[] }) {
+  return (
+    <div className="badge-themes">
+      {byTheme(badges).map(([theme, list]) => (
+        <section key={theme} className="badge-theme">
+          <h3>
+            {theme || 'Badges'}{' '}
+            <span className="muted">
+              {list.filter(done).length} / {list.length}
+            </span>
+          </h3>
+          <BadgeGrid badges={list} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** Mes badges, rechargés à chaque fin de partie (ou remise à zéro du classement). */
+export function useMyBadges(name: string | undefined): Badge[] | null {
+  const [badges, setBadges] = useState<Badge[] | null>(null);
+  useEffect(() => {
+    if (!name) return;
+    const load = () => void socket.emitWithAck('stats:player', { name }).then((r) => setBadges(r.ok && r.profile ? r.profile.badges : []));
+    load();
+    socket.on('stats:changed', load);
+    return () => {
+      socket.off('stats:changed', load);
+    };
+  }, [name]);
+  return badges;
+}
+
+type Filter = 'all' | 'won' | 'todo';
+
+/**
+ * Page « Mes badges » : tous les badges du joueur, par thème, avec leur description et leur progression.
+ * Elle remplace l'accueil ; le bouton Retour (ou celui du navigateur) y ramène.
+ */
+export function BadgesPage({ badges, onClose }: { badges: Badge[] | null; onClose: () => void }) {
+  const [filter, setFilter] = useState<Filter>('all');
+  const shown = useMemo(
+    () => (badges ?? []).filter((b) => filter === 'all' || (filter === 'won' ? done(b) : !done(b))),
+    [badges, filter],
+  );
+  const wonCount = badges?.filter(done).length ?? 0;
+  const total = badges?.length ?? 0;
+  return (
+    <main className="badges-page">
+      <header className="badges-page-head">
+        <button className="link" onClick={onClose}>
+          ← Retour
+        </button>
+        <h1>Mes badges</h1>
+        <div className="badges-page-progress" title={`${wonCount} badges obtenus sur ${total}`}>
+          <strong>
+            {wonCount} / {total}
+          </strong>
+          <span className="badge-bar">
+            <span style={{ width: `${total ? (100 * wonCount) / total : 0}%` }} />
+          </span>
+        </div>
+      </header>
+      <div className="segmented badges-filter" role="tablist" aria-label="Badges à afficher">
+        {(
+          [
+            ['all', 'Tous'],
+            ['won', 'Obtenus'],
+            ['todo', 'À gagner'],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {!badges ? (
+        <p className="muted">Chargement…</p>
+      ) : shown.length === 0 ? (
+        <p className="muted">{filter === 'won' ? 'Aucun badge pour l’instant : joue une partie pour commencer !' : 'Tous les badges sont obtenus, bravo !'}</p>
+      ) : (
+        <ThemedBadgeGrid badges={shown} />
+      )}
+    </main>
   );
 }
 
@@ -80,49 +174,3 @@ export function BadgeToasts() {
   );
 }
 
-/** Mes badges sur l'accueil : une rangée d'icônes, la grille complète dans ma fiche. */
-export function MyBadges({ name }: { name: string }) {
-  const [badges, setBadges] = useState<Badge[] | null>(null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const load = () => void socket.emitWithAck('stats:player', { name }).then((r) => setBadges(r.ok && r.profile ? r.profile.badges : null));
-    load();
-    socket.on('stats:changed', load);
-    return () => {
-      socket.off('stats:changed', load);
-    };
-  }, [name]);
-
-  if (!badges) return null;
-  // Une cinquantaine de badges : sur l'accueil, ceux obtenus, puis les trois les plus proches d'être gagnés.
-  const won = badges.filter(done);
-  const next = badges
-    .filter((b) => !done(b))
-    .sort((a, b) => b.value / b.goal - a.value / a.goal)
-    .slice(0, 3);
-  return (
-    <section className="panel my-badges">
-      <button className="my-badges-open" onClick={() => setOpen(true)} title="Voir mes badges">
-        <h2>Mes badges</h2>
-        <span className="muted">
-          {badges.filter(done).length} / {badges.length}
-        </span>
-      </button>
-      <div className="badge-strip">
-        {won.map((b) => (
-          <span key={b.id} className="won" title={`${b.name} : ${b.description}`}>
-            {b.icon}
-          </span>
-        ))}
-        {next.map((b) => (
-          <span key={b.id} title={`Prochain : ${b.name} (${b.value} / ${b.goal}) : ${b.description}`}>
-            {b.icon}
-          </span>
-        ))}
-      </div>
-      {next.length > 0 && <p className="muted small badge-next">Prochains : {next.map((b) => b.name).join(', ')}</p>}
-      {open && <Profile name={name} onClose={() => setOpen(false)} />}
-    </section>
-  );
-}

@@ -2439,7 +2439,7 @@ button.danger {
   margin: 0;
 }
 
-/* Badges : grille dans la fiche joueur, rangée d'icônes sur l'accueil */
+/* Badges : grille dans la fiche joueur et sur la page « Mes badges » */
 .modal.profile {
   width: min(760px, 100%);
   max-height: calc(100vh - 2rem);
@@ -2516,49 +2516,104 @@ button.danger {
   height: 100%;
   background: var(--gold);
 }
-.my-badges {
-  margin-top: 1.25rem;
-  padding: 1.1rem 1.25rem;
-}
-.my-badges-open {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 0;
-  min-height: 0;
-  margin-bottom: 0.6rem;
-}
-.my-badges h2 {
-  font-family: var(--font-title);
-  font-size: 1.1rem;
-  margin: 0;
-}
-.badge-strip {
-  display: flex;
-  flex-wrap: wrap;
+/* Bouton « Mes badges » dans le bloc du joueur, sur l'accueil */
+.badges-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
   gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(232, 185, 49, 0.45);
+  background: rgba(232, 185, 49, 0.08);
 }
-.badge-strip span {
+.badges-button:hover {
+  background: rgba(232, 185, 49, 0.16);
+}
+.badges-button span {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* Page « Mes badges » : tous les badges, rangés par thème */
+.badges-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vh, 2.5rem) 1rem 3rem;
+}
+.badges-page-head {
   display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: var(--surface-2);
-  font-size: 1rem;
-  filter: grayscale(1);
-  opacity: 0.45;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
-.badge-strip span.won {
-  background: var(--gold);
-  filter: none;
-  opacity: 1;
+.badges-page-head h1 {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-title);
+  color: var(--page-title);
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
 }
-.badge-next {
-  margin: 0.5rem 0 0;
+.badges-page-progress {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: end;
+  min-width: 140px;
+}
+.badges-page-progress strong {
+  color: var(--gold);
+  font-size: 1.1rem;
+}
+.badges-page-progress .badge-bar {
+  width: 100%;
+}
+.badges-filter {
+  margin: 0 auto 1.25rem;
+  display: flex;
+  width: fit-content;
+}
+.badge-themes {
+  display: grid;
+  gap: 1.25rem;
+}
+.badge-theme {
+  padding: 1rem 1.1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(232, 185, 49, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
+    linear-gradient(180deg, #21170e, #160f09);
+}
+.badge-theme h3 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  color: #f3d27a;
+}
+.badge-theme h3 .muted {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.badges-page .badges {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+@media (max-width: 560px) {
+  .badges-page-head {
+    grid-template-columns: auto 1fr;
+  }
+  .badges-page-head h1 {
+    text-align: left;
+  }
+  .badges-page-progress {
+    grid-column: 1 / -1;
+    justify-items: stretch;
+  }
+  .badges-page .badges {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Annonce d'un badge obtenu : une carte de cuir et d'or qui glisse depuis le bas à droite. */

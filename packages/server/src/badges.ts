@@ -2,6 +2,8 @@ import type { GameRecord } from './history';
 
 /** Un badge d'un joueur : `value` sur `goal`, obtenu dès que `value` atteint `goal`. */
 export interface Badge {
+  /** Thème du badge (parties jouées, victoires, gangs…), pour les ranger. */
+  theme: string;
   id: string;
   icon: string;
   name: string;
@@ -13,7 +15,10 @@ export interface Badge {
 /** Une partie vue par un joueur : la partie, et sa ligne à lui. */
 type Game = { record: GameRecord; me: GameRecord['players'][number] };
 
-type Definition = { id: string; icon: string; name: string; description: string; goal: number; value: (games: Game[]) => number };
+type Definition = { theme?: string; id: string; icon: string; name: string; description: string; goal: number; value: (games: Game[]) => number };
+
+/** Range des badges sous un thème (pour la page des badges). */
+const themed = (theme: string, definitions: Definition[]) => definitions.map((d) => ({ ...d, theme }));
 
 /** Badge obtenu dès qu'une seule partie remplit la condition. */
 const once = (id: string, icon: string, name: string, description: string, test: (g: Game) => boolean): Definition => ({
@@ -30,69 +35,79 @@ const once = (id: string, icon: string, name: string, description: string, test:
  * (en ligne et contre les bots), sauf ceux qui parlent explicitement de jouer avec d'autres personnes ou contre les bots.
  */
 const BADGES: Definition[] = [
-  // Parties jouées
-  { id: 'games-1', icon: '👋', name: 'Bienvenue', description: 'Joue ta première partie.', goal: 1, value: (g) => g.length },
-  { id: 'games-25', icon: '🃏', name: 'Habitué', description: 'Joue 25 parties.', goal: 25, value: (g) => g.length },
-  { id: 'games-100', icon: '🪑', name: 'Pilier', description: 'Joue 100 parties.', goal: 100, value: (g) => g.length },
-  { id: 'games-250', icon: '🎖️', name: 'Vétéran', description: 'Joue 250 parties.', goal: 250, value: (g) => g.length },
-  { id: 'games-500', icon: '🗿', name: 'Légende du bureau', description: 'Joue 500 parties.', goal: 500, value: (g) => g.length },
-  { id: 'games-1000', icon: '♾️', name: 'Immortel', description: 'Joue 1 000 parties.', goal: 1000, value: (g) => g.length },
-  // Avec les collègues
-  { id: 'online-25', icon: '👥', name: 'Bon collègue', description: 'Joue 25 parties en ligne, avec au moins une autre personne.', goal: 25, value: (g) => online(g).length },
-  { id: 'online-100', icon: '☕', name: 'Pilier de la pause café', description: 'Joue 100 parties en ligne.', goal: 100, value: (g) => online(g).length },
-  { id: 'online-wins-10', icon: '🏢', name: 'Roi du bureau', description: 'Gagne 10 parties en ligne.', goal: 10, value: (g) => wins(online(g)) },
-  { id: 'online-wins-50', icon: '🏛️', name: 'Empereur du bureau', description: 'Gagne 50 parties en ligne.', goal: 50, value: (g) => wins(online(g)) },
-  { id: 'friends-10', icon: '🤝', name: 'Grande famille', description: 'Joue avec 10 personnes différentes.', goal: 10, value: (g) => partners(g) },
-  { id: 'friends-25', icon: '🏙️', name: 'Tout le bureau', description: 'Joue avec 25 personnes différentes.', goal: 25, value: (g) => partners(g) },
-  once('full-table', '🎯', 'Table complète', 'Gagne une partie face à trois autres personnes.', (x) => x.me.winner && humans(x) >= 4),
-  // Contre les bots
-  { id: 'bots-wins-10', icon: '🤖', name: 'Dompteur de robots', description: 'Gagne 10 parties seul contre des bots.', goal: 10, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
-  { id: 'bots-wins-50', icon: '🦾', name: 'Terminator', description: 'Gagne 50 parties seul contre des bots.', goal: 50, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
-  // Victoires
-  { id: 'first-win', icon: '🏆', name: 'Premier sang', description: 'Gagne une partie.', goal: 1, value: (g) => wins(g) },
-  { id: 'wins-5', icon: '🌱', name: 'Prometteur', description: 'Gagne 5 parties.', goal: 5, value: (g) => wins(g) },
-  { id: 'wins-25', icon: '🎩', name: 'Chef de gang', description: 'Gagne 25 parties.', goal: 25, value: (g) => wins(g) },
-  { id: 'wins-75', icon: '👑', name: 'Parrain', description: 'Gagne 75 parties.', goal: 75, value: (g) => wins(g) },
-  { id: 'wins-150', icon: '🦁', name: 'Le Boss', description: 'Gagne 150 parties.', goal: 150, value: (g) => wins(g) },
-  once('win-3', '🥉', 'Trio gagnant', 'Gagne une partie à 3 joueurs.', (x) => x.me.winner && x.record.players.length === 3),
-  once('win-4', '🍀', 'Carré gagnant', 'Gagne une partie à 4 joueurs.', (x) => x.me.winner && x.record.players.length === 4),
-  // Séries
-  { id: 'streak-2', icon: '✌️', name: 'Doublé', description: '2 victoires d’affilée.', goal: 2, value: (g) => streak(g, (x) => x.me.winner) },
-  { id: 'streak-4', icon: '🔥', name: 'En série', description: '4 victoires d’affilée.', goal: 4, value: (g) => streak(g, (x) => x.me.winner) },
-  { id: 'streak-7', icon: '⚡', name: 'Intouchable', description: '7 victoires d’affilée.', goal: 7, value: (g) => streak(g, (x) => x.me.winner) },
-  { id: 'streak-10', icon: '💎', name: 'Invincible', description: '10 victoires d’affilée.', goal: 10, value: (g) => streak(g, (x) => x.me.winner) },
-  // Places
-  { id: 'second-10', icon: '🥈', name: 'Éternel second', description: 'Finis 10 parties à la deuxième place.', goal: 10, value: (g) => g.filter((x) => rank(x) === 2).length },
-  { id: 'last-10', icon: '🏮', name: 'Lanterne rouge', description: 'Finis 10 parties à la dernière place.', goal: 10, value: (g) => g.filter(last).length },
-  { id: 'bad-streak-5', icon: '☔', name: 'La poisse', description: '5 défaites d’affilée.', goal: 5, value: (g) => streak(g, (x) => !x.me.winner) },
-  // Manches
-  once('hot-hand', '🌶️', 'Main chaude', 'Gagne 5 manches dans une même partie.', (x) => (x.me.roundsWon ?? 0) >= 5),
-  once('masterclass', '🎓', 'Démonstration', 'Gagne 8 manches dans une même partie.', (x) => (x.me.roundsWon ?? 0) >= 8),
-  { id: 'steamroller', icon: '🚜', name: 'Rouleau compresseur', description: 'Gagne 100 manches, toutes parties confondues.', goal: 100, value: (g) => sum(g, (x) => x.me.roundsWon ?? 0) },
-  { id: 'bulldozer', icon: '🏗️', name: 'Bulldozer', description: 'Gagne 500 manches, toutes parties confondues.', goal: 500, value: (g) => sum(g, (x) => x.me.roundsWon ?? 0) },
-  { id: 'marathon', icon: '🏃', name: 'Marathon', description: 'Joue une partie de 20 manches.', goal: 20, value: (g) => max(g, (x) => x.record.rounds) },
-  { id: 'ultra-trail', icon: '🏔️', name: 'Ultra-trail', description: 'Joue une partie de 30 manches.', goal: 30, value: (g) => max(g, (x) => x.record.rounds) },
-  once('blitz', '⏱️', 'Éclair', 'Gagne une partie en 4 manches ou moins.', (x) => x.me.winner && x.record.rounds <= 4),
-  // Gangs
-  { id: 'gang-1', icon: '💥', name: 'Gang of Four', description: 'Pose un gang.', goal: 1, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
-  { id: 'gang-25', icon: '🧨', name: 'Dynamiteur', description: 'Pose 25 gangs.', goal: 25, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
-  { id: 'gang-100', icon: '🎇', name: 'Artificier en chef', description: 'Pose 100 gangs.', goal: 100, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
-  { id: 'fireworks', icon: '🎆', name: 'Feu d’artifice', description: 'Pose 3 gangs dans une même partie.', goal: 3, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
-  { id: 'bouquet', icon: '💐', name: 'Bouquet final', description: 'Pose 5 gangs dans une même partie.', goal: 5, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
-  // Scores
-  once('perfect', '💯', 'Parfait', 'Gagne une partie sans prendre un seul point.', (x) => x.me.winner && x.me.score === 0),
-  once('clean-win', '🛡️', 'Sans une égratignure', 'Gagne une partie avec moins de 10 points.', (x) => x.me.winner && x.me.score < 10),
-  once('photo-finish', '📸', 'Photo finish', 'Gagne une partie avec un seul point d’avance.', (x) => x.me.winner && margin(x) === 1),
-  once('crushing', '🐘', 'Écrasant', 'Gagne une partie avec 80 points d’avance sur le deuxième.', (x) => x.me.winner && margin(x) >= 80),
-  once('cold-shower', '🚿', 'Douche froide', 'Prends 40 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 40),
-  once('scapegoat', '🐐', 'Bouc émissaire', 'Prends 80 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 80),
-  once('castaway', '⚓', 'Naufragé', 'Finis une partie avec 150 points ou plus.', (x) => x.me.score >= 150),
-  // Moments (heure de Paris)
-  once('early-bird', '🌅', 'Lève-tôt', 'Termine une partie avant 9 h.', (x) => paris(x).hour < 9),
-  { id: 'lunch-10', icon: '🥪', name: 'Pause déj', description: 'Termine 10 parties entre midi et 14 h.', goal: 10, value: (g) => g.filter((x) => paris(x).hour >= 12 && paris(x).hour < 14).length },
-  once('night-owl', '🦉', 'Oiseau de nuit', 'Termine une partie après 21 h.', (x) => paris(x).hour >= 21),
-  once('weekend', '🗓️', 'Heures sup', 'Joue une partie un samedi ou un dimanche.', (x) => paris(x).weekend),
-  { id: 'days-20', icon: '📅', name: 'Fidèle', description: 'Joue 20 jours différents.', goal: 20, value: (g) => new Set(g.map((x) => paris(x).day)).size },
+  ...themed('Parties jouées', [
+    { id: 'games-1', icon: '👋', name: 'Bienvenue', description: 'Joue ta première partie.', goal: 1, value: (g) => g.length },
+    { id: 'games-25', icon: '🃏', name: 'Habitué', description: 'Joue 25 parties.', goal: 25, value: (g) => g.length },
+    { id: 'games-100', icon: '🪑', name: 'Pilier', description: 'Joue 100 parties.', goal: 100, value: (g) => g.length },
+    { id: 'games-250', icon: '🎖️', name: 'Vétéran', description: 'Joue 250 parties.', goal: 250, value: (g) => g.length },
+    { id: 'games-500', icon: '🗿', name: 'Légende du bureau', description: 'Joue 500 parties.', goal: 500, value: (g) => g.length },
+    { id: 'games-1000', icon: '♾️', name: 'Immortel', description: 'Joue 1 000 parties.', goal: 1000, value: (g) => g.length },
+  ]),
+  ...themed('Avec les collègues', [
+    { id: 'online-25', icon: '👥', name: 'Bon collègue', description: 'Joue 25 parties en ligne, avec au moins une autre personne.', goal: 25, value: (g) => online(g).length },
+    { id: 'online-100', icon: '☕', name: 'Pilier de la pause café', description: 'Joue 100 parties en ligne.', goal: 100, value: (g) => online(g).length },
+    { id: 'online-wins-10', icon: '🏢', name: 'Roi du bureau', description: 'Gagne 10 parties en ligne.', goal: 10, value: (g) => wins(online(g)) },
+    { id: 'online-wins-50', icon: '🏛️', name: 'Empereur du bureau', description: 'Gagne 50 parties en ligne.', goal: 50, value: (g) => wins(online(g)) },
+    { id: 'friends-10', icon: '🤝', name: 'Grande famille', description: 'Joue avec 10 personnes différentes.', goal: 10, value: (g) => partners(g) },
+    { id: 'friends-25', icon: '🏙️', name: 'Tout le bureau', description: 'Joue avec 25 personnes différentes.', goal: 25, value: (g) => partners(g) },
+    once('full-table', '🎯', 'Table complète', 'Gagne une partie face à trois autres personnes.', (x) => x.me.winner && humans(x) >= 4),
+  ]),
+  ...themed('Contre les bots', [
+    { id: 'bots-wins-10', icon: '🤖', name: 'Dompteur de robots', description: 'Gagne 10 parties seul contre des bots.', goal: 10, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
+    { id: 'bots-wins-50', icon: '🦾', name: 'Terminator', description: 'Gagne 50 parties seul contre des bots.', goal: 50, value: (g) => wins(g.filter((x) => humans(x) < 2)) },
+  ]),
+  ...themed('Victoires', [
+    { id: 'first-win', icon: '🏆', name: 'Premier sang', description: 'Gagne une partie.', goal: 1, value: (g) => wins(g) },
+    { id: 'wins-5', icon: '🌱', name: 'Prometteur', description: 'Gagne 5 parties.', goal: 5, value: (g) => wins(g) },
+    { id: 'wins-25', icon: '🎩', name: 'Chef de gang', description: 'Gagne 25 parties.', goal: 25, value: (g) => wins(g) },
+    { id: 'wins-75', icon: '👑', name: 'Parrain', description: 'Gagne 75 parties.', goal: 75, value: (g) => wins(g) },
+    { id: 'wins-150', icon: '🦁', name: 'Le Boss', description: 'Gagne 150 parties.', goal: 150, value: (g) => wins(g) },
+    once('win-3', '🥉', 'Trio gagnant', 'Gagne une partie à 3 joueurs.', (x) => x.me.winner && x.record.players.length === 3),
+    once('win-4', '🍀', 'Carré gagnant', 'Gagne une partie à 4 joueurs.', (x) => x.me.winner && x.record.players.length === 4),
+  ]),
+  ...themed('Séries', [
+    { id: 'streak-2', icon: '✌️', name: 'Doublé', description: '2 victoires d’affilée.', goal: 2, value: (g) => streak(g, (x) => x.me.winner) },
+    { id: 'streak-4', icon: '🔥', name: 'En série', description: '4 victoires d’affilée.', goal: 4, value: (g) => streak(g, (x) => x.me.winner) },
+    { id: 'streak-7', icon: '⚡', name: 'Intouchable', description: '7 victoires d’affilée.', goal: 7, value: (g) => streak(g, (x) => x.me.winner) },
+    { id: 'streak-10', icon: '💎', name: 'Invincible', description: '10 victoires d’affilée.', goal: 10, value: (g) => streak(g, (x) => x.me.winner) },
+  ]),
+  ...themed('Places', [
+    { id: 'second-10', icon: '🥈', name: 'Éternel second', description: 'Finis 10 parties à la deuxième place.', goal: 10, value: (g) => g.filter((x) => rank(x) === 2).length },
+    { id: 'last-10', icon: '🏮', name: 'Lanterne rouge', description: 'Finis 10 parties à la dernière place.', goal: 10, value: (g) => g.filter(last).length },
+    { id: 'bad-streak-5', icon: '☔', name: 'La poisse', description: '5 défaites d’affilée.', goal: 5, value: (g) => streak(g, (x) => !x.me.winner) },
+  ]),
+  ...themed('Manches', [
+    once('hot-hand', '🌶️', 'Main chaude', 'Gagne 5 manches dans une même partie.', (x) => (x.me.roundsWon ?? 0) >= 5),
+    once('masterclass', '🎓', 'Démonstration', 'Gagne 8 manches dans une même partie.', (x) => (x.me.roundsWon ?? 0) >= 8),
+    { id: 'steamroller', icon: '🚜', name: 'Rouleau compresseur', description: 'Gagne 100 manches, toutes parties confondues.', goal: 100, value: (g) => sum(g, (x) => x.me.roundsWon ?? 0) },
+    { id: 'bulldozer', icon: '🏗️', name: 'Bulldozer', description: 'Gagne 500 manches, toutes parties confondues.', goal: 500, value: (g) => sum(g, (x) => x.me.roundsWon ?? 0) },
+    { id: 'marathon', icon: '🏃', name: 'Marathon', description: 'Joue une partie de 20 manches.', goal: 20, value: (g) => max(g, (x) => x.record.rounds) },
+    { id: 'ultra-trail', icon: '🏔️', name: 'Ultra-trail', description: 'Joue une partie de 30 manches.', goal: 30, value: (g) => max(g, (x) => x.record.rounds) },
+    once('blitz', '⏱️', 'Éclair', 'Gagne une partie en 4 manches ou moins.', (x) => x.me.winner && x.record.rounds <= 4),
+  ]),
+  ...themed('Gangs', [
+    { id: 'gang-1', icon: '💥', name: 'Gang of Four', description: 'Pose un gang.', goal: 1, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
+    { id: 'gang-25', icon: '🧨', name: 'Dynamiteur', description: 'Pose 25 gangs.', goal: 25, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
+    { id: 'gang-100', icon: '🎇', name: 'Artificier en chef', description: 'Pose 100 gangs.', goal: 100, value: (g) => sum(g, (x) => x.me.gangs ?? 0) },
+    { id: 'fireworks', icon: '🎆', name: 'Feu d’artifice', description: 'Pose 3 gangs dans une même partie.', goal: 3, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
+    { id: 'bouquet', icon: '💐', name: 'Bouquet final', description: 'Pose 5 gangs dans une même partie.', goal: 5, value: (g) => max(g, (x) => x.me.gangs ?? 0) },
+  ]),
+  ...themed('Scores', [
+    once('perfect', '💯', 'Parfait', 'Gagne une partie sans prendre un seul point.', (x) => x.me.winner && x.me.score === 0),
+    once('clean-win', '🛡️', 'Sans une égratignure', 'Gagne une partie avec moins de 10 points.', (x) => x.me.winner && x.me.score < 10),
+    once('photo-finish', '📸', 'Photo finish', 'Gagne une partie avec un seul point d’avance.', (x) => x.me.winner && margin(x) === 1),
+    once('crushing', '🐘', 'Écrasant', 'Gagne une partie avec 80 points d’avance sur le deuxième.', (x) => x.me.winner && margin(x) >= 80),
+    once('cold-shower', '🚿', 'Douche froide', 'Prends 40 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 40),
+    once('scapegoat', '🐐', 'Bouc émissaire', 'Prends 80 points en une manche.', (x) => (x.me.worstRound ?? 0) >= 80),
+    once('castaway', '⚓', 'Naufragé', 'Finis une partie avec 150 points ou plus.', (x) => x.me.score >= 150),
+  ]),
+  ...themed('Moments', [
+    once('early-bird', '🌅', 'Lève-tôt', 'Termine une partie avant 9 h.', (x) => paris(x).hour < 9),
+    { id: 'lunch-10', icon: '🥪', name: 'Pause déj', description: 'Termine 10 parties entre midi et 14 h.', goal: 10, value: (g) => g.filter((x) => paris(x).hour >= 12 && paris(x).hour < 14).length },
+    once('night-owl', '🦉', 'Oiseau de nuit', 'Termine une partie après 21 h.', (x) => paris(x).hour >= 21),
+    once('weekend', '🗓️', 'Heures sup', 'Joue une partie un samedi ou un dimanche.', (x) => paris(x).weekend),
+    { id: 'days-20', icon: '📅', name: 'Fidèle', description: 'Joue 20 jours différents.', goal: 20, value: (g) => new Set(g.map((x) => paris(x).day)).size },
+  ]),
 ];
 
 const sum = (games: Game[], f: (g: Game) => number) => games.reduce((total, g) => total + f(g), 0);
@@ -142,7 +157,7 @@ function streak(games: Game[], test: (g: Game) => boolean): number {
 
 /** Badges d'un joueur à partir de ses parties, de la plus ancienne à la plus récente. */
 export function badgesOf(games: Game[], definitions = BADGES): Badge[] {
-  return definitions.map(({ value, ...badge }) => ({ ...badge, value: Math.min(value(games), badge.goal) }));
+  return definitions.map(({ value, theme = '', ...badge }) => ({ ...badge, theme, value: Math.min(value(games), badge.goal) }));
 }
 
 /**

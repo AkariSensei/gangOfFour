@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
-import { MyBadges } from './Badges';
+import { BadgesPage, useMyBadges } from './Badges';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
 import { errorLabel } from './labels';
@@ -25,6 +25,22 @@ export function Home({
   const [admin, setAdmin] = useState(false);
   const [rules, setRules] = useState(false);
   const { account } = me;
+  const badges = useMyBadges(account?.name || undefined);
+  // Page « Mes badges » : elle a sa propre adresse (#badges), pour que le bouton Retour du navigateur ramène à l'accueil.
+  const [badgesOpen, setBadgesOpen] = useState(() => location.hash === '#badges');
+  useEffect(() => {
+    const onPop = () => setBadgesOpen(location.hash === '#badges');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  function openBadges() {
+    history.pushState(null, '', '#badges');
+    setBadgesOpen(true);
+  }
+  function closeBadges() {
+    if (location.hash === '#badges') history.back();
+    else setBadgesOpen(false);
+  }
 
   async function signIn(credential: string) {
     setError('');
@@ -74,6 +90,14 @@ export function Home({
             <Avatar name={account.name} look={account} />
           </button>
           <strong>{account.name}</strong>
+          {badges && (
+            <button type="button" className="badges-button" onClick={openBadges} title="Voir tous mes badges">
+              🏅 Mes badges{' '}
+              <span>
+                {badges.filter((b) => b.value >= b.goal).length} / {badges.length}
+              </span>
+            </button>
+          )}
         </div>
         <form
           className="home-actions"
@@ -103,6 +127,8 @@ export function Home({
       </>
     );
   }
+
+  if (badgesOpen && account?.name) return <BadgesPage badges={badges} onClose={closeBadges} />;
 
   return (
     <main className="home">
@@ -143,7 +169,6 @@ export function Home({
           )}
         </section>
         {admin && <AdminPanel onClose={() => setAdmin(false)} />}
-        {account?.name && <MyBadges name={account.name} />}
         <LiveRooms onWatch={onEnter} />
       </div>
 
