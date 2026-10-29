@@ -67,6 +67,12 @@ export function Home({
     return () => window.removeEventListener('popstate', onPop);
   });
   useEffect(() => () => clearTimeout(leaveTimer.current), []);
+  // Déconnecté (ou pas encore de pseudo) depuis un autre écran : retour au menu, qui propose la connexion.
+  useEffect(() => {
+    if (account === undefined || signedIn || screen === 'menu') return;
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    show('menu', true);
+  });
   function open(next: Screen) {
     history.pushState(null, '', `${location.pathname}${location.search}#${next}`);
     show(next, false);
@@ -116,7 +122,7 @@ export function Home({
 
   function render(s: Screen): ReactNode {
     // Sans compte (ou sans pseudo), seul le menu s'affiche, avec la connexion à la place des entrées.
-    if (!signedIn && s !== 'menu') return null;
+    if (!signedIn && s !== 'menu') return render('menu');
     switch (s) {
       case 'menu':
         return (
