@@ -324,7 +324,8 @@ export class GameHistory {
 
   private xpOf(owner: string, badges: Badge[]): number {
     const games: GameForXp[] = this.gamesOf(owner).map(({ record, me }) => ({
-      winner: me.winner,
+      rank: 1 + record.players.filter((p) => p.score < me.score).length,
+      players: record.players.length,
       roundsWon: me.roundsWon ?? 0,
       gangs: me.gangs ?? 0,
       vsBots: record.players.filter((p) => !p.bot).length >= 2 ? null : (topBotLevel(record) ?? 'unknown'),

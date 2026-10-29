@@ -165,9 +165,10 @@ export function ProfileScreen({
       </div>
 
       <p className="muted small xp-help">
-        L'expérience : 40 XP par partie, 60 de plus pour une victoire, 8 par manche gagnée, 10 par gang posé, 30 par défi du jour
-        (80 s'il est gagné) et 25 par badge. Seules comptent les parties en ligne, ou seul contre des bots tous en difficile.
-        Chaque niveau demande un peu plus d'expérience que le précédent.
+        L'expérience d'une partie dépend de ta place : à quatre, 120 XP pour le premier, 70 pour le deuxième, 35 pour le troisième
+        (à trois : 110, puis 50), plus 8 par manche gagnée et 10 par gang posé. Le dernier ne gagne rien. S'y ajoutent 30 XP par
+        défi du jour (80 s'il est gagné) et 25 par badge. Seules comptent les parties en ligne, ou seul contre des bots tous en
+        difficile. Chaque niveau demande un peu plus d'expérience que le précédent.
       </p>
     </div>
   );

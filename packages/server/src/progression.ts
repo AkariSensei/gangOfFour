@@ -78,8 +78,6 @@ export const LEVEL_TITLES: { level: number; title: string }[] = [
 
 /** Ce que rapporte une partie, un défi ou un badge. */
 const XP = {
-  game: 40,
-  win: 60,
   roundWon: 8,
   gang: 10,
   challenge: 30,
@@ -95,16 +93,33 @@ const BOT_FACTOR: Record<BotLevel | 'unknown', number> = { hard: 1, normal: 0, e
 
 /** Une partie vue par un joueur, réduite à ce qui compte pour l'expérience. */
 export interface GameForXp {
-  winner: boolean;
+  /** Place à la fin de la partie (1 : le moins de points ; à égalité, même place), sur `players` joueurs. */
+  rank: number;
+  players: number;
   roundsWon: number;
   gangs: number;
   /** Partie en ligne (null), ou seul contre des bots : niveau du plus fort, ou « unknown » s'il n'est pas connu. */
   vsBots: BotLevel | 'unknown' | null;
 }
 
-/** Expérience d'une partie. */
+/**
+ * Expérience selon la place, comme le « uma » du mahjong : beaucoup pour le premier, de moins en moins ensuite, et
+ * rien pour le dernier (on ne perd jamais d'expérience). Par nombre de joueurs à la table.
+ */
+export const PLACE_XP: Record<number, number[]> = {
+  3: [110, 50, 0],
+  4: [120, 70, 35, 0],
+};
+
+/**
+ * Expérience d'une partie : celle de sa place, plus un bonus par manche gagnée et par gang posé. Le dernier ne
+ * gagne rien, bonus compris : seules les places 1 à 3 (1 et 2 à trois joueurs) rapportent.
+ */
 export function gameXp(g: GameForXp): number {
-  const raw = XP.game + (g.winner ? XP.win : 0) + g.roundsWon * XP.roundWon + g.gangs * XP.gang;
+  const table = PLACE_XP[g.players] ?? PLACE_XP[4]!;
+  const place = table[Math.min(g.rank, table.length) - 1] ?? 0;
+  if (place === 0) return 0;
+  const raw = place + g.roundsWon * XP.roundWon + g.gangs * XP.gang;
   return Math.round(raw * (g.vsBots ? BOT_FACTOR[g.vsBots] : 1));
 }
 
