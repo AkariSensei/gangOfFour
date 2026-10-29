@@ -800,9 +800,9 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
     await waitFor(() => won.includes('challenge-1'));
     expect(won.includes('challenge-win-1')).toBe(!!mine.won);
-    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), et 40 par badge obtenu.
+    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), et 25 par badge obtenu.
     await waitFor(() => gains.length === 1);
-    expect(gains[0]!.gained).toBe(mine.won ? 30 + 50 + 2 * 40 : 30 + 40);
+    expect(gains[0]!.gained).toBe(mine.won ? 30 + 50 + 2 * 25 : 30 + 25);
     expect(gains[0]!.after.xp - gains[0]!.before.xp).toBe(gains[0]!.gained);
   }, 30000);
 
@@ -873,6 +873,18 @@ describe('serveur de jeu', () => {
     await alice.emitWithAck('room:create');
     await waitFor(() => !!alice.room);
     expect(alice.room!.players[0]).toMatchObject({ frame: 'bronze', title: 'Débutant' });
+  });
+
+  it('retire au démarrage les récompenses qui ne sont plus débloquées', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'gof-comptes-')), 'comptes.json');
+    await start({ accountsFile: file });
+    server.accounts.signIn({ sub: 'g-1', email: 'a@exemple.fr' });
+    server.accounts.update('g-1', { name: 'Alice', cosmetics: { felt: 'onyx', frame: 'or', title: 'Débutant' } });
+    await new Promise((resolve) => server.io.close(resolve));
+    await start({ accountsFile: file });
+    expect(server.accounts.get('g-1')).toMatchObject({ title: 'Débutant' });
+    expect(server.accounts.get('g-1')).not.toHaveProperty('felt');
+    expect(server.accounts.get('g-1')).not.toHaveProperty('frame');
   });
 
   it('ne lance pas de minuteur par défaut', async () => {

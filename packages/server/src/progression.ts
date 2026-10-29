@@ -27,21 +27,36 @@ export interface Reward {
   level: number;
 }
 
+/*
+ * Les récompenses s'étalent jusqu'au niveau 30, à peu près une par niveau : un cadre, un tapis ou un titre.
+ * Passé le niveau 20, elles s'espacent, comme les niveaux eux-mêmes.
+ */
+
 /** Couleurs de tapis, chacune débloquée à un niveau (le vert pour tout le monde). */
 export const FELTS: Reward[] = [
   { id: 'vert', name: 'Vert tripot', level: 1 },
   { id: 'bordeaux', name: 'Bordeaux', level: 3 },
-  { id: 'nuit', name: 'Bleu nuit', level: 6 },
+  { id: 'nuit', name: 'Bleu nuit', level: 5 },
+  { id: 'ardoise', name: 'Ardoise', level: 7 },
   { id: 'royal', name: 'Violet royal', level: 10 },
-  { id: 'onyx', name: 'Onyx et or', level: 15 },
+  { id: 'cuivre', name: 'Cuivre', level: 13 },
+  { id: 'onyx', name: 'Onyx et or', level: 16 },
+  { id: 'glace', name: 'Glacier', level: 20 },
+  { id: 'rubis', name: 'Rubis', level: 25 },
+  { id: 'legende', name: 'Légendaire', level: 30 },
 ];
 
 /** Cadres autour de l'avatar, vus de toute la table (aucun au départ). */
 export const FRAMES: Reward[] = [
-  { id: 'bronze', name: 'Bronze', level: 4 },
-  { id: 'argent', name: 'Argent', level: 8 },
+  { id: 'bronze', name: 'Bronze', level: 2 },
+  { id: 'cuivre', name: 'Cuivre', level: 4 },
+  { id: 'argent', name: 'Argent', level: 6 },
+  { id: 'jade', name: 'Jade', level: 9 },
   { id: 'or', name: 'Or', level: 12 },
-  { id: 'diamant', name: 'Diamant', level: 20 },
+  { id: 'saphir', name: 'Saphir', level: 15 },
+  { id: 'rubis', name: 'Rubis', level: 18 },
+  { id: 'diamant', name: 'Diamant', level: 22 },
+  { id: 'legende', name: 'Légendaire', level: 28 },
 ];
 
 /** Titres de niveau : le dernier atteint est celui du joueur, et chacun peut être choisi une fois débloqué. */
@@ -49,10 +64,16 @@ export const LEVEL_TITLES: { level: number; title: string }[] = [
   { level: 1, title: 'Débutant' },
   { level: 3, title: 'Apprenti' },
   { level: 5, title: 'Joueur du dimanche' },
+  { level: 7, title: 'Amateur éclairé' },
   { level: 8, title: 'Habitué du tripot' },
-  { level: 12, title: 'Requin' },
-  { level: 16, title: 'Caïd' },
-  { level: 20, title: 'Légende du tapis' },
+  { level: 11, title: 'Fine gâchette' },
+  { level: 13, title: 'Requin' },
+  { level: 14, title: 'Stratège' },
+  { level: 17, title: 'Caïd' },
+  { level: 19, title: 'Parrain du tapis' },
+  { level: 22, title: 'Maître du jeu' },
+  { level: 25, title: 'Grand maître' },
+  { level: 30, title: 'Légende du tapis' },
 ];
 
 /** Ce que rapporte une partie, un défi ou un badge. */
@@ -63,15 +84,14 @@ const XP = {
   gang: 10,
   challenge: 30,
   challengeWin: 50,
-  badge: 40,
+  badge: 25,
 };
 
 /**
- * Part de l'expérience gardée selon l'adversaire : tout en ligne ou contre des bots difficiles, moins contre des
- * bots plus faciles, pour qu'on ne monte pas de niveau à la chaîne contre des bots faciles. `undefined` : partie
- * contre des bots d'avant les niveaux (niveau inconnu), comptée comme contre des bots moyens.
+ * L'expérience ne compte qu'en ligne ou seul contre des bots tous difficiles : contre des bots faciles ou moyens
+ * (ou d'avant les niveaux, « unknown »), une partie ne rapporte rien, pour qu'on ne monte pas de niveau à la chaîne.
  */
-const BOT_FACTOR: Record<BotLevel | 'unknown', number> = { hard: 1, normal: 0.6, easy: 0.3, unknown: 0.6 };
+const BOT_FACTOR: Record<BotLevel | 'unknown', number> = { hard: 1, normal: 0, easy: 0, unknown: 0 };
 
 /** Une partie vue par un joueur, réduite à ce qui compte pour l'expérience. */
 export interface GameForXp {
@@ -96,8 +116,18 @@ export function totalXp(games: GameForXp[], challenges: ChallengeStats, badges: 
   return fromGames + fromChallenges + fromBadges;
 }
 
-/** Expérience totale à atteindre pour être au niveau `level` : 0 au niveau 1, puis 100, 300, 600, 1 000… */
-export const xpForLevel = (level: number) => 50 * (level - 1) * level;
+/**
+ * Expérience pour passer du niveau `level` au suivant : de plus en plus, comme dans un jeu (100, 280, 520, 800,
+ * 1 120… puis environ 3 200 au niveau 10 et 9 000 au niveau 20), arrondie à la dizaine.
+ */
+export const levelSpan = (level: number) => Math.round((100 * level ** 1.5) / 10) * 10;
+
+/** Expérience totale à atteindre pour être au niveau `level` (0 au niveau 1). */
+export function xpForLevel(level: number): number {
+  let total = 0;
+  for (let l = 1; l < level; l++) total += levelSpan(l);
+  return total;
+}
 
 export function progressOf(xp: number): Progress {
   let level = 1;

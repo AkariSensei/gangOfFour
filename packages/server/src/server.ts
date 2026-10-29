@@ -105,6 +105,20 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const accounts = new AccountStore(options.accountsFile, options.adminEmail);
   const challenges = new ChallengeStore(options.challengesFile, accounts);
   const history = new GameHistory(options.historyFile, accounts, challenges);
+  // Au démarrage (après une mise à jour qui change les règles de l'expérience), on retire à chacun les récompenses
+  // qu'il avait choisies mais qui ne sont plus débloquées à son niveau.
+  for (const account of accounts.list()) {
+    if (!account.felt && !account.frame && !account.title) continue;
+    const unlocks = history.unlocksOfAccount(account.id);
+    const keep = {
+      felt: account.felt && unlocks.felts.includes(account.felt) ? account.felt : '',
+      frame: account.frame && unlocks.frames.includes(account.frame) ? account.frame : '',
+      title: account.title && unlocks.titles.includes(account.title) ? account.title : '',
+    };
+    if (keep.felt !== (account.felt ?? '') || keep.frame !== (account.frame ?? '') || keep.title !== (account.title ?? '')) {
+      accounts.update(account.id, { cosmetics: keep });
+    }
+  }
   const verifyGoogle = options.verifyGoogle ?? (options.googleClientId ? googleVerifier(options.googleClientId) : undefined);
   const errors = new ErrorLog(options.errorsFile);
   const saved = new SavedRooms(options.roomsFile, () => rooms.all());
