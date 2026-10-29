@@ -1,7 +1,6 @@
-import type { PlayerView } from '@gof/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { type Socket, io } from 'socket.io-client';
-import type { AccountView, ChatMessage, ClientToServerEvents, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
+import type { AccountView, ChatMessage, ClientToServerEvents, GameView, RoomView, ServerToClientEvents, Session } from '../../server/src/protocol';
 
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -107,7 +106,7 @@ export function useGameConnection() {
   const [connected, setConnected] = useState(socket.connected);
   const [session, setSession] = useState<Session | null>(null);
   const [room, setRoom] = useState<RoomView | null>(null);
-  const [game, setGame] = useState<PlayerView | null>(null);
+  const [game, setGame] = useState<GameView | null>(null);
   // Le chat ne vit que dans la page : rien n'est gardé, ni ici après un départ, ni sur le serveur.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   /** Exclu par l'hôte ou l'admin : l'accueil le dit. */

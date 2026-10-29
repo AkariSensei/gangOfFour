@@ -634,6 +634,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
       // Regarder un défi dévoilerait la donne du jour ; le tutoriel se joue seul.
       if (room.challenge || room.tutorial) return ack({ ok: false, error: 'roomNotFound' });
+      // Le spectateur voit toutes les mains : on ne regarde pas une partie où l'on est assis (un second onglet tricherait).
+      if (socket.data.accountId && room.seats.some((s) => s.account === socket.data.accountId)) return ack({ ok: false, error: 'alreadySeated' });
       if (socket.data.code) leaveCurrent();
       socket.data = { ip: socket.data.ip, accountId: socket.data.accountId, code: room.code, spectator: true };
       await socket.join(room.code);

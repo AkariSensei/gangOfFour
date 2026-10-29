@@ -506,9 +506,9 @@ export class RoomManager {
     return move?.player === 0 ? { coach: move.coach ?? null, expect: move.cardIds ?? [], step: step + 1, total } : { coach: null, expect: null, step, total };
   }
 
-  /** Ce que voit un spectateur : toute la table, mais aucune main (`you` vaut -1). */
+  /** Ce que voit un spectateur : toute la table (`you` vaut -1) et la main de chacun, qu'il choisit d'afficher ou non. */
   spectatorView(room: Room) {
-    return room.game ? { ...getPlayerView(room.game, 0), you: -1, hand: [] } : null;
+    return room.game ? { ...getPlayerView(room.game, 0), you: -1, hand: [], hands: room.game.players.map((p) => p.hand) } : null;
   }
 
   /** Parties en cours (ni en attente de joueurs, ni terminées), pour les spectateurs. */

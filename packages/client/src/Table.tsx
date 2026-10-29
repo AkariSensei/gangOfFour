@@ -1,6 +1,6 @@
 import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { BotLevel, ChatMessage, Look, RoomView } from '../../server/src/protocol';
+import type { BotLevel, ChatMessage, GameView, Look, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
@@ -139,6 +139,39 @@ function Podium({ game, seats }: { game: PlayerView; seats: RoomView['players'] 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Spectateur : il choisit les joueurs dont il veut voir la main, affichées l'une sous l'autre. */
+function HandsPeek({ game, hands }: { game: PlayerView; hands: Card[][] }) {
+  const [shown, setShown] = useState<number[]>([]);
+  const toggle = (i: number) => setShown((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i].sort((a, b) => a - b)));
+  const all = shown.length === game.players.length;
+  return (
+    <div className="peek">
+      <div className="peek-picker" role="group" aria-label="Mains à afficher">
+        <span className="muted small">Voir la main de :</span>
+        {game.players.map((p, i) => (
+          <button key={p.id} className={`chip ${shown.includes(i) ? 'on' : ''}`} aria-pressed={shown.includes(i)} onClick={() => toggle(i)}>
+            {p.name} · {p.cardCount}
+          </button>
+        ))}
+        <button className="link small" onClick={() => setShown(all ? [] : game.players.map((_, i) => i))}>
+          {all ? 'Tout masquer' : 'Tout voir'}
+        </button>
+      </div>
+      {shown.map((i) => (
+        <div key={i} className="peek-hand">
+          <span className="peek-name">{game.players[i]!.name}</span>
+          <div className="pile-cards">
+            {(hands[i] ?? []).map((c) => (
+              <CardView key={c.id} card={c} />
+            ))}
+            {(hands[i] ?? []).length === 0 && <span className="muted small">plus de cartes</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -625,7 +658,7 @@ export function Table({
   admin,
   onLeave,
 }: {
-  game: PlayerView;
+  game: GameView;
   room: RoomView;
   messages: ChatMessage[];
   /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */
@@ -1052,6 +1085,7 @@ export function Table({
           <div className="my-bar">
             <div className="status">👀 Tu regardes la partie · {status}</div>
           </div>
+          {game.hands && <HandsPeek game={game} hands={game.hands} />}
         </section>
       ) : (
         <section className={`my-area ${(myTurn && !passingAlone) || mustGive ? 'active' : ''}`}>

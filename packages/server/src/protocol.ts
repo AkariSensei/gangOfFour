@@ -1,4 +1,4 @@
-import type { ActionError, PlayerView } from '@gof/engine';
+import type { ActionError, Card, PlayerView } from '@gof/engine';
 import type { Badge } from './badges';
 import type { BotLevel } from './bot';
 import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
@@ -62,6 +62,9 @@ export interface ChallengeView {
   today: ChallengeRankEntry[];
   overall: ChallengeOverallEntry[];
 }
+
+/** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
+export type GameView = PlayerView & { hands?: Card[][] };
 
 /** Partie en cours, proposée sur l'accueil à ceux qui veulent la regarder. */
 export interface LiveRoom {
@@ -203,7 +206,7 @@ export interface ChatMessage {
 
 export interface ServerToClientEvents {
   'room:state': (room: RoomView) => void;
-  'game:state': (game: PlayerView) => void;
+  'game:state': (game: GameView) => void;
   'chat:message': (message: ChatMessage) => void;
   /** Ce joueur vient d'être exclu du salon par l'hôte ou l'admin. */
   'room:kicked': () => void;

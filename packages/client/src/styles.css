@@ -3171,3 +3171,48 @@ button.danger {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* Spectateur : choix des mains à voir, puis une ligne par main affichée */
+.peek {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.peek-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+.chip {
+  padding: 0.2rem 0.7rem;
+  min-height: 0;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: inherit;
+}
+.chip.on {
+  border-color: var(--gold);
+  background: rgba(232, 185, 49, 0.15);
+  color: var(--gold);
+}
+.peek-hand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+}
+.peek-name {
+  min-width: 7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.peek-hand .pile-cards {
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.peek-hand .pile-cards .card {
+  --card-w: calc(var(--pile-w) * 0.62);
+}

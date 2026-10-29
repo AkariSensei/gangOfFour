@@ -327,7 +327,12 @@ describe('serveur de jeu', () => {
     expect(watcher.game!.you).toBe(-1);
     expect(watcher.game!.hand).toEqual([]);
     expect(watcher.game!.players.map((p) => p.cardCount)).toEqual(players.map((p) => p.game!.hand.length));
+    // Le spectateur reçoit la main de chacun ; les joueurs, eux, ne voient que la leur.
+    expect(watcher.game!.hands).toEqual(players.map((p) => p.game!.hand));
+    expect(players[0]!.game!.hands).toBeUndefined();
     expect(await watcher.emitWithAck('game:pass')).toEqual({ ok: false, error: 'notInRoom' });
+    // Un joueur ne peut pas regarder sa propre partie (il verrait les mains des autres).
+    expect(await players[1]!.emitWithAck('room:watch', { code })).toEqual({ ok: false, error: 'alreadySeated' });
 
     watcher.disconnect();
     await waitFor(() => players.every((p) => p.room?.spectators === 0));
