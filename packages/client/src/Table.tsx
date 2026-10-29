@@ -6,7 +6,7 @@ import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { LEVEL_LABELS, cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
-import { useTurnAlert } from './turnAlert';
+import { useTurnAlert, useTurnNotifications } from './turnAlert';
 import { useAutoPass } from './autoPass';
 
 type Seat = 'right' | 'top' | 'left' | 'bottom';
@@ -661,7 +661,11 @@ export function Table({
   }, [myTurn, game.table, game.hand, game.players, game.direction, me, n]);
   // Rien ne passe et la passe auto est active : le serveur passe tout seul, inutile d'annoncer le tour.
   const passingAlone = autoPass && playable?.size === 0;
-  useTurnAlert((myTurn && !passingAlone) || mustGive || mustCut);
+  const notifications = useTurnNotifications();
+  useTurnAlert(
+    mustCut ? 'À toi de couper le paquet' : mustGive ? 'À toi de rendre une carte' : myTurn && !passingAlone ? 'À toi de jouer !' : null,
+    notifications.state === 'on',
+  );
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   useEffect(() => {
@@ -986,6 +990,23 @@ export function Table({
           {canPause && !room.paused && game.phase !== 'gameOver' && (
             <button className="icon" onClick={() => void pause(true)} title="Mettre la partie en pause">
               ⏸
+            </button>
+          )}
+          {!spectator && notifications.state !== 'unsupported' && (
+            <button
+              className={`icon${notifications.state === 'on' ? '' : ' off'}`}
+              onClick={() => void notifications.toggle()}
+              disabled={notifications.state === 'denied'}
+              title={
+                notifications.state === 'denied'
+                  ? 'Notifications bloquées : autorise-les pour ce site dans les réglages du navigateur'
+                  : notifications.state === 'on'
+                    ? 'Tu reçois une notification quand ton tour arrive et que tu es sur un autre onglet (cliquer pour couper)'
+                    : 'Recevoir une notification quand ton tour arrive et que tu es sur un autre onglet'
+              }
+              aria-pressed={notifications.state === 'on'}
+            >
+              {notifications.state === 'on' ? '🔔' : '🔕'}
             </button>
           )}
           {!spectator && (
