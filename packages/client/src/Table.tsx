@@ -207,7 +207,10 @@ function RoundOver({
             <Podium game={game} seats={seats} />
           </>
         ) : (
-          <h2>{game.players[r.winnerIndex]!.name} remporte la manche {game.round}</h2>
+          <div className="round-winner">
+            <Avatar name={game.players[r.winnerIndex]!.name} look={seats[r.winnerIndex]} bot={!!(seats[r.winnerIndex]?.bot || seats[r.winnerIndex]?.vacant)} />
+            <h2>{game.players[r.winnerIndex]!.name} remporte la manche {game.round}</h2>
+          </div>
         )}
         <table className="results">
           <thead>
@@ -221,7 +224,7 @@ function RoundOver({
           </thead>
           <tbody>
             {ranking.map((p, rank) => (
-              <tr key={p.id} className={p.i === game.you ? 'me' : ''}>
+              <tr key={p.id} className={`row-in ${p.i === game.you ? 'me' : ''}`} style={{ '--i': rank } as CSSProperties}>
                 <td className="rank">{rank + 1}</td>
                 <td className="player-name">{p.name}</td>
                 <td>
@@ -231,9 +234,22 @@ function RoundOver({
                       : r.hands[p.i]!.map((c) => <img key={c.id} src={cardImage(c)} alt={cardLabel(c)} title={cardLabel(c)} />)}
                   </div>
                 </td>
-                <td className={r.penalties[p.i] === 0 ? 'zero' : 'penalty'}>+{r.penalties[p.i]}</td>
+                <td className={r.penalties[p.i] === 0 ? 'zero' : 'penalty'}>
+                  +<CountUp to={r.penalties[p.i]!} delay={250 + rank * 150} />
+                </td>
                 <td>
-                  <strong>{p.score}</strong>
+                  <strong>
+                    <CountUp to={p.score} delay={250 + rank * 150} />
+                  </strong>
+                  {/* Où il en est par rapport au score de fin : la barre rougit quand il s'en approche. */}
+                  {game.targetScore > 1 && (
+                    <span className="score-bar" title={`${p.score} / ${game.targetScore} pts`}>
+                      <span
+                        className={p.score >= game.targetScore * 0.75 ? 'danger' : ''}
+                        style={{ width: `${Math.min(100, (100 * p.score) / game.targetScore)}%` }}
+                      />
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -252,8 +268,9 @@ function RoundOver({
           </div>
         ) : (
           <>
-            <p className="muted">
-              {game.players[r.loserIndex]!.name} donnera sa meilleure carte à {game.players[r.winnerIndex]!.name}.
+            <p className="exchange-notice">
+              🔁 <strong>{game.players[r.loserIndex]!.name}</strong> donnera sa meilleure carte à{' '}
+              <strong>{game.players[r.winnerIndex]!.name}</strong>, qui lui en rendra une de son choix.
             </p>
             {game.you < 0 ? (
               <p className="muted">La manche suivante commence quand un joueur la lance.</p>
@@ -525,6 +542,24 @@ function useCountdown(endsAt: number | null): number | null {
     return () => clearInterval(t);
   }, [endsAt]);
   return endsAt === null ? null : Math.max(0, Math.ceil((endsAt - now) / 1000));
+}
+
+/** Nombre qui défile de 0 jusqu'à `to`, après `delay` ms (tout de suite si l'utilisateur préfère moins d'animations). */
+function CountUp({ to, delay = 0 }: { to: number; delay?: number }) {
+  const [value, setValue] = useState(() => (matchMedia('(prefers-reduced-motion: reduce)').matches ? to : 0));
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return setValue(to);
+    let frame = 0;
+    const start = performance.now() + delay;
+    const tick = (now: number) => {
+      const t = Math.min(1, Math.max(0, (now - start) / 700));
+      setValue(Math.round(to * (1 - (1 - t) ** 3)));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [to, delay]);
+  return <>{value}</>;
 }
 
 /** Temps d'affichage de la dernière carte posée avant le résumé de fin de manche. */
