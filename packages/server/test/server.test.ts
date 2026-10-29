@@ -7,10 +7,18 @@ import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { type PlayerView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type ClientToServerEvents, type GameServer, type GameServerOptions, type RoomView, type ServerToClientEvents, createGameServer } from '../src';
+import {
+  type ClientToServerEvents,
+  type GameServer,
+  type GameServerOptions,
+  type GameView,
+  type RoomView,
+  type ServerToClientEvents,
+  createGameServer,
+} from '../src';
 import { playBotTurn } from '../scripts/bot';
 
-type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: PlayerView };
+type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: GameView };
 
 let server: GameServer;
 const clients: Client[] = [];
