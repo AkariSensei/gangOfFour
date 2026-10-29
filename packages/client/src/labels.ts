@@ -56,6 +56,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   kicked: 'Tu as été exclu de ce salon.',
   paused: 'La partie est en pause.',
   challengeAlreadyPlayed: 'Tu as déjà relevé le défi du jour : reviens demain !',
+  tutorialMove: 'Suis le tutoriel : joue les cartes mises en avant.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 

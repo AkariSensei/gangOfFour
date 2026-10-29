@@ -3024,3 +3024,84 @@ button.danger {
   margin: 0;
   color: #cfe3d7;
 }
+
+/* Tutoriel : l'explication au-dessus de la main, et les cartes à poser qui brillent */
+.coach {
+  margin: 0 0 0.6rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 185, 49, 0.55);
+  background: linear-gradient(135deg, rgba(232, 185, 49, 0.16), rgba(232, 185, 49, 0.05));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.coach p {
+  margin: 0.15rem 0 0;
+  line-height: 1.4;
+}
+.coach-step {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.coach.waiting {
+  border-style: dashed;
+  background: none;
+  box-shadow: none;
+  color: var(--muted);
+}
+/* Une carte à poser monte un peu et brille ; une fois sélectionnée, elle prend l'allure habituelle. */
+.hand .card.coached:not(.selected) {
+  --sel: calc(var(--card-w) * -0.12);
+  z-index: 1;
+  animation: coach-glow 1.4s ease-in-out infinite alternate;
+}
+@keyframes coach-glow {
+  from {
+    box-shadow:
+      0 0 0 2px var(--gold),
+      0 0 8px rgba(232, 185, 49, 0.45);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--gold),
+      0 0 20px rgba(232, 185, 49, 0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hand .card.coached:not(.selected) {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--gold);
+  }
+}
+
+/* Liens sous le titre de l'accueil (règles, tutoriel) */
+.hero-links {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: -1rem auto 1.25rem;
+}
+.hero-links .rules-link {
+  margin: 0;
+}
+/* Proposition du tutoriel à la première connexion */
+.first-time {
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 185, 49, 0.55);
+  background: linear-gradient(135deg, rgba(232, 185, 49, 0.16), rgba(232, 185, 49, 0.05));
+  text-align: left;
+}
+.first-time p {
+  margin: 0.3rem 0 0.6rem;
+  color: #cfe3d7;
+  font-size: 0.92rem;
+}
+.first-time-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

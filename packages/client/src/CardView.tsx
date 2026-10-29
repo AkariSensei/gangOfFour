@@ -23,6 +23,7 @@ export function CardView({
   small,
   dimmed,
   dragging,
+  coached,
   style,
   handlers,
 }: {
@@ -34,11 +35,13 @@ export function CardView({
   small?: boolean;
   /** Carte en train d'être déplacée dans la main. */
   dragging?: boolean;
+  /** Carte à jouer, mise en avant par le tutoriel. */
+  coached?: boolean;
   style?: CSSProperties;
   /** Gestionnaires du glisser-déposer (main du joueur). */
   handlers?: HTMLAttributes<HTMLButtonElement>;
 }) {
-  const classes = ['card', selected && 'selected', small && 'small', dimmed && 'dimmed', dragging && 'dragging', onClick && 'clickable']
+  const classes = ['card', selected && 'selected', small && 'small', dimmed && 'dimmed', dragging && 'dragging', coached && 'coached', onClick && 'clickable']
     .filter(Boolean)
     .join(' ');
   const image = <img src={cardImage(card)} alt={cardLabel(card)} draggable={false} />;

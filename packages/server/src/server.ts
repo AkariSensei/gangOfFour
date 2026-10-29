@@ -113,6 +113,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     room.recorded = true;
     // Un défi ne compte pas dans l'historique (ni les classements et badges des parties) : il a les siens.
     if (room.challenge) return finishChallenge(room);
+    // Le tutoriel non plus : c'est une manche écrite à l'avance.
+    if (room.tutorial) return;
     history.record(
       room.game,
       new Date(),
@@ -153,8 +155,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     for (const accountId of new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))) {
       // Première fois qu'on regarde ce joueur dans cette partie : ce qu'il avait déjà ne s'annonce pas.
       const had = (seen[accountId] ??= history.badgesOfAccount(accountId).filter(won).map((b) => b.id));
-      // Pendant un défi, rien ne s'annonce en direct : la manche ne compte pas pour les badges des parties.
-      if (room.challenge && !room.recorded) continue;
+      // Pendant un défi ou le tutoriel, rien ne s'annonce en direct : la manche ne compte pas pour les badges des parties.
+      if ((room.challenge && !room.recorded) || room.tutorial) continue;
       const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts, botLevels(room));
       const fresh = now.filter((b) => won(b) && !had.includes(b.id));
       if (fresh.length === 0) continue;
@@ -169,6 +171,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const botDelay = () => options.botDelayMs ?? 3000 + Math.random() * 1000;
   /** Passe automatique d'un humain qui ne peut rien poser : juste le temps que la table voie la passe. */
   const passDelay = options.botDelayMs ?? 1100;
+  /** Dans le tutoriel, les bots jouent plus vite : le joueur lit surtout les explications. */
+  const tutorialDelay = options.botDelayMs ?? 1600;
   const cutPause = options.cutPauseMs ?? 1800;
 
   /**
@@ -189,7 +193,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         } catch (error) {
           errors.record('bot', error);
         }
-      }, (bot ? botDelay() : passDelay) + (justCut ? cutPause : 0)),
+      }, (bot ? (rooms.get(code)?.tutorial ? tutorialDelay : botDelay()) : passDelay) + (justCut ? cutPause : 0)),
     );
   }
 
@@ -207,7 +211,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const seat = rooms.botToAct(code);
     if (!room?.game || !seat) return;
     const index = room.seats.indexOf(seat);
-    const choice = chooseBotAction(room.game, index, Math.random, seat.level);
+    // Tutoriel : le bot joue le coup prévu par le script.
+    const scripted = rooms.tutorialMove(room);
+    const choice = room.tutorial
+      ? scripted && { type: scripted.cardIds ? ('play' as const) : ('pass' as const), cardIds: scripted.cardIds ?? [] }
+      : chooseBotAction(room.game, index, Math.random, seat.level);
     if (!choice) return;
     const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
     let result = rooms.act(code, seat.playerId, action as PlayerAction);
@@ -591,6 +599,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const day = dayOf(now);
       return enter(rooms.createChallenge(name, account, account.id, day, seedOf(day)), ack);
     });
+    on('tutorial:start', (_payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      const { account, name } = seated;
+      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
+      return allowed.ok ? enter(rooms.createTutorial(name, account, account.id), ack) : ack(allowed);
+    });
     on('challenge:get', (_payload, ack) => {
       const day = dayOf(new Date());
       const account = me();
@@ -617,8 +632,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const room = rooms.get(text(payload.code));
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
-      // Regarder un défi dévoilerait la donne du jour.
-      if (room.challenge) return ack({ ok: false, error: 'roomNotFound' });
+      // Regarder un défi dévoilerait la donne du jour ; le tutoriel se joue seul.
+      if (room.challenge || room.tutorial) return ack({ ok: false, error: 'roomNotFound' });
       if (socket.data.code) leaveCurrent();
       socket.data = { ip: socket.data.ip, accountId: socket.data.accountId, code: room.code, spectator: true };
       await socket.join(room.code);

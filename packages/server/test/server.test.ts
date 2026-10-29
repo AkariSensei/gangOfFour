@@ -765,6 +765,33 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('challenge:start')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
   });
 
+  it('guide le joueur pas à pas dans le tutoriel, sans rien enregistrer', async () => {
+    await start({ botDelayMs: 0 });
+    const alice = connect('Alice');
+    const session = await alice.emitWithAck('tutorial:start');
+    if (!session.ok) throw new Error(session.error);
+    await waitFor(() => !!alice.room?.tutorial?.coach);
+    expect(alice.room!.tutorial).toMatchObject({ expect: ['m1'], step: 1, total: 7 });
+    // Un autre coup que celui prévu est refusé.
+    const other = alice.game!.hand.find((c) => c.id !== 'm1')!;
+    expect(await alice.emitWithAck('game:play', { cardIds: [other.id] })).toEqual({ ok: false, error: 'tutorialMove' });
+    expect(await alice.emitWithAck('rooms:live')).toEqual({ ok: true, rooms: [] });
+    const over = () => alice.game?.phase === 'gameOver';
+    for (let steps = 0; !over(); steps++) {
+      expect(steps).toBeLessThan(20);
+      await waitFor(() => over() || !!alice.room?.tutorial?.expect, 5000);
+      const wanted = alice.room!.tutorial!.expect;
+      if (over() || !wanted) break;
+      const before = alice.room!.tutorial!.step;
+      expect(await alice.emitWithAck('game:play', { cardIds: [...wanted].reverse() })).toEqual({ ok: true });
+      await waitFor(() => over() || alice.room!.tutorial!.step !== before || !alice.room!.tutorial!.expect);
+    }
+    await waitFor(() => alice.game?.phase === 'gameOver');
+    expect(alice.game!.winners).toEqual([0]);
+    expect(server.history.recent()).toEqual([]);
+    expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'tutorialMove' });
+  }, 20000);
+
   it('ne lance pas de minuteur par défaut', async () => {
     await start();
     const { players } = await lobby(3);

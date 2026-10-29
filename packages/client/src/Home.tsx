@@ -9,6 +9,9 @@ import { Rules } from './Rules';
 import { errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
 
+/** Le joueur a vu (suivi ou refusé) la proposition de tutoriel sur ce navigateur. */
+const TUTORIAL_SEEN = 'gof-tutorial-seen';
+
 export function Home({
   onEnter,
   account: me,
@@ -41,6 +44,31 @@ export function Home({
   function closeBadges() {
     if (location.hash === '#badges') history.back();
     else setBadgesOpen(false);
+  }
+
+  // Première fois : tant qu'il n'a fini aucune partie et n'a pas refusé, on lui propose le tutoriel.
+  const [tutorialSeen, setTutorialSeen] = useState(() => {
+    try {
+      return localStorage.getItem(TUTORIAL_SEEN) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const firstTime = !tutorialSeen && !!badges && !badges.some((b) => b.id === 'games-1' && b.value >= b.goal);
+  function dismissTutorial() {
+    try {
+      localStorage.setItem(TUTORIAL_SEEN, '1');
+    } catch {
+      // Sans stockage, la proposition reviendra à la prochaine visite : rien de grave.
+    }
+    setTutorialSeen(true);
+  }
+  async function startTutorial() {
+    setError('');
+    const result = await socket.emitWithAck('tutorial:start');
+    if (!result.ok) return setError(errorLabel(result.error));
+    dismissTutorial();
+    onEnter(result);
   }
 
   async function signIn(credential: string) {
@@ -94,12 +122,31 @@ export function Home({
           {badges && (
             <button type="button" className="badges-button" onClick={openBadges} title="Voir tous mes badges">
               🏅 Mes badges{' '}
-              <span>
-                {badges.filter((b) => b.value >= b.goal).length} / {badges.length}
-              </span>
+              {badges.length > 0 && (
+                <span>
+                  {badges.filter((b) => b.value >= b.goal).length} / {badges.length}
+                </span>
+              )}
             </button>
           )}
         </div>
+        {firstTime && (
+          <div className="first-time">
+            <strong>🎓 Première partie ?</strong>
+            <p>
+              Un tutoriel de deux minutes t'apprend les règles en jouant : une manche guidée contre trois bots, que tu gagnes à coup
+              sûr.
+            </p>
+            <div className="first-time-actions">
+              <button type="button" className="primary" onClick={startTutorial}>
+                Suivre le tutoriel
+              </button>
+              <button type="button" className="ghost" onClick={dismissTutorial}>
+                Non merci, partie classique
+              </button>
+            </div>
+          </div>
+        )}
         <form
           className="home-actions"
           onSubmit={(e) => {
@@ -153,9 +200,16 @@ export function Home({
           Gang <span>of</span> Four
         </h1>
         <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
-        <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
-          Règles du jeu
-        </button>
+        <div className="hero-links">
+          <button type="button" className="link small rules-link" onClick={() => setRules(true)}>
+            Règles du jeu
+          </button>
+          {account?.name && (
+            <button type="button" className="link small rules-link" onClick={startTutorial}>
+              Tutoriel
+            </button>
+          )}
+        </div>
       </header>
       {rules && <Rules onClose={() => setRules(false)} />}
 

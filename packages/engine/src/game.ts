@@ -176,8 +176,11 @@ function gather(state: GameState): Card[] {
   return [...state.dummy, ...state.pile, ...hands].reverse();
 }
 
-/** Le joueur 0 est le donneur de la première manche (le plus âgé dans le jeu réel). */
-export function createGame(players: NewPlayer[], seed: number, config: Partial<GameConfig> = {}): GameState {
+/**
+ * Le joueur 0 est le donneur de la première manche (le plus âgé dans le jeu réel). `deck` impose l'ordre du paquet
+ * de la première donne (le dessus en premier) au lieu de le mélanger : pour le tutoriel, toujours la même donne.
+ */
+export function createGame(players: NewPlayer[], seed: number, config: Partial<GameConfig> = {}, deck?: Card[]): GameState {
   if (players.length !== 3 && players.length !== 4) throw new Error('Gang of Four se joue à 3 ou 4 joueurs');
   const state: GameState = {
     config: { ...DEFAULT_CONFIG, ...config },
@@ -201,7 +204,7 @@ export function createGame(players: NewPlayer[], seed: number, config: Partial<G
     stats: players.map(() => ({ roundsWon: 0, gangs: 0, worstRound: 0 })),
   };
   // Seul le tout premier paquet est mélangé.
-  deal(state, shuffle(createDeck(), createRng(state.seed)));
+  deal(state, deck ?? shuffle(createDeck(), createRng(state.seed)));
   // Le détenteur du 1 multicolore ouvre avec ce 1. À trois, s'il est dans la main morte, le voisin du donneur ouvre.
   const holder = state.players.findIndex((p) => p.hand.some((c) => c.id === MULTI_ONE_ID));
   state.mustPlayMultiOne = holder >= 0;

@@ -47,6 +47,11 @@ export interface RoomView {
   paused: boolean;
   /** Défi du jour (une seule manche contre trois bots difficiles) : son jour et les coups joués jusqu'ici. */
   challenge?: { day: string; moves: number };
+  /**
+   * Tutoriel : quand c'est au joueur, l'explication (`coach`) et les cartes à poser (`expect`, vide pour passer) ;
+   * pendant le tour des bots, les deux sont null. `step` sur `total` : où il en est.
+   */
+  tutorial?: { coach: string | null; expect: string[] | null; step: number; total: number };
 }
 
 /** Le défi du jour vu par un joueur : son essai, et les classements. */
@@ -93,7 +98,8 @@ export type RoomError =
   | 'muted'
   | 'kicked'
   | 'paused'
-  | 'challengeAlreadyPlayed';
+  | 'challengeAlreadyPlayed'
+  | 'tutorialMove';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -182,6 +188,8 @@ export interface ClientToServerEvents {
   'challenge:get': (ack: Ack<{ challenge: ChallengeView }>) => void;
   /** Relève le défi du jour : une seule fois par jour, la manche démarre aussitôt. */
   'challenge:start': (ack: Ack<Session>) => void;
+  /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
+  'tutorial:start': (ack: Ack<Session>) => void;
 }
 
 /** Message du chat d'un salon : relayé aux joueurs présents, jamais enregistré. */

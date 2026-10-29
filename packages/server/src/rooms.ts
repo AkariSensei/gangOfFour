@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView, playableCards } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
+import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
 import { AVATARS, COLORS, type Look, type RoomError, type RoomView, type Session } from './protocol';
 
 export const MAX_PLAYERS = 4;
@@ -63,6 +64,8 @@ export interface Room {
   paused?: boolean;
   /** Défi du jour : une seule manche, seul contre trois bots difficiles, sur la donne du jour. */
   challenge?: { day: string; moves: number };
+  /** Tutoriel : la manche écrite à l'avance, et le rang du prochain coup du script. */
+  tutorial?: { step: number };
 }
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
@@ -145,6 +148,30 @@ export class RoomManager {
     room.turnSeconds = 0;
     this.rooms.set(room.code, room);
     return { ok: true, ...session };
+  }
+
+  /** Tutoriel : le joueur à la place du donneur, trois bots, et la donne écrite à l'avance qui démarre aussitôt. */
+  createTutorial(rawName: unknown, look: unknown, account: string): Result<Session> {
+    const name = cleanName(rawName);
+    if (!name) return { ok: false, error: 'invalidName' };
+    const room: Room = { code: this.newCode(), hostId: '', seats: [], game: null, tutorial: { step: 0 } };
+    const session = this.seat(room, name, look, account);
+    room.hostId = session.playerId;
+    for (const botName of BOT_NAMES) room.seats.push({ playerId: randomUUID(), token: randomUUID(), name: botName, connected: true, bot: true });
+    room.game = createGame(
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      0,
+      { targetScore: 1 },
+      tutorialDeck(),
+    );
+    room.turnSeconds = 0;
+    this.rooms.set(room.code, room);
+    return { ok: true, ...session };
+  }
+
+  /** Prochain coup du script du tutoriel, s'il en reste. */
+  tutorialMove(room: Room): TutorialMove | undefined {
+    return room.tutorial ? TUTORIAL_SCRIPT[room.tutorial.step] : undefined;
   }
 
   /**
@@ -408,6 +435,7 @@ export class RoomManager {
     if (!room.seats.some((s) => s.playerId === playerId && !s.bot)) return { ok: false, error: 'notInRoom' };
     if (room.game.phase !== 'gameOver') return { ok: false, error: 'wrongPhase' };
     if (room.challenge) return { ok: false, error: 'challengeAlreadyPlayed' };
+    if (room.tutorial) return { ok: false, error: 'tutorialMove' };
     room.game = createGame(
       room.seats.map((s) => ({ id: s.playerId, name: s.name })),
       seed,
@@ -427,11 +455,20 @@ export class RoomManager {
     const playerIndex = room.seats.findIndex((s) => s.playerId === playerId);
     if (playerIndex < 0) return { ok: false, error: 'notInRoom' };
 
+    // Tutoriel : seul le coup prévu par le script est accepté.
+    const scripted = this.tutorialMove(room);
+    if (room.tutorial) {
+      const expected = scripted?.cardIds ?? [];
+      const given = action.type === 'play' ? action.cardIds : action.type === 'pass' ? [] : null;
+      const same = given !== null && given.length === expected.length && given.every((id) => expected.includes(id));
+      if (!scripted || scripted.player !== playerIndex || !same) return { ok: false, error: 'tutorialMove' };
+    }
     const engineAction: Action = action.type === 'nextRound' ? action : { ...action, playerIndex };
     const result = applyAction(room.game, engineAction);
     if (!result.ok) return result;
     room.game = result.state;
     if (room.challenge && action.type === 'play' && !room.seats[playerIndex]!.bot) room.challenge.moves += 1;
+    if (room.tutorial) room.tutorial.step += 1;
     return { ok: true };
   }
 
@@ -457,7 +494,16 @@ export class RoomManager {
       spectators: 0,
       paused: room.paused ?? false,
       ...(room.challenge ? { challenge: room.challenge } : {}),
+      ...(room.tutorial ? { tutorial: this.tutorialView(room) } : {}),
     };
+  }
+
+  /** Le tutoriel vu par le joueur : l'explication et les cartes à poser quand c'est à lui, rien pendant le tour des bots. */
+  private tutorialView(room: Room): { coach: string | null; expect: string[] | null; step: number; total: number } {
+    const move = this.tutorialMove(room);
+    const total = TUTORIAL_SCRIPT.filter((m) => m.player === 0).length;
+    const step = TUTORIAL_SCRIPT.slice(0, room.tutorial!.step).filter((m) => m.player === 0).length;
+    return move?.player === 0 ? { coach: move.coach ?? null, expect: move.cardIds ?? [], step: step + 1, total } : { coach: null, expect: null, step, total };
   }
 
   /** Ce que voit un spectateur : toute la table, mais aucune main (`you` vaut -1). */
@@ -469,7 +515,7 @@ export class RoomManager {
   live(): { code: string; players: { name: string; score: number; bot: boolean }[]; round: number; open: boolean }[] {
     // Seulement les parties où au moins un vrai joueur est encore là : pas celles que les bots jouent seuls.
     return this.all().flatMap((room) =>
-      room.game && room.game.phase !== 'gameOver' && !room.challenge && !this.isAbandoned(room.code)
+      room.game && room.game.phase !== 'gameOver' && !room.challenge && !room.tutorial && !this.isAbandoned(room.code)
         ? [
             {
               code: room.code,
