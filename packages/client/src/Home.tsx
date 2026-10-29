@@ -161,9 +161,11 @@ export function Home({
           <div className="join">
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              // Codes en chiffres ; les lettres restent acceptées pour les salons ouverts avant ce changement.
+              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
               maxLength={4}
-              placeholder="CODE"
+              inputMode="numeric"
+              placeholder="1234"
               aria-label="Code du salon"
               className="code-input"
             />

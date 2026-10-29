@@ -14,9 +14,9 @@ function roomWith(count: number) {
 }
 
 describe('RoomManager', () => {
-  it('crée un salon avec un code de 4 lettres et en fait son hôte', () => {
+  it('crée un salon avec un code de 4 chiffres et en fait son hôte', () => {
     const { rooms, host } = roomWith(1);
-    expect(host.code).toMatch(/^[A-Z]{4}$/);
+    expect(host.code).toMatch(/^[0-9]{4}$/);
     expect(rooms.get(host.code)!.hostId).toBe(host.playerId);
   });
 

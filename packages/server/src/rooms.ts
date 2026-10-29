@@ -18,8 +18,8 @@ export interface StartOptions {
   targetScore?: number;
   turnSeconds?: number;
 }
-/** Lettres sans ambiguïté à l'oral ou à l'écrit (pas de I, O, 0, 1). */
-const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+/** Les codes de salon sont 4 chiffres : faciles à dicter et à taper, même sur le clavier d'un téléphone. */
+const CODE_DIGITS = 4;
 
 export interface Seat {
   playerId: string;
@@ -105,7 +105,7 @@ export class RoomManager {
   private newCode(): string {
     let code: string;
     do {
-      code = Array.from({ length: 4 }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join('');
+      code = String(randomInt(10 ** CODE_DIGITS)).padStart(CODE_DIGITS, '0');
     } while (this.rooms.has(code));
     return code;
   }
