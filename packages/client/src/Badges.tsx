@@ -39,6 +39,11 @@ export function BadgeGrid({ badges, picker }: { badges: Badge[]; picker?: Showca
           </span>
           <strong>{b.name}</strong>
           <span className="badge-desc">{b.description}</span>
+          {b.serious && (
+            <span className="badge-rule" title="Les parties contre des bots faciles ou moyens ne comptent pas pour ce badge">
+              🎯 En ligne ou contre des bots difficiles
+            </span>
+          )}
           {done(b) ? (
             <span className="badge-won">✓ Obtenu</span>
           ) : (
@@ -162,8 +167,8 @@ export function BadgesPage({
       <p className="muted small badges-hint">
         📌 Épingle jusqu'à 3 badges pour les montrer sur ta fiche
         {showcase.length === 0 ? ' : sans choix, ce sont tes 3 badges les plus rares.' : ` (${showcase.length} / 3).`} Le
-        pourcentage indique la part des joueurs qui ont obtenu le badge. Victoires, séries et scores ne comptent que les parties en
-        ligne, ou seul contre des bots tous en difficile.
+        pourcentage indique la part des joueurs qui ont obtenu le badge. 🎯 : seules comptent les parties en ligne, ou seul contre des
+        bots tous en difficile.
       </p>
       {!badges ? (
         <p className="muted">Chargement…</p>

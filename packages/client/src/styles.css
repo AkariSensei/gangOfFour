@@ -2639,6 +2639,15 @@ button.danger {
   font-size: 0.78rem;
   color: var(--muted);
 }
+/* Le texte reste dans la colonne de droite, quel que soit le nombre de lignes à côté de l'icône. */
+.badge > :not(.badge-icon, .badge-rarity, .badge-pin) {
+  grid-column: 2;
+}
+.badge-rule {
+  font-size: 0.7rem;
+  color: var(--gold);
+  opacity: 0.85;
+}
 .badge-won {
   margin-top: 0.15rem;
   font-size: 0.78rem;

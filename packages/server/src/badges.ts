@@ -13,12 +13,23 @@ export interface Badge {
   goal: number;
   /** Part des joueurs qui ont obtenu ce badge, en pourcentage (dans la fiche d'un joueur). */
   percent?: number;
+  /** Ne compte que les parties en ligne, ou seul contre des bots tous en difficile. */
+  serious?: boolean;
 }
 
 /** Une partie vue par un joueur : la partie, et sa ligne à lui. */
 type Game = { record: GameRecord; me: GameRecord['players'][number] };
 
-type Definition = { theme?: string; id: string; icon: string; name: string; description: string; goal: number; value: (games: Game[], challenges: ChallengeStats) => number };
+type Definition = {
+  theme?: string;
+  id: string;
+  icon: string;
+  name: string;
+  description: string;
+  goal: number;
+  serious?: boolean;
+  value: (games: Game[], challenges: ChallengeStats) => number;
+};
 
 /** Range des badges sous un thème (pour la page des badges). */
 const themed = (theme: string, definitions: Definition[]) => definitions.map((d) => ({ ...d, theme }));
@@ -39,7 +50,7 @@ const once = (id: string, icon: string, name: string, description: string, test:
  * les gagner à la chaîne contre des bots faciles.
  */
 const seriousOnly = (definitions: Definition[]) =>
-  definitions.map((d) => ({ ...d, value: (games: Game[], challenges: ChallengeStats) => d.value(games.filter(serious), challenges) }));
+  definitions.map((d) => ({ ...d, serious: true, value: (games: Game[], challenges: ChallengeStats) => d.value(games.filter(serious), challenges) }));
 
 /**
  * Badges à gagner, du plus simple au plus rare, rangés par thème. Ils comptent toutes les parties
