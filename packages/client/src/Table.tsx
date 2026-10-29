@@ -145,6 +145,7 @@ function Opponent({
         <div className="opponent-meta">
           <span className="count">{p.cardCount}</span> carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
         </div>
+        <ScoreGauge score={p.score} target={game.targetScore} />
       </div>
       <div className="mini-fan" aria-hidden>
         {Array.from({ length: fan }, (_, i) => (
@@ -157,14 +158,34 @@ function Opponent({
   );
 }
 
+/**
+ * Jauge du score vers le score de fin de partie : elle se remplit manche après manche, rougit passé les trois quarts,
+ * et bat quand le joueur n'est plus qu'à une mauvaise manche de la fin. Rien pour le défi ou le tutoriel (une seule manche).
+ */
+function ScoreGauge({ score, target }: { score: number; target: number }) {
+  if (target <= 1) return null;
+  const ratio = Math.min(1, score / target);
+  const level = ratio >= 0.9 ? 'critical' : ratio >= 0.75 ? 'danger' : ratio >= 0.5 ? 'warm' : '';
+  return (
+    <span className="score-gauge" title={`${score} / ${target} pts`} aria-hidden>
+      <span className={level} style={{ width: `${ratio * 100}%` }} />
+    </span>
+  );
+}
+
 function Scores({ game }: { game: PlayerView }) {
   const best = Math.min(...game.players.map((p) => p.score));
   const tied = game.players.every((p) => p.score === best);
   return (
     <div className="scores" aria-label="Scores">
       {game.players.map((p, i) => (
-        <span key={p.id} className={`score-pill ${i === game.you ? 'me' : ''} ${p.score === best && !tied ? 'leader' : ''}`}>
+        <span
+          key={p.id}
+          className={`score-pill ${i === game.you ? 'me' : ''} ${p.score === best && !tied ? 'leader' : ''}`}
+          title={`${p.score} / ${game.targetScore} pts`}
+        >
           {p.name} <strong>{p.score}</strong>
+          <ScoreGauge score={p.score} target={game.targetScore} />
         </span>
       ))}
     </div>
