@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { AccountStore } from './accounts';
 import type { Badge } from './badges';
 import { ChallengeStore, dayOf, seedOf } from './challenges';
+import { newRewards } from './progression';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -118,14 +119,34 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     if (room.challenge) return finishChallenge(room);
     // Le tutoriel non plus : c'est une manche écrite à l'avance.
     if (room.tutorial) return;
-    history.record(
-      room.game,
-      new Date(),
-      botSeats(room),
-      room.seats.map((s) => s.account),
-      botLevels(room),
+    const game = room.game;
+    withProgress(room, () =>
+      history.record(
+        game,
+        new Date(),
+        botSeats(room),
+        room.seats.map((s) => s.account),
+        botLevels(room),
+      ),
     );
     io.emit('stats:changed');
+  }
+
+  /**
+   * Enregistre une fin de partie (ou de défi), puis annonce à chaque joueur de la table l'expérience qu'elle lui a
+   * rapportée : niveau avant et après, et les récompenses débloquées en passant de niveau.
+   */
+  function withProgress(room: Room, record: () => unknown) {
+    const humans = [...new Set(room.seats.flatMap((s, i) => (s.account && !botSeats(room).includes(i) ? [s.account] : [])))];
+    const before = new Map(humans.map((id) => [id, history.progressOfAccount(id)]));
+    record();
+    for (const id of humans) {
+      const was = before.get(id)!;
+      const now = history.progressOfAccount(id);
+      if (now.xp === was.xp) continue;
+      const gain = { gained: now.xp - was.xp, before: was, after: now, rewards: newRewards(was.level, now.level) };
+      for (const s of io.sockets.sockets.values()) if (s.data.accountId === id && s.data.code === room.code && !s.data.spectator) s.emit('progress:gained', gain);
+    }
   }
 
   /** Termine l'essai du défi : à la fin de la manche, ou quand le joueur abandonne la table avant. */
@@ -135,7 +156,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     if (!room.challenge || !seat?.account || !game) return;
     const index = room.seats.indexOf(seat);
     const won = game.phase === 'gameOver' && game.lastRound?.winnerIndex === index;
-    challenges.finish(seat.account, room.challenge.day, { won, moves: room.challenge.moves, cardsLeft: game.players[index]?.hand.length ?? 0 });
+    const { day, moves } = room.challenge;
+    const account = seat.account;
+    withProgress(room, () => challenges.finish(account, day, { won, moves, cardsLeft: game.players[index]?.hand.length ?? 0 }));
     io.emit('stats:changed');
   }
 
@@ -535,6 +558,20 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });
       const result = accounts.update(account.id, { showcase: payload.badgeIds });
+      ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
+    });
+    on('account:cosmetics', (payload, ack) => {
+      const account = me();
+      if (!account) return ack({ ok: false, error: 'notSignedIn' });
+      // Seulement ce que le joueur a débloqué ; une chaîne vide revient au choix par défaut.
+      const unlocks = history.unlocksOfAccount(account.id);
+      const cosmetics = { felt: text(payload.felt), frame: text(payload.frame), title: text(payload.title) };
+      const allowed =
+        (!cosmetics.felt || unlocks.felts.includes(cosmetics.felt)) &&
+        (!cosmetics.frame || unlocks.frames.includes(cosmetics.frame)) &&
+        (!cosmetics.title || unlocks.titles.includes(cosmetics.title));
+      if (!allowed) return ack({ ok: false, error: 'locked' });
+      const result = accounts.update(account.id, { cosmetics });
       ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
     });
     on('account:signOut', (_payload, ack) => {

@@ -57,6 +57,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   paused: 'La partie est en pause.',
   challengeAlreadyPlayed: 'Tu as déjà relevé le défi du jour : reviens demain !',
   tutorialMove: 'Suis le tutoriel : joue les cartes mises en avant.',
+  locked: 'Cette récompense n’est pas encore débloquée.',
   disconnected: 'Connexion au serveur perdue, reconnexion…',
 };
 

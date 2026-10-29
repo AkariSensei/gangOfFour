@@ -4,6 +4,7 @@ import type { GameState } from '@gof/engine';
 import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
+import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
 export interface GameRecord {
   finishedAt: string;
@@ -50,6 +51,12 @@ export interface PlayerProfile {
   badges: Badge[];
   /** Badges montrés sur sa fiche : ceux qu'il a choisis, complétés par ses plus rares. */
   showcase: Badge[];
+  /** Niveau et expérience, et ce qu'ils débloquent (tapis, cadres, titres). */
+  progress: Progress;
+  unlocks: Unlocks;
+  /** Titre et cadre choisis par le joueur (absents : son titre de niveau, sans cadre). */
+  title?: string;
+  frame?: string;
 }
 
 export interface LeaderboardEntry {
@@ -80,7 +87,7 @@ function topBotLevel(record: GameRecord): BotLevel | undefined {
 
 /** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
 export interface AccountNames {
-  get(id: string | undefined): { name?: string; showcase?: string[] } | undefined;
+  get(id: string | undefined): { name?: string; showcase?: string[]; title?: string; frame?: string } | undefined;
   byName(name: string): { id: string } | undefined;
 }
 
@@ -304,6 +311,27 @@ export class GameHistory {
     return badgesOf(this.gamesOf(accountId), this.challengesOf(accountId));
   }
 
+  /** Niveau d'un joueur (compte, ou « pseudo:… » d'avant les comptes), calculé depuis toutes ses parties, défis et badges. */
+  progressOfAccount(owner: string): Progress {
+    return progressOf(this.xpOf(owner, badgesOf(this.gamesOf(owner), this.challengesOf(owner))));
+  }
+
+  /** Récompenses qu'un joueur a débloquées, pour vérifier celles qu'il choisit. */
+  unlocksOfAccount(owner: string): Unlocks {
+    const badges = badgesOf(this.gamesOf(owner), this.challengesOf(owner));
+    return unlocksOf(progressOf(this.xpOf(owner, badges)).level, badges);
+  }
+
+  private xpOf(owner: string, badges: Badge[]): number {
+    const games: GameForXp[] = this.gamesOf(owner).map(({ record, me }) => ({
+      winner: me.winner,
+      roundsWon: me.roundsWon ?? 0,
+      gangs: me.gangs ?? 0,
+      vsBots: record.players.filter((p) => !p.bot).length >= 2 ? null : (topBotLevel(record) ?? 'unknown'),
+    }));
+    return totalXp(games, this.challengesOf(owner), badges);
+  }
+
   /**
    * Part des joueurs (tous ceux qui ont une partie au classement ou un défi terminé) qui ont obtenu chaque badge,
    * en pourcentage arrondi : plus il est bas, plus le badge est rare.
@@ -343,6 +371,8 @@ export class GameHistory {
     const earned = badges.filter((b) => b.value >= b.goal);
     const chosen = (this.accounts?.get(owner)?.showcase ?? []).flatMap((id) => earned.filter((b) => b.id === id));
     const rarest = [...earned].sort((a, b) => a.percent - b.percent).filter((b) => !chosen.includes(b));
+    const progress = progressOf(this.xpOf(owner, badges));
+    const account = this.accounts?.get(owner);
     return {
       name: games.length > 0 ? this.displayName(games[games.length - 1]!.me) : (this.accounts?.get(owner)?.name ?? name),
       games: games.length,
@@ -369,6 +399,10 @@ export class GameHistory {
         })),
       badges,
       showcase: [...chosen, ...rarest].slice(0, SHOWCASE_SIZE),
+      progress,
+      unlocks: unlocksOf(progress.level, badges),
+      ...(account?.title ? { title: account.title } : {}),
+      ...(account?.frame ? { frame: account.frame } : {}),
     };
   }
 }

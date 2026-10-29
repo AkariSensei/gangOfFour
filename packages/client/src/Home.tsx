@@ -2,10 +2,11 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { BotLevel, LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
-import { BadgesPage, useMyBadges } from './Badges';
+import { BadgesPage, useMyProfile } from './Badges';
 import { DailyChallenge, challengeSummary, useDailyChallenge } from './Challenge';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
+import { FIRST_LEVEL, LevelBadge, LevelBar, ProfileScreen } from './Progress';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
 
@@ -13,7 +14,7 @@ import { socket, type useAccount } from './socket';
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
 /** Écrans de l'accueil : le menu principal, et un écran par entrée du menu (chacun a son adresse, #jouer…). */
-const SCREENS = ['menu', 'jouer', 'defi', 'regarder', 'classement', 'badges'] as const;
+const SCREENS = ['menu', 'jouer', 'defi', 'regarder', 'classement', 'badges', 'profil'] as const;
 type Screen = (typeof SCREENS)[number];
 
 const screenOf = (hash: string): Screen => {
@@ -36,12 +37,14 @@ export function Home({
 }) {
   const invite = new URLSearchParams(location.search).get('salon')?.toUpperCase() ?? '';
   const [error, setError] = useState(notice);
-  const [editing, setEditing] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [rules, setRules] = useState(false);
   const { account } = me;
   const signedIn = !!account?.name;
-  const badges = useMyBadges(account?.name || undefined);
+  const profile = useMyProfile(account?.name || undefined);
+  // Sans partie ni défi terminés, pas encore de fiche : aucun badge, niveau 1.
+  const badges = profile === undefined ? null : (profile?.badges ?? []);
+  const progress = profile?.progress ?? FIRST_LEVEL;
   const challenge = useDailyChallenge(account?.id);
   const live = useLiveRooms();
 
@@ -224,6 +227,12 @@ export function Home({
         );
       case 'badges':
         return <BadgesPage badges={badges} showcase={account?.showcase ?? []} onShowcase={(ids) => void setShowcase(ids)} onClose={backToMenu} />;
+      case 'profil':
+        return account?.name ? (
+          <SubScreen title="Mon profil" onBack={backToMenu}>
+            <ProfileScreen account={account} profile={profile} onAccount={(a) => me.setAccount(a)} />
+          </SubScreen>
+        ) : null;
     }
   }
 
@@ -231,13 +240,17 @@ export function Home({
     <main className="home-menu">
       {signedIn && account && (
         <header className="menu-topbar">
-          <button type="button" className="player-card" onClick={() => setEditing(true)} title="Modifier mon pseudo et mon avatar">
-            <Avatar name={account.name} look={account} />
-            <span>
+          <button type="button" className="player-card" onClick={() => open('profil')} title="Mon profil : niveau, pseudo, avatar, récompenses">
+            <span className="level-avatar">
+              <Avatar name={account.name} look={account} />
+              <LevelBadge level={progress.level} />
+            </span>
+            <span className="player-card-text">
               <strong>{account.name}</strong>
               <small>
-                🏅 {wonBadges} badge{wonBadges > 1 ? 's' : ''}
+                {account.title || progress.title} · 🏅 {wonBadges}
               </small>
+              <LevelBar progress={progress} compact />
             </span>
           </button>
           <div className="menu-topbar-actions">
@@ -264,20 +277,6 @@ export function Home({
       </div>
       {rules && <Rules onClose={() => setRules(false)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
-      {editing && account?.name && (
-        <div className="overlay" onClick={() => setEditing(false)}>
-          <div className="panel modal account-modal pop-in" onClick={(e) => e.stopPropagation()}>
-            <AccountForm
-              account={account}
-              onSaved={(a) => {
-                me.setAccount(a);
-                setEditing(false);
-              }}
-              onCancel={() => setEditing(false)}
-            />
-          </div>
-        </div>
-      )}
     </main>
   );
 }

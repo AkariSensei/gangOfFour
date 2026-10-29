@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
 import { BadgeGrid } from './Badges';
+import { LevelBadge, LevelBar } from './Progress';
 import { LEVEL_LABELS } from './labels';
 import { socket } from './socket';
 
@@ -29,6 +30,12 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
           ✕
         </button>
         <h2>{profile?.name ?? name}</h2>
+        {profile && (
+          <p className="profile-level">
+            <LevelBadge level={profile.progress.level} /> {profile.title || profile.progress.title}
+            <LevelBar progress={profile.progress} />
+          </p>
+        )}
         {profile === undefined && <p className="muted">Chargement…</p>}
         {profile === null && <p className="muted">Pas encore de partie terminée.</p>}
         {profile && (

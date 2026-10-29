@@ -17,6 +17,10 @@ export interface Account extends Look {
   blocked?: boolean;
   /** Badges que le joueur a choisi de montrer sur sa fiche (trois au plus) ; sans choix, ses plus rares. */
   showcase?: string[];
+  /** Récompenses choisies (vérifiées comme débloquées avant d'être enregistrées) : tapis, cadre d'avatar, titre. */
+  felt?: string;
+  frame?: string;
+  title?: string;
   createdAt: string;
 }
 
@@ -82,6 +86,9 @@ export class AccountStore {
       ...cleanLook(account),
       admin: this.isAdmin(account),
       showcase: account.showcase ?? [],
+      ...(account.felt ? { felt: account.felt } : {}),
+      ...(account.frame ? { frame: account.frame } : {}),
+      ...(account.title ? { title: account.title } : {}),
     };
   }
 
@@ -102,7 +109,10 @@ export class AccountStore {
   }
 
   /** Modifie un compte : pseudo, apparence, ou blocage (ce dernier par l'admin seulement). */
-  update(id: string, change: { name?: unknown; look?: unknown; blocked?: boolean; showcase?: unknown }): Result {
+  update(
+    id: string,
+    change: { name?: unknown; look?: unknown; blocked?: boolean; showcase?: unknown; cosmetics?: { felt: string; frame: string; title: string } },
+  ): Result {
     const account = this.get(id);
     if (!account) return { ok: false, error: 'accountNotFound' };
     if (change.name !== undefined) {
@@ -116,6 +126,13 @@ export class AccountStore {
       delete account.avatar;
       delete account.color;
       Object.assign(account, cleanLook(change.look));
+    }
+    // Le serveur a déjà vérifié que ces récompenses sont débloquées ; une chaîne vide revient au choix par défaut.
+    if (change.cosmetics) {
+      for (const key of ['felt', 'frame', 'title'] as const) {
+        if (change.cosmetics[key]) account[key] = change.cosmetics[key];
+        else delete account[key];
+      }
     }
     if (change.showcase !== undefined) {
       const ids = Array.isArray(change.showcase) ? change.showcase.filter((id): id is string => typeof id === 'string' && BADGE_IDS.has(id)) : [];

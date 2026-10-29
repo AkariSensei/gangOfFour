@@ -2,12 +2,15 @@ import type { ActionError, Card, PlayerView } from '@gof/engine';
 import type { Badge } from './badges';
 import type { BotLevel } from './bot';
 import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
+import type { Progress } from './progression';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
 export type { Badge } from './badges';
 export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
+export type { Progress, Reward, Unlocks } from './progression';
+export { FELTS, FRAMES, LEVEL_TITLES } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
 export const REACTIONS = ['👍', '😂', '😱', '😡', '👏', '🔥'];
@@ -20,6 +23,12 @@ export const COLORS = ['#e8b931', '#d1453b', '#4fb477', '#3b82c4', '#9b59b6', '#
 export interface Look {
   avatar?: string;
   color?: string;
+}
+
+/** Récompenses que le joueur a choisi de montrer à la table : un cadre autour de son avatar, et un titre. */
+export interface Cosmetics {
+  frame?: string;
+  title?: string;
 }
 
 /** Ce que chacun voit du salon, avant et pendant la partie. */
@@ -38,7 +47,8 @@ export interface RoomView {
     vacant: boolean;
     /** Le joueur passe tout seul quand aucune de ses cartes ne peut battre la table (son choix, coupé par défaut). */
     autoPass: boolean;
-  } & Look)[];
+  } & Look &
+    Cosmetics)[];
   started: boolean;
   /** Temps par tour choisi par l'hôte, en secondes (0 : pas de minuteur). */
   turnSeconds: number;
@@ -105,7 +115,8 @@ export type RoomError =
   | 'kicked'
   | 'paused'
   | 'challengeAlreadyPlayed'
-  | 'tutorialMove';
+  | 'tutorialMove'
+  | 'locked';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -127,6 +138,10 @@ export interface AccountView extends Look {
   admin: boolean;
   /** Badges choisis pour sa fiche. */
   showcase: string[];
+  /** Récompenses choisies : le tapis (vu par lui seul), le cadre et le titre (vus de tous). */
+  felt?: string;
+  frame?: string;
+  title?: string;
 }
 
 /** Ligne de la liste des comptes, vue par l'admin. */
@@ -149,6 +164,8 @@ export interface ClientToServerEvents {
   'account:signOut': (ack: Ack) => void;
   /** Choisit les badges (trois au plus) montrés sur sa fiche ; une liste vide revient aux plus rares. */
   'account:showcase': (payload: { badgeIds: string[] }, ack: Ack<{ account: AccountView }>) => void;
+  /** Choisit son tapis, son cadre et son titre parmi ce qu'il a débloqué (vide : celui par défaut). */
+  'account:cosmetics': (payload: { felt: string; frame: string; title: string }, ack: Ack<{ account: AccountView }>) => void;
   'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
   'admin:update': (payload: { id: string; name?: string; blocked?: boolean }, ack: Ack) => void;
   /** L'admin retire un compte du classement (ses parties jouées jusqu'ici ne comptent plus). */
@@ -221,4 +238,6 @@ export interface ServerToClientEvents {
   'stats:changed': () => void;
   /** Badges que ce joueur vient d'obtenir avec la partie qui se termine. */
   'badges:won': (badges: Badge[]) => void;
+  /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */
+  'progress:gained': (gain: { gained: number; before: Progress; after: Progress; rewards: string[] }) => void;
 }

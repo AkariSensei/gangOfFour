@@ -776,6 +776,8 @@ describe('serveur de jeu', () => {
     const alice = connect('Alice');
     const won: string[] = [];
     alice.on('badges:won', (badges) => won.push(...badges.map((b) => b.id)));
+    const gains: { gained: number; before: { xp: number }; after: { xp: number } }[] = [];
+    alice.on('progress:gained', (gain) => gains.push(gain));
     await alice.emitWithAck('challenge:start');
     const over = () => alice.game?.phase === 'gameOver';
     for (let steps = 0; !over(); steps++) {
@@ -798,6 +800,10 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
     await waitFor(() => won.includes('challenge-1'));
     expect(won.includes('challenge-win-1')).toBe(!!mine.won);
+    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), et 40 par badge obtenu.
+    await waitFor(() => gains.length === 1);
+    expect(gains[0]!.gained).toBe(mine.won ? 30 + 50 + 2 * 40 : 30 + 40);
+    expect(gains[0]!.after.xp - gains[0]!.before.xp).toBe(gains[0]!.gained);
   }, 30000);
 
   it("consomme l'essai du jour quand le joueur quitte le défi en cours", async () => {
@@ -850,6 +856,23 @@ describe('serveur de jeu', () => {
     for (let i = 0; i < 3; i++) await players[0]!.emitWithAck('room:react', { emoji: '👍' });
     expect(await players[0]!.emitWithAck('room:react', { emoji: '👍' })).toEqual({ ok: false, error: 'slowDown' });
     expect(await connect().emitWithAck('room:react', { emoji: '👍' })).toEqual({ ok: false, error: 'notInRoom' });
+  });
+
+  it("ne laisse choisir que les récompenses débloquées, et montre cadre et titre à la table", async () => {
+    await start();
+    const alice = connect('Alice');
+    await waitFor(() => alice.connected);
+    // Niveau 1 : le tapis vert et le titre « Débutant », mais pas encore de cadre ni de tapis bleu nuit.
+    expect(await alice.emitWithAck('account:cosmetics', { felt: 'nuit', frame: '', title: '' })).toEqual({ ok: false, error: 'locked' });
+    expect(await alice.emitWithAck('account:cosmetics', { felt: '', frame: 'or', title: '' })).toEqual({ ok: false, error: 'locked' });
+    expect(await alice.emitWithAck('account:cosmetics', { felt: '', frame: '', title: 'Parrain' })).toEqual({ ok: false, error: 'locked' });
+    const chosen = await alice.emitWithAck('account:cosmetics', { felt: 'vert', frame: '', title: 'Débutant' });
+    expect(chosen).toMatchObject({ ok: true, account: { felt: 'vert', title: 'Débutant' } });
+    // Un cadre débloqué (posé ici directement) se voit, avec le titre, sur sa place à la table.
+    server.accounts.update(server.accounts.byName('Alice')!.id, { cosmetics: { felt: 'vert', frame: 'bronze', title: 'Débutant' } });
+    await alice.emitWithAck('room:create');
+    await waitFor(() => !!alice.room);
+    expect(alice.room!.players[0]).toMatchObject({ frame: 'bronze', title: 'Débutant' });
   });
 
   it('ne lance pas de minuteur par défaut', async () => {

@@ -19,6 +19,7 @@ export function Lobby({
   session,
   messages,
   admin,
+  felt,
   onLeave,
 }: {
   room: RoomView;
@@ -26,6 +27,8 @@ export function Lobby({
   messages: ChatMessage[];
   /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */
   admin: boolean;
+  /** Couleur de tapis choisie par le joueur, la même que sur la table. */
+  felt?: string;
   onLeave: () => void;
 }) {
   const [error, setError] = useState('');
@@ -80,7 +83,7 @@ export function Lobby({
   }
 
   return (
-    <main className="lobby">
+    <main className={`lobby felt-${felt || 'vert'}`}>
       <div className="panel">
         {/* La table vue de dessus : sa propre place en bas, les autres autour, le code du salon sur le tapis. */}
         <div className="lobby-table">
@@ -96,6 +99,7 @@ export function Lobby({
                 <li key={p.id} className={`lobby-seat at-${SEATS[i]} ${p.connected ? '' : 'offline'}`}>
                   <Avatar name={p.name} look={p} bot={p.bot} />
                   <span className="lobby-seat-name">{p.name}</span>
+                  {p.title && <span className="seat-title">{p.title}</span>}
                   <span className="lobby-seat-tags">
                     {p.bot && <span className={`tag level-${p.level ?? 'normal'}`}>bot {LEVEL_LABELS[p.level ?? 'normal'].toLowerCase()}</span>}
                     {p.id === room.hostId && <span className="tag">hôte</span>}

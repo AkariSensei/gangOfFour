@@ -6,6 +6,7 @@ import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { LEVEL_LABELS, cardLabel, combinationLabel, errorLabel } from './labels';
 import { socket } from './socket';
+import { type ProgressGain, XpGain, useProgressGain } from './Progress';
 import { useTurnAlert, useTurnNotifications } from './turnAlert';
 import { useAutoPass } from './autoPass';
 
@@ -300,12 +301,15 @@ function RoundOver({
   seats,
   challenge,
   tutorial,
+  gain,
   onExit,
 }: {
   game: PlayerView;
   seats: RoomView['players'];
   challenge?: RoomView['challenge'];
   tutorial?: boolean;
+  /** Expérience que la partie vient de rapporter au joueur. */
+  gain?: ProgressGain | null;
   onExit: () => void;
 }) {
   const r = game.lastRound!;
@@ -376,6 +380,7 @@ function RoundOver({
             ))}
           </tbody>
         </table>
+        {over && gain && <XpGain gain={gain} />}
         {over ? (
           <div className="end-actions">
             {game.you >= 0 && !challenge && !tutorial && (
@@ -744,6 +749,7 @@ export function Table({
   room,
   messages,
   admin,
+  felt,
   onLeave,
 }: {
   game: GameView;
@@ -751,8 +757,15 @@ export function Table({
   messages: ChatMessage[];
   /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */
   admin: boolean;
+  /** Couleur de tapis choisie par le joueur (vert sans choix). */
+  felt?: string;
   onLeave: () => void;
 }) {
+  const [gain, clearGain] = useProgressGain();
+  // Une nouvelle partie (revanche) repart sans l'expérience de la précédente.
+  useEffect(() => {
+    if (game.phase !== 'gameOver') clearGain();
+  }, [game.phase, clearGain]);
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('value');
@@ -1073,7 +1086,7 @@ export function Table({
   const mid = (hand.length - 1) / 2;
 
   return (
-    <main className={`table-screen players-${n}${room.paused ? ' paused' : ''}`}>
+    <main className={`table-screen players-${n}${room.paused ? ' paused' : ''} felt-${felt || 'vert'}`}>
       <header className="table-header">
         <div className="header-left">
           {room.tutorial ? (
@@ -1329,7 +1342,7 @@ export function Table({
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       {/* Dans le tutoriel, l'explication au-dessus de la main dit déjà quoi faire : pas de grande annonce par-dessus. */}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown || room.tutorial ? null : bannerText} />
-      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} challenge={room.challenge} tutorial={!!room.tutorial} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} challenge={room.challenge} tutorial={!!room.tutorial} gain={gain} onExit={exit} />}
       {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );

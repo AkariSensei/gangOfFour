@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Badge } from '../../server/src/protocol';
+import type { Badge, PlayerProfile } from '../../server/src/protocol';
 import { socket } from './socket';
 
 const done = (b: Badge) => b.value >= b.goal;
@@ -90,19 +90,22 @@ export function ThemedBadgeGrid({ badges, picker }: { badges: Badge[]; picker?: 
   );
 }
 
-/** Mes badges, rechargés à chaque fin de partie (ou remise à zéro du classement). */
-export function useMyBadges(name: string | undefined): Badge[] | null {
-  const [badges, setBadges] = useState<Badge[] | null>(null);
+/**
+ * Ma fiche (badges, niveau, récompenses), rechargée à chaque fin de partie : `undefined` pendant le chargement,
+ * null tant que le joueur n'a fini ni partie ni défi.
+ */
+export function useMyProfile(name: string | undefined): PlayerProfile | null | undefined {
+  const [profile, setProfile] = useState<PlayerProfile | null | undefined>(undefined);
   useEffect(() => {
     if (!name) return;
-    const load = () => void socket.emitWithAck('stats:player', { name }).then((r) => setBadges(r.ok && r.profile ? r.profile.badges : []));
+    const load = () => void socket.emitWithAck('stats:player', { name }).then((r) => setProfile(r.ok ? r.profile : null));
     load();
     socket.on('stats:changed', load);
     return () => {
       socket.off('stats:changed', load);
     };
   }, [name]);
-  return badges;
+  return profile;
 }
 
 type Filter = 'all' | 'won' | 'todo';

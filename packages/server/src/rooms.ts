@@ -2,7 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { type Action, type ActionError, type GameState, applyAction, createGame, getPlayerView, playableCards } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
-import { AVATARS, COLORS, type Look, type RoomError, type RoomView, type Session } from './protocol';
+import { AVATARS, COLORS, type Cosmetics, type Look, type RoomError, type RoomView, type Session } from './protocol';
+import { FRAMES } from './progression';
 
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 3;
@@ -40,6 +41,9 @@ export interface Seat {
   account?: string;
   /** Joueur exclu en pleine partie : un bot tient le siège jusqu'à ce qu'un nouvel humain le prenne. */
   vacant?: boolean;
+  /** Cadre d'avatar et titre choisis par le joueur, montrés à toute la table. */
+  frame?: string;
+  title?: string;
 }
 
 /** Noms donnés aux bots, dans l'ordre. */
@@ -85,6 +89,15 @@ export function cleanName(name: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** Garde seulement un cadre connu et un titre de taille raisonnable (ils viennent du compte, déjà vérifiés). */
+export function cleanCosmetics(source: unknown): Cosmetics {
+  const { frame, title } = (source && typeof source === 'object' ? source : {}) as Record<string, unknown>;
+  return {
+    ...(typeof frame === 'string' && FRAMES.some((f) => f.id === frame) ? { frame } : {}),
+    ...(typeof title === 'string' && title.length > 0 && title.length <= 40 ? { title } : {}),
+  };
+}
+
 /** Garde seulement un avatar et une couleur de la liste proposée. */
 export function cleanLook(look: unknown): Look {
   const { avatar, color } = (look && typeof look === 'object' ? look : {}) as Record<string, unknown>;
@@ -111,7 +124,15 @@ export class RoomManager {
   }
 
   private seat(room: Room, name: string, look: unknown, account?: string): Session {
-    const seat: Seat = { playerId: randomUUID(), token: randomUUID(), name, connected: true, ...cleanLook(look), ...(account ? { account } : {}) };
+    const seat: Seat = {
+      playerId: randomUUID(),
+      token: randomUUID(),
+      name,
+      connected: true,
+      ...cleanLook(look),
+      ...cleanCosmetics(look),
+      ...(account ? { account } : {}),
+    };
     room.seats.push(seat);
     return { code: room.code, playerId: seat.playerId, token: seat.token };
   }
@@ -487,6 +508,7 @@ export class RoomManager {
         vacant: s.vacant ?? false,
         muted: room.muted?.includes(s.playerId) ?? false,
         ...cleanLook(s),
+        ...cleanCosmetics(s),
       })),
       started: room.game !== null,
       turnSeconds: room.turnSeconds ?? 0,

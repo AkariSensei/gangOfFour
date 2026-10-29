@@ -379,7 +379,7 @@ input {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, 0.1), transparent 55%),
-    radial-gradient(ellipse at center, #24704d, var(--felt) 45%, var(--felt-dark) 100%);
+    radial-gradient(ellipse at center, var(--felt-light, #24704d), var(--felt) 45%, var(--felt-dark) 100%);
   border: 10px solid #5a3519;
   box-shadow:
     0 0 0 1px #2e1a0b,
@@ -907,7 +907,7 @@ button.mute.on {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, 0.1), transparent 55%),
-    radial-gradient(ellipse at center, #24704d, var(--felt) 45%, var(--felt-dark) 100%);
+    radial-gradient(ellipse at center, var(--felt-light, #24704d), var(--felt) 45%, var(--felt-dark) 100%);
   box-shadow:
     inset 0 0 0 2px rgba(0, 0, 0, 0.35),
     inset 0 6px 18px rgba(0, 0, 0, 0.45),
@@ -3639,5 +3639,327 @@ button.danger {
   50% {
     opacity: 0.45;
     box-shadow: 0 0 8px var(--danger);
+  }
+}
+
+/* ——— Niveau, expérience et récompenses ——— */
+
+/* Tapis de jeu : chaque couleur donne ses trois teintes (centre éclairé, tapis, bords), sur la table et sur l'aperçu. */
+.felt-vert {
+  --felt-light: #24704d;
+  --felt: #1f6143;
+  --felt-dark: #123b29;
+}
+.felt-bordeaux {
+  --felt-light: #8c2f3b;
+  --felt: #6e2230;
+  --felt-dark: #3a0e17;
+}
+.felt-nuit {
+  --felt-light: #2d5288;
+  --felt: #1f3c66;
+  --felt-dark: #0d1c35;
+}
+.felt-royal {
+  --felt-light: #66409a;
+  --felt: #4a2c75;
+  --felt-dark: #23133c;
+}
+.felt-onyx {
+  --felt-light: #3b3a36;
+  --felt: #262522;
+  --felt-dark: #0d0d0c;
+}
+.felt-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at center, var(--felt-light), var(--felt) 45%, var(--felt-dark) 100%);
+  box-shadow:
+    inset 0 0 0 4px #5a3519,
+    inset 0 0 0 5px rgba(255, 220, 170, 0.25);
+}
+.felt-preview.felt-onyx {
+  box-shadow:
+    inset 0 0 0 4px #b98b12,
+    inset 0 0 0 5px rgba(255, 230, 160, 0.5);
+}
+
+/* Cadres d'avatar : un anneau de métal autour du rond du joueur, vu de toute la table. */
+.avatar.frame.frame-bronze {
+  box-shadow:
+    0 0 0 2px #e0a15e,
+    0 0 0 4px #8a5424,
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.avatar.frame.frame-argent {
+  box-shadow:
+    0 0 0 2px #f2f5f9,
+    0 0 0 4px #8d97a6,
+    0 0 10px rgba(220, 230, 245, 0.35);
+}
+.avatar.frame.frame-or {
+  box-shadow:
+    0 0 0 2px #ffe08a,
+    0 0 0 4px var(--gold-dark),
+    0 0 14px rgba(232, 185, 49, 0.55);
+}
+.avatar.frame.frame-diamant {
+  box-shadow:
+    0 0 0 2px #e8fbff,
+    0 0 0 4px #4fc3e8,
+    0 0 16px rgba(110, 215, 255, 0.75);
+  animation: diamond-glint 3s ease-in-out infinite;
+}
+@keyframes diamond-glint {
+  50% {
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 4px #7fdcff,
+      0 0 24px rgba(150, 230, 255, 0.95);
+  }
+}
+
+/* Pastille du niveau sur l'avatar, et barre d'expérience. */
+.level-avatar {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+.level-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -5px;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.25rem;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  border: 2px solid #1a120a;
+}
+.profile-level .level-badge,
+.level-card .level-badge {
+  position: static;
+}
+.level-card .level-avatar .level-badge {
+  position: absolute;
+}
+.level-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.level-bar.compact {
+  height: 4px;
+  margin-top: 0.25rem;
+}
+.level-bar.big {
+  height: 10px;
+}
+.level-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b98b12, #f6d36b);
+  box-shadow: 0 0 8px rgba(232, 185, 49, 0.6);
+  transition: width 1.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.player-card-text {
+  display: grid;
+  min-width: 9rem;
+}
+
+/* Écran « Mon profil » */
+.profile-screen {
+  display: grid;
+  gap: 1.25rem;
+}
+.level-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+}
+.level-card .avatar {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 2.2rem;
+}
+.level-card .level-badge {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.95rem;
+}
+.level-info {
+  flex: 1;
+  display: grid;
+  gap: 0.35rem;
+}
+.level-info strong {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+}
+.level-title,
+.seat-title {
+  color: var(--gold);
+  font-style: italic;
+}
+.seat-title {
+  display: block;
+  font-size: 0.75rem;
+}
+.profile-columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.profile-columns .panel,
+.rewards .panel {
+  padding: 1.1rem 1.25rem;
+}
+.profile-screen h3 {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  color: #f3d27a;
+}
+.profile-screen .muted.small {
+  margin: 0 0 0.75rem;
+}
+.rewards {
+  display: grid;
+  gap: 1.25rem;
+}
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.6rem;
+}
+.reward {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  min-height: 0;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line-strong);
+}
+.reward.on {
+  border-color: var(--gold);
+  background: rgba(232, 185, 49, 0.12);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.reward.locked,
+.chip.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.reward.locked small {
+  color: var(--muted);
+}
+.reward .avatar {
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0.3rem 0;
+}
+.title-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.xp-help {
+  text-align: center;
+}
+.profile-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  margin: -0.4rem auto 1rem;
+  max-width: 22rem;
+  color: var(--gold);
+  font-style: italic;
+}
+.profile-level .level-bar {
+  flex-basis: 100%;
+}
+
+/* Fin de partie : l'expérience gagnée, la barre qui avance, le niveau supérieur. */
+.xp-gain {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0 0.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(232, 185, 49, 0.35);
+  animation: row-in 0.4s ease-out 0.8s backwards;
+}
+.xp-gain-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.xp-amount {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  color: var(--gold);
+  text-shadow: 0 0 16px rgba(232, 185, 49, 0.45);
+}
+.level-up-tag {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--gold);
+  animation: winner-pop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1.4) 1.6s both;
+}
+.xp-gain.level-up {
+  border-color: var(--gold);
+  box-shadow: 0 0 24px rgba(232, 185, 49, 0.25);
+}
+.xp-rewards {
+  margin: 0.2rem 0 0;
+  color: #f3d27a;
+  font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .profile-columns {
+    grid-template-columns: 1fr;
+  }
+  .level-card {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+@media (max-width: 560px) {
+  .player-card-text {
+    min-width: 0;
+  }
+  .player-card-text small {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
