@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import type { BotLevel } from './bot';
-import { type ChallengeStats, NO_CHALLENGE } from './challenges';
+import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
 
 export interface GameRecord {
   finishedAt: string;
@@ -83,7 +83,7 @@ export class GameHistory {
     private file?: string,
     private accounts?: AccountNames,
     /** Défis du jour, qui donnent eux aussi des badges. */
-    private challenges?: { statsOf(account: string): ChallengeStats; players(): string[] },
+    private challenges?: { statsOf(account: string): ChallengeStats; players(): string[]; version: number },
   ) {
     if (!file) return;
     try {
@@ -178,7 +178,13 @@ export class GameHistory {
     return this.counted.some((r) => r.players.some((p) => this.ranked(p) && p.account === accountId));
   }
 
+  /** Change à chaque modification de l'historique (partie ajoutée, remise à zéro, retrait, pseudo repris). */
+  private version = 0;
+  /** Rareté des badges, recalculée seulement quand l'historique ou les défis ont changé. */
+  private rarity?: { key: string; value: Record<string, number> };
+
   private save() {
+    this.version += 1;
     if (!this.file) return;
     try {
       mkdirSync(dirname(this.file), { recursive: true });
@@ -290,6 +296,13 @@ export class GameHistory {
    * en pourcentage arrondi : plus il est bas, plus le badge est rare.
    */
   badgeRarity(): Record<string, number> {
+    // Le podium du défi dépend aussi du jour : le cache change donc à minuit, heure de Paris.
+    const key = `${this.version}/${this.challenges?.version ?? 0}/${dayOf(new Date())}`;
+    if (this.rarity?.key !== key) this.rarity = { key, value: this.computeRarity() };
+    return this.rarity.value;
+  }
+
+  private computeRarity(): Record<string, number> {
     const owners = new Set([
       ...this.counted.flatMap((r) => r.players.filter((p) => this.ranked(p)).map((p) => this.owner(p))),
       ...(this.challenges?.players() ?? []),

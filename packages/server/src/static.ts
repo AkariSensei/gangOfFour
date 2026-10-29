@@ -1,7 +1,8 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { constants, brotliCompressSync, gzipSync } from 'node:zlib';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -14,6 +15,39 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
 };
+
+/** Fichiers texte qu'on envoie compressés ; les images (webp, png) le sont déjà. */
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg']);
+
+type Encoding = 'br' | 'gzip';
+
+/** Meilleure compression acceptée par le navigateur (brotli, sinon gzip), ou aucune. */
+function encodingFor(req: IncomingMessage): Encoding | null {
+  const accepted = String(req.headers['accept-encoding'] ?? '');
+  if (/\bbr\b/.test(accepted)) return 'br';
+  if (/\bgzip\b/.test(accepted)) return 'gzip';
+  return null;
+}
+
+/**
+ * Versions compressées des fichiers, faites une seule fois par fichier (et refaites s'il change) : les fichiers de
+ * l'interface ne changent qu'à la mise à jour du site, et compresser à chaque visite gaspillerait le processeur.
+ */
+const compressed = new Map<string, { mtimeMs: number; br: Buffer; gzip: Buffer }>();
+
+async function compressedFile(file: string, mtimeMs: number, encoding: Encoding): Promise<Buffer> {
+  let entry = compressed.get(file);
+  if (entry?.mtimeMs !== mtimeMs) {
+    const content = await readFile(file);
+    entry = {
+      mtimeMs,
+      br: brotliCompressSync(content, { params: { [constants.BROTLI_PARAM_QUALITY]: 10 } }),
+      gzip: gzipSync(content, { level: 9 }),
+    };
+    compressed.set(file, entry);
+  }
+  return entry[encoding];
+}
 
 /** Durée de cache : les fichiers de Vite ont un nom unique par version, les cartes changent rarement. */
 function cacheControl(path: string): string {
@@ -69,12 +103,19 @@ export function createStaticHandler(rootDir: string) {
       }
     }
 
-    res.writeHead(200, {
+    const headers = {
       ...SECURITY_HEADERS,
       'Content-Type': CONTENT_TYPES[extname(file)] ?? 'application/octet-stream',
-      'Content-Length': info.size,
       'Cache-Control': cacheControl(path),
-    });
+    };
+    const encoding = COMPRESSIBLE.has(extname(file)) ? encodingFor(req) : null;
+    if (encoding) {
+      const body = await compressedFile(file, info.mtimeMs, encoding);
+      res.writeHead(200, { ...headers, 'Content-Encoding': encoding, 'Content-Length': body.length, Vary: 'Accept-Encoding' });
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
+    res.writeHead(200, { ...headers, 'Content-Length': info.size, ...(COMPRESSIBLE.has(extname(file)) ? { Vary: 'Accept-Encoding' } : {}) });
     if (req.method === 'HEAD') res.end();
     else createReadStream(file).pipe(res);
   };

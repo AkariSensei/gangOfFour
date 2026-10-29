@@ -1,7 +1,9 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
+import { type IncomingHttpHeaders, get as httpGet } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { type PlayerView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -18,6 +20,17 @@ const clients: Client[] = [];
 async function start(options: GameServerOptions = {}) {
   server = createGameServer({ ...options, limits: { eventsPerSocket: Infinity, ...options.limits } });
   await new Promise<void>((resolve) => server.http.listen(0, resolve));
+}
+
+/** Requête brute (sans décompression automatique, contrairement à fetch), pour vérifier ce qui transite. */
+function request(url: string, acceptEncoding: string): Promise<{ headers: IncomingHttpHeaders; body: Buffer }> {
+  return new Promise((resolve, reject) => {
+    httpGet(url, { headers: { 'Accept-Encoding': acceptEncoding } }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => resolve({ headers: res.headers, body: Buffer.concat(chunks) }));
+    }).on('error', reject);
+  });
 }
 
 let accountCount = 0;
@@ -419,6 +432,26 @@ describe('serveur de jeu', () => {
     expect(page.headers.get('content-security-policy')).toContain("script-src 'self'");
     expect((await fetch(`http://localhost:${port}/%E0`)).status).toBe(400);
     expect((await fetch(`http://localhost:${port}/`)).status).toBe(200);
+  });
+
+  it("compresse les fichiers texte de l'interface selon ce que le navigateur accepte", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gof-static-'));
+    const script = `console.log("${'Gang of Four '.repeat(500)}");`;
+    writeFileSync(join(dir, 'index.html'), '<!doctype html>');
+    writeFileSync(join(dir, 'app.js'), script);
+    await start({ staticDir: dir });
+    const { port } = server.http.address() as AddressInfo;
+    const get = (encoding: string) => request(`http://localhost:${port}/app.js`, encoding);
+    const br = await get('gzip, deflate, br');
+    expect(br.headers['content-encoding']).toBe('br');
+    expect(brotliDecompressSync(br.body).toString()).toBe(script);
+    expect(br.body.length).toBeLessThan(script.length / 5);
+    const gzip = await get('gzip');
+    expect(gzip.headers['content-encoding']).toBe('gzip');
+    expect(gunzipSync(gzip.body).toString()).toBe(script);
+    const plain = await get('identity');
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    expect(plain.body.toString()).toBe(script);
   });
 
   it('freine une connexion qui envoie des événements à la chaîne', async () => {

@@ -295,6 +295,9 @@ describe('GameHistory', () => {
     history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60, David: 70 }));
     const percent = Object.fromEntries(history.profile('Bruno')!.badges.map((b) => [b.id, b.percent]));
     expect(percent).toMatchObject({ 'games-1': 100, 'first-win': 25, 'games-25': 0 });
+    // Gardé en cache, mais recalculé dès qu'une partie s'ajoute.
+    history.record(finished({ Alice: 50, Bruno: 10, Chloé: 60, David: 70 }));
+    expect(history.badgeRarity()['first-win']).toBe(50);
   });
 
   it('montre sur la fiche les badges choisis, complétés par les plus rares, trois au plus', () => {

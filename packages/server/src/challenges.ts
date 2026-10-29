@@ -173,7 +173,11 @@ export class ChallengeStore {
     };
   }
 
+  /** Change à chaque essai commencé ou terminé : sert à savoir si ce qui en est déduit est encore à jour. */
+  version = 0;
+
   private save() {
+    this.version += 1;
     if (!this.file) return;
     try {
       mkdirSync(dirname(this.file), { recursive: true });
