@@ -3216,3 +3216,76 @@ button.danger {
 .peek-hand .pile-cards .card {
   --card-w: calc(var(--pile-w) * 0.62);
 }
+
+/* Fiche : les trois niveaux de bots côte à côte */
+.profile-stats.vs-bots,
+.profile-side .profile-stats.vs-bots {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Réactions : la palette sous le bouton, et l'émoji qui jaillit au-dessus de la place du joueur */
+.reaction-menu {
+  position: relative;
+}
+.reaction-picker {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 50%;
+  translate: -50% 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.reaction-picker button {
+  min-height: 0;
+  padding: 0.3rem 0.4rem;
+  font-size: 1.35rem;
+  line-height: 1;
+  background: none;
+  border: none;
+  border-radius: 8px;
+}
+.reaction-picker button:hover {
+  background: var(--surface-2);
+}
+.reaction {
+  position: absolute;
+  left: 50%;
+  top: -0.6rem;
+  z-index: 5;
+  font-size: 2rem;
+  pointer-events: none;
+  animation: reaction-pop 2.6s ease-out forwards;
+}
+.reaction.mine {
+  top: -1.6rem;
+}
+@keyframes reaction-pop {
+  0% {
+    translate: -50% 10px;
+    scale: 0.3;
+    opacity: 0;
+  }
+  12% {
+    translate: -50% -14px;
+    scale: 1.25;
+    opacity: 1;
+  }
+  22% {
+    scale: 1;
+  }
+  80% {
+    translate: -50% -26px;
+    opacity: 1;
+  }
+  100% {
+    translate: -50% -40px;
+    opacity: 0;
+  }
+}

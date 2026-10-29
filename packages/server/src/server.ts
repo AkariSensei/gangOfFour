@@ -9,7 +9,7 @@ import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
-import type { ClientToServerEvents, ServerToClientEvents } from './protocol';
+import { type ClientToServerEvents, REACTIONS, type ServerToClientEvents } from './protocol';
 import { chooseBotAction } from './bot';
 import { DEFAULT_LIMITS, type Limits, RateLimiter, clientIp } from './limits';
 import { type PlayerAction, type Room, RoomManager, type Result } from './rooms';
@@ -27,6 +27,9 @@ export const AWAY_DELAY_MS = 60 * 1000;
 const CHAT_MAX_LENGTH = 200;
 const CHAT_MESSAGES = 6;
 const CHAT_WINDOW_MS = 10 * 1000;
+/** Réactions : quelques-unes à la suite, pas plus, pour ne pas inonder la table. */
+const REACTIONS_PER_WINDOW = 4;
+const REACTIONS_WINDOW_MS = 5 * 1000;
 
 interface SocketData {
   code?: string;
@@ -374,6 +377,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const roomsPerSocket = new RateLimiter(limits.roomsPerSocket, limits.windowMs);
   const openSockets = new Map<string, number>();
   const chatPerSocket = new RateLimiter(CHAT_MESSAGES, CHAT_WINDOW_MS);
+  const reactionsPerSocket = new RateLimiter(REACTIONS_PER_WINDOW, REACTIONS_WINDOW_MS);
   const eventsPerSocket = new RateLimiter(limits.eventsPerSocket, limits.eventWindowMs);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
@@ -661,6 +665,18 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (rooms.isMuted(code, seat.playerId)) return ack({ ok: false, error: 'muted' });
       if (!chatPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
       io.to(code).emit('chat:message', { id: randomUUID(), playerId: seat.playerId, name: seat.name, text: message, at: Date.now() });
+      ack({ ok: true });
+    });
+    on('room:react', (payload, ack) => {
+      const { code, playerId } = socket.data;
+      const seat = code && playerId ? rooms.get(code)?.seats.find((s) => s.playerId === playerId) : undefined;
+      if (!code || !seat) return ack({ ok: false, error: 'notInRoom' });
+      const emoji = text(payload.emoji);
+      if (!REACTIONS.includes(emoji)) return ack({ ok: false, error: 'emptyMessage' });
+      // Un joueur privé de chat ne peut pas non plus réagir.
+      if (rooms.isMuted(code, seat.playerId)) return ack({ ok: false, error: 'muted' });
+      if (!reactionsPerSocket.allow(socket.id)) return ack({ ok: false, error: 'slowDown' });
+      io.to(code).emit('room:reaction', { id: randomUUID(), playerId: seat.playerId, emoji });
       ack({ ok: true });
     });
     on('room:mute', (payload, ack) => {

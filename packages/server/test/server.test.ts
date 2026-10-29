@@ -838,6 +838,20 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'tutorialMove' });
   }, 20000);
 
+  it('relaie les réactions à toute la table, seulement celles de la liste et sans inonder', async () => {
+    await start();
+    const { players } = await lobby(3);
+    const received: string[] = [];
+    players[1]!.on('room:reaction', (r) => received.push(`${r.playerId === players[0]!.room!.hostId ? 'hôte' : '?'} ${r.emoji}`));
+    expect(await players[0]!.emitWithAck('room:react', { emoji: '😂' })).toEqual({ ok: true });
+    await waitFor(() => received.length === 1);
+    expect(received).toEqual(['hôte 😂']);
+    expect(await players[0]!.emitWithAck('room:react', { emoji: '<b>' })).toEqual({ ok: false, error: 'emptyMessage' });
+    for (let i = 0; i < 3; i++) await players[0]!.emitWithAck('room:react', { emoji: '👍' });
+    expect(await players[0]!.emitWithAck('room:react', { emoji: '👍' })).toEqual({ ok: false, error: 'slowDown' });
+    expect(await connect().emitWithAck('room:react', { emoji: '👍' })).toEqual({ ok: false, error: 'notInRoom' });
+  });
+
   it('ne lance pas de minuteur par défaut', async () => {
     await start();
     const { players } = await lobby(3);

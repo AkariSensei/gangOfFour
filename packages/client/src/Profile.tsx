@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
 import { BadgeGrid } from './Badges';
+import { LEVEL_LABELS } from './labels';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -46,6 +47,20 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
                 <Stat value={profile.gangs} label={`gang${profile.gangs > 1 ? 's' : ''} posé${profile.gangs > 1 ? 's' : ''}`} />
                 <Stat value={profile.worstRound} label="pire manche (pts)" />
               </div>
+              {profile.vsBots.some((b) => b.games > 0) && (
+                <>
+                  <h3>Seul contre les bots</h3>
+                  <div className="profile-stats vs-bots">
+                    {profile.vsBots.map((b) => (
+                      <Stat
+                        key={b.level}
+                        value={`${b.wins} / ${b.games}`}
+                        label={`victoires en ${LEVEL_LABELS[b.level].toLowerCase()}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
               <h3>Dernières parties</h3>
               <ul className="recent">
                 {profile.recent.map((g) => (

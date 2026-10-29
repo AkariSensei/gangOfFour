@@ -1,6 +1,6 @@
 import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { BotLevel, ChatMessage, GameView, Look, RoomView } from '../../server/src/protocol';
+import { type BotLevel, type ChatMessage, type GameView, type Look, REACTIONS, type RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
@@ -22,6 +22,66 @@ function spectatorSeats(count: number): Seat[] {
   return ['bottom', ...seatsFor(count)];
 }
 
+type Reaction = { id: string; emoji: string };
+/** Durée d'affichage d'une réaction au-dessus de la place du joueur. */
+const REACTION_MS = 2600;
+
+/** Réactions reçues, par joueur : chacune s'efface d'elle-même au bout de quelques secondes. */
+function useReactions(): Record<string, Reaction> {
+  const [reactions, setReactions] = useState<Record<string, Reaction>>({});
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const onReaction = ({ id, playerId, emoji }: { id: string; playerId: string; emoji: string }) => {
+      setReactions((r) => ({ ...r, [playerId]: { id, emoji } }));
+      timers.push(
+        setTimeout(
+          () =>
+            setReactions((r) => {
+              if (r[playerId]?.id !== id) return r;
+              const { [playerId]: _gone, ...rest } = r;
+              return rest;
+            }),
+          REACTION_MS,
+        ),
+      );
+    };
+    socket.on('room:reaction', onReaction);
+    return () => {
+      socket.off('room:reaction', onReaction);
+      timers.forEach(clearTimeout);
+    };
+  }, []);
+  return reactions;
+}
+
+/** Bouton des réactions : ouvre la petite palette d'émojis, un clic en envoie un à toute la table. */
+function ReactionButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="reaction-menu">
+      <button className="icon" onClick={() => setOpen((o) => !o)} title="Réagir" aria-expanded={open}>
+        😀
+      </button>
+      {open && (
+        <div className="reaction-picker" role="menu">
+          {REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void socket.emitWithAck('room:react', { emoji });
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Dernier geste de chaque joueur dans le pli en cours, pour afficher « Passe » à côté de lui. */
 function lastMoves(trick: TrickEntry[]): Map<number, TrickEntry> {
   const moves = new Map<number, TrickEntry>();
@@ -40,12 +100,15 @@ function Opponent({
   look,
   move,
   muted,
+  reaction,
   onMute,
   onKick,
 }: {
   game: PlayerView;
   index: number;
   seat: Seat;
+  /** Réaction que ce joueur vient d'envoyer, affichée un instant au-dessus de sa place. */
+  reaction?: Reaction;
   connected: boolean;
   bot: boolean;
   /** Niveau d'un vrai bot (pas d'un bot qui remplace un absent). */
@@ -64,6 +127,11 @@ function Opponent({
   const fan = Math.min(p.cardCount, 16);
   return (
     <div className={`opponent seat-${seat} ${active || giving ? 'active' : ''} ${connected ? '' : 'offline'}`}>
+      {reaction && (
+        <span key={reaction.id} className="reaction" aria-label={`${p.name} réagit : ${reaction.emoji}`}>
+          {reaction.emoji}
+        </span>
+      )}
       <Avatar name={p.name} look={look} bot={bot} />
       <div className="opponent-info">
         <div className="opponent-name">
@@ -695,6 +763,8 @@ export function Table({
   // Rien ne passe et la passe auto est active : le serveur passe tout seul, inutile d'annoncer le tour.
   const passingAlone = autoPass && playable?.size === 0;
   const notifications = useTurnNotifications();
+  const reactions = useReactions();
+  const myReaction = reactions[game.players[me]?.id ?? ''];
   useTurnAlert(
     mustCut ? 'À toi de couper le paquet' : mustGive ? 'À toi de rendre une carte' : myTurn && !passingAlone ? 'À toi de jouer !' : null,
     notifications.state === 'on',
@@ -1020,6 +1090,7 @@ export function Table({
         <Scores game={game} />
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
+          {!spectator && !room.tutorial && <ReactionButton />}
           {canPause && !room.paused && game.phase !== 'gameOver' && (
             <button className="icon" onClick={() => void pause(true)} title="Mettre la partie en pause">
               ⏸
@@ -1072,6 +1143,7 @@ export function Table({
             look={room.players[index]}
             move={moves.get(index)}
             muted={room.players[index]?.muted ?? false}
+            reaction={reactions[room.players[index]?.id ?? '']}
             onMute={canModerate(index) ? () => void mute(room.players[index]!.id, !room.players[index]!.muted) : undefined}
             onKick={canModerate(index) ? () => void kick(room.players[index]!.id) : undefined}
           />
@@ -1089,6 +1161,11 @@ export function Table({
         </section>
       ) : (
         <section className={`my-area ${(myTurn && !passingAlone) || mustGive ? 'active' : ''}`}>
+          {myReaction && (
+            <span key={myReaction.id} className="reaction mine" aria-hidden>
+              {myReaction.emoji}
+            </span>
+          )}
           {myAction && secondsLeft !== null && (
             <div className="turn-timer" aria-hidden>
               <div

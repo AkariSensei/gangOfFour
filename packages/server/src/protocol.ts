@@ -9,6 +9,9 @@ export type { Badge } from './badges';
 export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 
+/** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
+export const REACTIONS = ['👍', '😂', '😱', '😡', '👏', '🔥'];
+
 /** Avatars et couleurs qu'un joueur peut choisir dans son profil (le serveur refuse tout le reste). */
 export const AVATARS = ['🦊', '🐼', '🐸', '🦁', '🐯', '🐙', '🦄', '🐧', '🐝', '🦉', '🐢', '🐳', '🌵', '🍕', '🎩', '👾'];
 export const COLORS = ['#e8b931', '#d1453b', '#4fb477', '#3b82c4', '#9b59b6', '#e67e22', '#1abc9c', '#ec6fa6'];
@@ -159,6 +162,8 @@ export interface ClientToServerEvents {
   'room:watch': (payload: { code: string }, ack: Ack<Session>) => void;
   'rooms:live': (ack: Ack<{ rooms: LiveRoom[] }>) => void;
   'chat:send': (payload: { text: string }, ack: Ack) => void;
+  /** Envoie une réaction (une de `REACTIONS`), affichée un instant au-dessus de sa place pour toute la table. */
+  'room:react': (payload: { emoji: string }, ack: Ack) => void;
   'room:addBot': (payload: { level?: BotLevel }, ack: Ack) => void;
   'room:removeBot': (payload: { botId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin coupe (ou rend) le chat d'un joueur du salon. */
@@ -208,6 +213,8 @@ export interface ServerToClientEvents {
   'room:state': (room: RoomView) => void;
   'game:state': (game: GameView) => void;
   'chat:message': (message: ChatMessage) => void;
+  /** Un joueur de la table vient de réagir. Rien n'est gardé : la réaction s'efface d'elle-même. */
+  'room:reaction': (reaction: { id: string; playerId: string; emoji: string }) => void;
   /** Ce joueur vient d'être exclu du salon par l'hôte ou l'admin. */
   'room:kicked': () => void;
   /** Le classement a changé (partie finie, remise à zéro…) : l'accueil le recharge. */

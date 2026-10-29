@@ -174,6 +174,12 @@ describe('GameHistory', () => {
       castaway: '0/1',
     });
     expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', castaway: '1/1', 'clean-win': '0/1', 'streak-4': '1/4' });
+    // Parties seule contre des bots, par niveau (celle d'avant les niveaux n'est rangée nulle part).
+    expect(history.profile('Alice')!.vsBots).toEqual([
+      { level: 'easy', games: 0, wins: 0 },
+      { level: 'normal', games: 1, wins: 1 },
+      { level: 'hard', games: 1, wins: 1 },
+    ]);
   });
 
   it('calcule les badges de places, d\'écart, d\'horaires et de partenaires', () => {

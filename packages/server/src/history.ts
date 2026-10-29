@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
-import type { BotLevel } from './bot';
+import { BOT_LEVELS, type BotLevel } from './bot';
 import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
 
 export interface GameRecord {
@@ -42,6 +42,11 @@ export interface PlayerProfile {
   worstRound: number;
   /** Dernières parties, de la plus récente à la plus ancienne. */
   recent: { finishedAt: string; score: number; winner: boolean; rank: number; players: number }[];
+  /**
+   * Parties jouées seul contre des bots, rangées par niveau du bot le plus fort de la table (celles d'avant les
+   * niveaux, sans niveau enregistré, n'y sont pas).
+   */
+  vsBots: { level: BotLevel; games: number; wins: number }[];
   badges: Badge[];
   /** Badges montrés sur sa fiche : ceux qu'il a choisis, complétés par ses plus rares. */
   showcase: Badge[];
@@ -64,6 +69,14 @@ export interface WinStreak {
 }
 
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
+
+/** Partie jouée seul contre des bots : niveau du plus fort des bots de la table (undefined sinon, ou sans niveau connu). */
+function topBotLevel(record: GameRecord): BotLevel | undefined {
+  if (record.players.filter((p) => !p.bot).length >= 2) return undefined;
+  const levels = record.players.filter((p) => p.bot).map((p) => p.botLevel);
+  if (levels.some((l) => l === undefined)) return undefined;
+  return [...BOT_LEVELS].reverse().find((level) => levels.includes(level));
+}
 
 /** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
 export interface AccountNames {
@@ -340,6 +353,10 @@ export class GameHistory {
       roundsWon: sum((g) => g.me.roundsWon ?? 0),
       gangs: sum((g) => g.me.gangs ?? 0),
       worstRound: Math.max(0, ...games.map((g) => g.me.worstRound ?? 0)),
+      vsBots: BOT_LEVELS.map((level) => {
+        const atLevel = games.filter((g) => topBotLevel(g.record) === level);
+        return { level, games: atLevel.length, wins: atLevel.filter((g) => g.me.winner).length };
+      }),
       recent: games
         .slice(-8)
         .reverse()
