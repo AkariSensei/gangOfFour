@@ -14,12 +14,9 @@ function outcome(won: boolean, moves: number, cardsLeft: number): string {
  * Défi du jour sur l'accueil : la même donne pour tout le monde, une seule manche contre trois bots difficiles,
  * un essai par jour. Le classement du jour et celui au long cours sont juste en dessous.
  */
-export function DailyChallenge({ canPlay, onEnter }: { canPlay: boolean; onEnter: (s: Session) => void }) {
+/** Le défi du jour (son essai et les classements), rechargé à chaque partie finie ou changement de compte. */
+export function useDailyChallenge(accountKey: unknown): ChallengeView | null {
   const [challenge, setChallenge] = useState<ChallengeView | null>(null);
-  const [tab, setTab] = useState<'today' | 'overall'>('today');
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState('');
-
   useEffect(() => {
     const load = async () => {
       const result = await socket.emitWithAck('challenge:get');
@@ -32,8 +29,26 @@ export function DailyChallenge({ canPlay, onEnter }: { canPlay: boolean; onEnter
       socket.off('connect', load);
       socket.off('stats:changed', load);
     };
-    // Le compte change (connexion, déconnexion) : son essai du jour aussi.
-  }, [canPlay]);
+  }, [accountKey]);
+  return challenge;
+}
+
+/** En quelques mots, où en est le joueur avec le défi du jour (pour le menu principal). */
+export function challengeSummary(challenge: ChallengeView | null): string {
+  if (!challenge) return 'Une donne pour tout le monde';
+  const { mine, today } = challenge;
+  if (mine?.finished) return `Ton essai : ${outcome(!!mine.won, mine.moves ?? 0, mine.cardsLeft ?? 0)}${mine.rank ? ` · ${mine.rank}${mine.rank === 1 ? 'er' : 'e'} sur ${today.length}` : ''}`;
+  if (mine) return 'Ton défi est en cours';
+  if (today.length === 0) return 'Pas encore relevé : sois le premier !';
+  return `Pas encore relevé · ${today.length} joueur${today.length > 1 ? 's' : ''} aujourd'hui`;
+}
+
+export function DailyChallenge({ canPlay, onEnter }: { canPlay: boolean; onEnter: (s: Session) => void }) {
+  // Le compte change (connexion, déconnexion) : son essai du jour aussi.
+  const challenge = useDailyChallenge(canPlay);
+  const [tab, setTab] = useState<'today' | 'overall'>('today');
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
 
   async function start() {
     setError('');

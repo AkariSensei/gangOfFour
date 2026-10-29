@@ -136,10 +136,10 @@ export function BadgesPage({
   const wonCount = badges?.filter(done).length ?? 0;
   const total = badges?.length ?? 0;
   return (
-    <main className="badges-page">
+    <div className="badges-page">
       <header className="badges-page-head">
         <button className="link" onClick={onClose}>
-          ← Retour
+          ← Menu
         </button>
         <h1>Mes badges</h1>
         <div className="badges-page-progress" title={`${wonCount} badges obtenus sur ${total}`}>
@@ -177,7 +177,7 @@ export function BadgesPage({
       ) : (
         <ThemedBadgeGrid badges={shown} picker={picker} />
       )}
-    </main>
+    </div>
   );
 }
 
