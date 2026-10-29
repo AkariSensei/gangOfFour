@@ -3593,7 +3593,7 @@ button.danger {
   will-change: opacity, translate, scale;
 }
 
-/* Jauge du score vers le score de fin : sous chaque score de l'en-tête et sous chaque place */
+/* Jauge du score vers le score de fin, sous chaque score de l'en-tête */
 .score-pill {
   position: relative;
   overflow: hidden;

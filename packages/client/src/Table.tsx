@@ -145,7 +145,6 @@ function Opponent({
         <div className="opponent-meta">
           <span className="count">{p.cardCount}</span> carte{p.cardCount > 1 ? 's' : ''} · {p.score} pt{p.score > 1 ? 's' : ''}
         </div>
-        <ScoreGauge score={p.score} target={game.targetScore} />
       </div>
       <div className="mini-fan" aria-hidden>
         {Array.from({ length: fan }, (_, i) => (
@@ -159,8 +158,8 @@ function Opponent({
 }
 
 /**
- * Jauge du score vers le score de fin de partie : elle se remplit manche après manche, rougit passé les trois quarts,
- * et bat quand le joueur n'est plus qu'à une mauvaise manche de la fin. Rien pour le défi ou le tutoriel (une seule manche).
+ * Jauge du score vers le score de fin de partie, sous chaque score de l'en-tête : elle se remplit manche après manche,
+ * rougit passé les trois quarts, et bat quand le joueur approche de la fin. Rien pour le défi ou le tutoriel (une seule manche).
  */
 function ScoreGauge({ score, target }: { score: number; target: number }) {
   if (target <= 1) return null;
