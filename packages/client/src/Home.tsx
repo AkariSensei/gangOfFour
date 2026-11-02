@@ -4,6 +4,7 @@ import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
 import { BadgesPage, useMyProfile } from './Badges';
 import { DailyChallenge, challengeSummary, useDailyChallenge } from './Challenge';
+import { DailyScreen, dailySummary, useDaily } from './Daily';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, LevelBadge, LevelBar, ProfileScreen } from './Progress';
@@ -14,7 +15,7 @@ import { socket, type useAccount } from './socket';
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
 /** Écrans de l'accueil : le menu principal, et un écran par entrée du menu (chacun a son adresse, #jouer…). */
-const SCREENS = ['menu', 'jouer', 'defi', 'regarder', 'classement', 'badges', 'profil'] as const;
+const SCREENS = ['menu', 'jouer', 'missions', 'defi', 'regarder', 'classement', 'badges', 'profil'] as const;
 type Screen = (typeof SCREENS)[number];
 
 const screenOf = (hash: string): Screen => {
@@ -47,6 +48,7 @@ export function Home({
   const progress = profile?.progress ?? FIRST_LEVEL;
   const challenge = useDailyChallenge(account?.id);
   const live = useLiveRooms();
+  const daily = useDaily(account?.name ? account.id : null);
 
   // Navigation entre les écrans : l'adresse suit l'écran, pour que le bouton Retour du navigateur ramène au menu.
   // Un lien d'invitation (?salon=1234) ouvre directement l'écran « Jouer », le code déjà rempli.
@@ -179,6 +181,13 @@ export function Home({
                   <nav className="game-menu" aria-label="Menu principal">
                     <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon, rejoindre des collègues, partie rapide" onClick={() => open('jouer')} />
                     <MenuItem
+                      icon="🎯"
+                      title="Missions du jour"
+                      subtitle={dailySummary(daily)}
+                      pill={daily && daily.missions.some((m) => !m.done) ? { text: `${daily.missions.filter((m) => !m.done).length} à faire` } : undefined}
+                      onClick={() => open('missions')}
+                    />
+                    <MenuItem
                       icon="🗓️"
                       title="Défi du jour"
                       subtitle={challengeSummary(challenge)}
@@ -233,6 +242,12 @@ export function Home({
         );
       case 'badges':
         return <BadgesPage badges={badges} showcase={account?.showcase ?? []} onShowcase={(ids) => void setShowcase(ids)} onClose={backToMenu} />;
+      case 'missions':
+        return (
+          <SubScreen title="Missions du jour" onBack={backToMenu} narrow>
+            <DailyScreen daily={daily} />
+          </SubScreen>
+        );
       case 'profil':
         return account?.name ? (
           <SubScreen title="Mon profil" onBack={backToMenu}>
@@ -255,6 +270,7 @@ export function Home({
               <strong>{account.name}</strong>
               <small>
                 {account.title || progress.title} · 🏅 {wonBadges}
+                {daily && daily.streak > 0 && <span title={`Série de ${daily.streak} jours de jeu d'affilée`}> · 🔥 {daily.streak}</span>}
               </small>
               <LevelBar progress={progress} compact />
             </span>

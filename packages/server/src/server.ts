@@ -152,13 +152,19 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
    */
   function withProgress(room: Room, record: () => unknown) {
     const humans = [...new Set(room.seats.flatMap((s, i) => (s.account && !botSeats(room).includes(i) ? [s.account] : [])))];
-    const before = new Map(humans.map((id) => [id, history.progressOfAccount(id)]));
+    const before = new Map(humans.map((id) => [id, { progress: history.progressOfAccount(id), daily: history.dailyOfAccount(id) }]));
     record();
     for (const id of humans) {
-      const was = before.get(id)!;
+      const { progress: was, daily: wasDaily } = before.get(id)!;
       const now = history.progressOfAccount(id);
       if (now.xp === was.xp) continue;
-      const gain = { gained: now.xp - was.xp, before: was, after: now, rewards: newRewards(was.level, now.level) };
+      // Ce qui s'annonce : missions accomplies, série prolongée, puis les récompenses d'un niveau supérieur.
+      const daily = history.dailyOfAccount(id);
+      const missions = daily.missions
+        .filter((m) => m.done && !wasDaily.missions.find((w) => w.id === m.id)?.done)
+        .map((m) => `Mission « ${m.text} » (+${m.xp} XP)`);
+      const streak = daily.playedToday && !wasDaily.playedToday ? [`Série de ${daily.streak} jour${daily.streak > 1 ? 's' : ''} (+${10 * Math.min(daily.streak, 7)} XP)`] : [];
+      const gain = { gained: now.xp - was.xp, before: was, after: now, rewards: [...missions, ...streak, ...newRewards(was.level, now.level)] };
       for (const s of io.sockets.sockets.values()) if (s.data.accountId === id && s.data.code === room.code && !s.data.spectator) s.emit('progress:gained', gain);
     }
   }
@@ -660,6 +666,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { account, name } = seated;
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       return allowed.ok ? enter(rooms.createTutorial(name, account, account.id), ack) : ack(allowed);
+    });
+    on('daily:get', (_payload, ack) => {
+      const account = me();
+      if (!account) return ack({ ok: false, error: 'notSignedIn' });
+      ack({ ok: true, daily: history.dailyOfAccount(account.id) });
     });
     on('challenge:get', (_payload, ack) => {
       const day = dayOf(new Date());

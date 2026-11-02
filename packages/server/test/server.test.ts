@@ -776,7 +776,7 @@ describe('serveur de jeu', () => {
     const alice = connect('Alice');
     const won: string[] = [];
     alice.on('badges:won', (badges) => won.push(...badges.map((b) => b.id)));
-    const gains: { gained: number; before: { xp: number }; after: { xp: number } }[] = [];
+    const gains: { gained: number; before: { xp: number }; after: { xp: number }; rewards: string[] }[] = [];
     alice.on('progress:gained', (gain) => gains.push(gain));
     await alice.emitWithAck('challenge:start');
     const over = () => alice.game?.phase === 'gameOver';
@@ -800,9 +800,13 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
     await waitFor(() => won.includes('challenge-1'));
     expect(won.includes('challenge-win-1')).toBe(!!mine.won);
-    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), et 25 par badge obtenu.
+    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), 25 par badge obtenu, 10 pour le premier jour de
+    // série, plus les missions du jour qu'il accomplit (elles changent chaque jour).
     await waitFor(() => gains.length === 1);
-    expect(gains[0]!.gained).toBe(mine.won ? 30 + 50 + 2 * 25 : 30 + 25);
+    expect(gains[0]!.gained).toBeGreaterThanOrEqual((mine.won ? 30 + 50 + 2 * 25 : 30 + 25) + 10);
+    expect(gains[0]!.rewards).toContain('Série de 1 jour (+10 XP)');
+    const daily = await alice.emitWithAck('daily:get');
+    expect(daily).toMatchObject({ ok: true, daily: { streak: 1, playedToday: true } });
     expect(gains[0]!.after.xp - gains[0]!.before.xp).toBe(gains[0]!.gained);
   }, 30000);
 

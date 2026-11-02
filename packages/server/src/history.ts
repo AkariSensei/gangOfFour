@@ -4,6 +4,7 @@ import type { GameState } from '@gof/engine';
 import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
+import { type DayActivity, type MissionStatus, missionStatus, missionXp, streakOf } from './daily';
 import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
 export interface GameRecord {
@@ -103,7 +104,12 @@ export class GameHistory {
     private file?: string,
     private accounts?: AccountNames,
     /** Défis du jour, qui donnent eux aussi des badges. */
-    private challenges?: { statsOf(account: string): ChallengeStats; players(): string[]; version: number },
+    private challenges?: {
+      statsOf(account: string): ChallengeStats;
+      players(): string[];
+      resultsOf(account: string): { day: string; won: boolean }[];
+      version: number;
+    },
   ) {
     if (!file) return;
     try {
@@ -330,7 +336,44 @@ export class GameHistory {
       gangs: me.gangs ?? 0,
       vsBots: record.players.filter((p) => !p.bot).length >= 2 ? null : (topBotLevel(record) ?? 'unknown'),
     }));
-    return totalXp(games, this.challengesOf(owner), badges);
+    // Missions accomplies chaque jour, et série de jours joués.
+    const days = this.daysOf(owner);
+    const missions = [...days].reduce((total, [day, activity]) => total + missionXp(day, activity), 0);
+    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus;
+  }
+
+  /**
+   * Ce qu'un joueur a fait chaque jour (à l'heure de Paris) : ses parties qui rapportent de l'expérience (en ligne, ou
+   * seul contre des bots tous difficiles) et son défi du jour terminé.
+   */
+  private daysOf(owner: string): Map<string, DayActivity> {
+    const days = new Map<string, DayActivity>();
+    const at = (day: string) => {
+      if (!days.has(day)) days.set(day, { games: [], challenge: null });
+      return days.get(day)!;
+    };
+    for (const { record, me } of this.gamesOf(owner)) {
+      const online = record.players.filter((p) => !p.bot).length >= 2;
+      if (!online && topBotLevel(record) !== 'hard') continue;
+      at(dayOf(new Date(record.finishedAt))).games.push({
+        online,
+        rank: 1 + record.players.filter((p) => p.score < me.score).length,
+        players: record.players.length,
+        score: me.score,
+        roundsWon: me.roundsWon ?? 0,
+        gangs: me.gangs ?? 0,
+      });
+    }
+    if (!owner.startsWith('pseudo:')) for (const r of this.challenges?.resultsOf(owner) ?? []) at(r.day).challenge = { won: r.won };
+    return days;
+  }
+
+  /** Les missions du jour d'un joueur et sa série de jours joués. */
+  dailyOfAccount(owner: string, now = new Date()): { day: string; missions: MissionStatus[]; streak: number; playedToday: boolean } {
+    const today = dayOf(now);
+    const days = this.daysOf(owner);
+    const streak = streakOf([...days.keys()], today);
+    return { day: today, missions: missionStatus(today, days.get(today) ?? { games: [], challenge: null }), streak: streak.current, playedToday: streak.playedToday };
   }
 
   /**

@@ -2,6 +2,7 @@ import type { ActionError, Card, PlayerView } from '@gof/engine';
 import type { Badge } from './badges';
 import type { BotLevel } from './bot';
 import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
+import type { MissionStatus } from './daily';
 import type { Progress } from './progression';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
@@ -10,6 +11,7 @@ export type { Badge } from './badges';
 export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 export type { Progress, Reward, Unlocks } from './progression';
+export type { MissionStatus } from './daily';
 export { FELTS, FRAMES, LEVEL_TITLES } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
@@ -74,6 +76,15 @@ export interface ChallengeView {
   mine: { finished: boolean; won?: boolean; moves?: number; cardsLeft?: number; rank?: number } | null;
   today: ChallengeRankEntry[];
   overall: ChallengeOverallEntry[];
+}
+
+/** Missions du jour et série de jours joués d'un joueur. */
+export interface DailyView {
+  day: string;
+  missions: MissionStatus[];
+  /** Jours de jeu d'affilée (le week-end ne casse pas la série) ; `playedToday` : la série a déjà avancé aujourd'hui. */
+  streak: number;
+  playedToday: boolean;
 }
 
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
@@ -213,6 +224,8 @@ export interface ClientToServerEvents {
   'challenge:get': (ack: Ack<{ challenge: ChallengeView }>) => void;
   /** Relève le défi du jour : une seule fois par jour, la manche démarre aussitôt. */
   'challenge:start': (ack: Ack<Session>) => void;
+  /** Missions du jour du joueur connecté (les mêmes pour tous, avec son avancée), et sa série de jours joués. */
+  'daily:get': (ack: Ack<{ daily: DailyView }>) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;
 }

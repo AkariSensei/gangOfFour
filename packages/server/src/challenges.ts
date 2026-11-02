@@ -91,6 +91,11 @@ export class ChallengeStore {
     }
   }
 
+  /** Défis terminés d'un joueur, jour par jour (pour les missions et la série). */
+  resultsOf(account: string): { day: string; won: boolean }[] {
+    return this.results.filter((r): r is Finished => r.account === account && finished(r)).map((r) => ({ day: r.day, won: r.won }));
+  }
+
   /** Comptes qui ont terminé au moins un défi. */
   players(): string[] {
     return [...new Set(this.results.filter(finished).map((r) => r.account))];
