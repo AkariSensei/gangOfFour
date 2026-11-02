@@ -5,6 +5,7 @@ import { AccountStore } from './accounts';
 import type { Badge } from './badges';
 import { ChallengeStore, dayOf, seedOf } from './challenges';
 import { newRewards, seasonName } from './progression';
+import { type BuyError, type TripotSave, TripotStore, advance, buyBuilding, buyUpgrade, deal, prestige, viewOf } from './tripot';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -84,6 +85,10 @@ export interface GameServerOptions {
   googleClientId?: string;
   /** Adresse Google de l'admin (ADMIN_EMAIL) : il gère les comptes et peut tenir plusieurs sièges pour tester seul. */
   adminEmail?: string;
+  /** Adresses autorisées à jouer au Tripot pendant ses essais (TRIPOT_EMAILS), en plus de l'admin. */
+  tripotEmails?: string[];
+  /** Fichier JSON des parties du Tripot ; sans fichier, elles restent en mémoire. */
+  tripotFile?: string;
   /** Vérification du jeton Google (remplacée dans les tests). */
   verifyGoogle?: VerifyGoogle;
 }
@@ -102,7 +107,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     maxHttpBufferSize: limits.maxMessageBytes,
   });
   const rooms = new RoomManager();
-  const accounts = new AccountStore(options.accountsFile, options.adminEmail);
+  const accounts = new AccountStore(options.accountsFile, options.adminEmail, options.tripotEmails);
+  const tripot = new TripotStore(options.tripotFile);
   const challenges = new ChallengeStore(options.challengesFile, accounts);
   const history = new GameHistory(options.historyFile, accounts, challenges);
   // Au démarrage (après une mise à jour qui change les règles de l'expérience), on retire à chacun les récompenses
@@ -667,6 +673,28 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       return allowed.ok ? enter(rooms.createTutorial(name, account, account.id), ack) : ack(allowed);
     });
+    /**
+     * Le Tripot : chaque commande fait d'abord tourner la production jusqu'à maintenant, compte les donnes envoyées
+     * (plafonnées selon le temps écoulé depuis le dernier envoi), puis renvoie la partie à jour.
+     */
+    function withTripot(ack: AnyAck, deals: unknown, run?: (save: TripotSave) => BuyError | null) {
+      const account = me();
+      if (!accounts.canPlayTripot(account)) return ack({ ok: false, error: 'forbidden' });
+      const now = Date.now();
+      const save = tripot.get(account!.id, now);
+      const elapsed = (now - save.updatedAt) / 1000;
+      const awayGain = advance(save, now);
+      if (typeof deals === 'number' && deals > 0) deal(save, deals, elapsed);
+      const error = run?.(save) ?? null;
+      tripot.save();
+      ack(error ? { ok: false, error } : { ok: true, tripot: viewOf(save, awayGain) });
+    }
+    on('tripot:get', (_payload, ack) => withTripot(ack, 0));
+    on('tripot:sync', (payload, ack) => withTripot(ack, payload.deals));
+    on('tripot:buy', (payload, ack) =>
+      withTripot(ack, payload.deals, (save) => (payload.kind === 'upgrade' ? buyUpgrade(save, text(payload.id)) : buyBuilding(save, text(payload.id)))),
+    );
+    on('tripot:prestige', (_payload, ack) => withTripot(ack, 0, prestige));
     on('daily:get', (_payload, ack) => {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });
@@ -845,5 +873,16 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     awayTimers.forEach(clearTimeout);
     turnTimers.forEach((t) => clearTimeout(t.timer));
   });
-  return { http, io, rooms, history, accounts, errors, saveRooms: () => saved.saveNow() };
+  return {
+    http,
+    io,
+    rooms,
+    history,
+    accounts,
+    errors,
+    saveRooms: () => {
+      saved.saveNow();
+      tripot.saveNow();
+    },
+  };
 }

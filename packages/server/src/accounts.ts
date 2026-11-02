@@ -42,6 +42,8 @@ export class AccountStore {
   constructor(
     private file?: string,
     private adminEmail?: string,
+    /** Adresses autorisées à jouer au Tripot pendant ses essais (l'admin l'est toujours). */
+    private tripotEmails: string[] = [],
   ) {
     if (!file) return;
     try {
@@ -78,6 +80,11 @@ export class AccountStore {
     return !!account && !!this.adminEmail && account.email.toLowerCase() === this.adminEmail.toLowerCase();
   }
 
+  /** Le Tripot est encore en essai : seuls l'admin et les adresses choisies y ont accès (les autres ne le voient pas). */
+  canPlayTripot(account: Account | undefined): boolean {
+    return !!account && (this.isAdmin(account) || this.tripotEmails.some((e) => e.toLowerCase() === account.email.toLowerCase()));
+  }
+
   view(account: Account): AccountView {
     return {
       id: account.id,
@@ -85,6 +92,7 @@ export class AccountStore {
       name: account.name ?? '',
       ...cleanLook(account),
       admin: this.isAdmin(account),
+      tripot: this.canPlayTripot(account),
       showcase: account.showcase ?? [],
       ...(account.felt ? { felt: account.felt } : {}),
       ...(account.frame ? { frame: account.frame } : {}),

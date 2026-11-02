@@ -3,6 +3,7 @@ import type { Badge } from './badges';
 import type { BotLevel } from './bot';
 import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 import type { MissionStatus } from './daily';
+import type { TripotView } from './tripot';
 import type { Progress } from './progression';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
@@ -12,6 +13,7 @@ export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 export type { Progress, Reward, Unlocks } from './progression';
 export type { MissionStatus } from './daily';
+export type { TripotView } from './tripot';
 export { FELTS, FRAMES, LEVEL_TITLES, SEASON_FRAME, SEASON_MIN_GAMES, SEASON_XP } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
@@ -134,7 +136,11 @@ export type RoomError =
   | 'paused'
   | 'challengeAlreadyPlayed'
   | 'tutorialMove'
-  | 'locked';
+  | 'locked'
+  | 'forbidden'
+  | 'tooExpensive'
+  | 'notAvailable'
+  | 'unknownItem';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -154,6 +160,8 @@ export interface AccountView extends Look {
   /** Pseudo unique ; vide tant que le joueur ne l'a pas choisi. */
   name: string;
   admin: boolean;
+  /** Accès au Tripot, encore réservé à quelques comptes. */
+  tripot: boolean;
   /** Badges choisis pour sa fiche. */
   showcase: string[];
   /** Récompenses choisies : le tapis (vu par lui seul), le cadre et le titre (vus de tous). */
@@ -235,6 +243,13 @@ export interface ClientToServerEvents {
   'challenge:start': (ack: Ack<Session>) => void;
   /** Missions du jour du joueur connecté (les mêmes pour tous, avec son avancée), et sa série de jours joués. */
   'daily:get': (ack: Ack<{ daily: DailyView }>) => void;
+  /** Le Tripot (réservé) : sa partie, avec la production pendant l'absence. */
+  'tripot:get': (ack: Ack<{ tripot: TripotView }>) => void;
+  /** Envoie les donnes distribuées depuis le dernier envoi (groupées, plafonnées par le serveur). */
+  'tripot:sync': (payload: { deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
+  'tripot:buy': (payload: { kind: 'building' | 'upgrade'; id: string; deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
+  /** Repartir de zéro dans un établissement plus grand, avec un bonus permanent. */
+  'tripot:prestige': (ack: Ack<{ tripot: TripotView }>) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;
 }

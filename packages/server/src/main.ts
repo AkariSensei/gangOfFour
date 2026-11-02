@@ -34,6 +34,9 @@ const challengesFile = process.env.CHALLENGES_FILE ?? join(dirname(historyFile),
 // Connexion Google : identifiant du client OAuth (GOOGLE_CLIENT_ID), et adresse Google de l'admin (ADMIN_EMAIL).
 const googleClientId = process.env.GOOGLE_CLIENT_ID || undefined;
 const adminEmail = process.env.ADMIN_EMAIL || undefined;
+// Le Tripot, encore en essai : réservé à l'admin et aux adresses listées (séparées par des virgules).
+const tripotEmails = (process.env.TRIPOT_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+const tripotFile = process.env.TRIPOT_FILE ?? join(dirname(historyFile), 'tripot.json');
 if (!googleClientId) console.warn('GOOGLE_CLIENT_ID absent : personne ne pourra se connecter pour jouer.');
 
 const { http, saveRooms, errors } = createGameServer({
@@ -46,6 +49,8 @@ const { http, saveRooms, errors } = createGameServer({
   challengesFile,
   googleClientId,
   adminEmail,
+  tripotEmails,
+  tripotFile,
 });
 
 // Filet de sécurité : une erreur imprévue est notée dans le journal mais n'arrête plus le serveur (et les parties).

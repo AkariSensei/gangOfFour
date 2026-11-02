@@ -7,6 +7,7 @@ import { DailyChallenge, challengeSummary, useDailyChallenge } from './Challenge
 import { DailyScreen, dailySummary, useDaily } from './Daily';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
+import { TripotScreen } from './Tripot';
 import { FIRST_LEVEL, LevelBadge, LevelBar, ProfileScreen } from './Progress';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
@@ -15,7 +16,7 @@ import { socket, type useAccount } from './socket';
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
 /** Écrans de l'accueil : le menu principal, et un écran par entrée du menu (chacun a son adresse, #jouer…). */
-const SCREENS = ['menu', 'jouer', 'missions', 'defi', 'regarder', 'classement', 'badges', 'profil'] as const;
+const SCREENS = ['menu', 'jouer', 'missions', 'defi', 'regarder', 'classement', 'badges', 'profil', 'tripot'] as const;
 type Screen = (typeof SCREENS)[number];
 
 const screenOf = (hash: string): Screen => {
@@ -201,6 +202,10 @@ export function Home({
                       pill={live.length > 0 ? { text: `${live.length} en cours`, live: true } : undefined}
                       onClick={() => open('regarder')}
                     />
+                    {/* Le Tripot est encore en essai : seuls les comptes autorisés le voient. */}
+                    {account.tripot && (
+                      <MenuItem icon="🎲" title="Le Tripot" subtitle="Distribue, embauche, fais grandir ton tripot" pill={{ text: 'Essai' }} onClick={() => open('tripot')} />
+                    )}
                     <div className="menu-tiles">
                       <MenuItem tile icon="🏆" title="Classement" subtitle="Le bureau, ce mois-ci" onClick={() => open('classement')} />
                       <MenuItem tile icon="🏅" title="Badges" subtitle={badges?.length ? `${wonBadges} / ${badges.length}` : 'À gagner'} onClick={() => open('badges')} />
@@ -247,6 +252,14 @@ export function Home({
           <SubScreen title="Missions du jour" onBack={backToMenu} narrow>
             <DailyScreen daily={daily} />
           </SubScreen>
+        );
+      case 'tripot':
+        return account?.tripot ? (
+          <SubScreen title="🎲 Le Tripot" onBack={backToMenu} wide>
+            <TripotScreen />
+          </SubScreen>
+        ) : (
+          render('menu')
         );
       case 'profil':
         return account?.name ? (
@@ -341,9 +354,21 @@ function MenuItem({
 }
 
 /** Écran secondaire de l'accueil : un titre, le retour au menu, et son contenu. */
-function SubScreen({ title, onBack, narrow, children }: { title: string; onBack: () => void; narrow?: boolean; children: ReactNode }) {
+function SubScreen({
+  title,
+  onBack,
+  narrow,
+  wide,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  narrow?: boolean;
+  wide?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className={`sub-screen ${narrow ? 'narrow' : ''}`}>
+    <div className={`sub-screen ${narrow ? 'narrow' : ''} ${wide ? 'wide' : ''}`}>
       <div className="sub-head">
         <button type="button" className="back-button" onClick={onBack}>
           ← Menu

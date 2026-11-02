@@ -891,6 +891,24 @@ describe('serveur de jeu', () => {
     expect(server.accounts.get('g-1')).not.toHaveProperty('frame');
   });
 
+  it("réserve le Tripot aux comptes autorisés, et garde la partie de chacun", async () => {
+    // Le deuxième compte créé ci-dessous (« Joueur ») est le seul autorisé.
+    await start({ tripotEmails: [`google-${accountCount + 2}@exemple.fr`] });
+    const curieux = connect('Curieux');
+    const joueur = connect('Joueur');
+    await waitFor(() => curieux.connected && joueur.connected);
+    expect(await curieux.emitWithAck('tripot:get')).toEqual({ ok: false, error: 'forbidden' });
+    const first = await joueur.emitWithAck('tripot:get');
+    expect(first).toMatchObject({ ok: true, tripot: { chips: 0, venue: 'Arrière-salle' } });
+    // 12 donnes envoyées d'un coup : chacune rapporte un jeton. Plus qu'une main n'en distribue d'affilée, c'est plafonné.
+    expect(await joueur.emitWithAck('tripot:sync', { deals: 12 })).toMatchObject({ ok: true, tripot: { chips: 12, deals: 12 } });
+    expect(await joueur.emitWithAck('tripot:sync', { deals: 500 })).toMatchObject({ ok: true, tripot: { deals: expect.toBeOneOf([27, 28]) } });
+    // Un donneur du dimanche coûte 15 jetons.
+    const bought = await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'donneur', deals: 0 });
+    expect(bought).toMatchObject({ ok: true, tripot: { buildings: expect.arrayContaining([expect.objectContaining({ id: 'donneur', owned: 1 })]) } });
+    expect(await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'dragon', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
+  });
+
   it('ne lance pas de minuteur par défaut', async () => {
     await start();
     const { players } = await lobby(3);
