@@ -120,6 +120,8 @@ export class GameHistory {
       resultsOf(account: string): { day: string; won: boolean }[];
       version: number;
     },
+    /** Expérience versée par la rente du Tripot (une fois le Tripot ouvert à tous). */
+    private tripotRent?: (owner: string) => number,
   ) {
     if (!file) return;
     try {
@@ -382,7 +384,8 @@ export class GameHistory {
     const days = this.daysOf(owner);
     const missions = [...days].reduce((total, [day, activity]) => total + missionXp(day, activity), 0);
     const seasons = this.seasonsOf(owner).reduce((total, s) => total + (SEASON_XP[s.place - 1] ?? 0), 0);
-    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus + seasons;
+    const rent = this.tripotRent?.(owner) ?? 0;
+    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus + seasons + rent;
   }
 
   /**

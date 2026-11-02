@@ -3,7 +3,7 @@ import type { Badge } from './badges';
 import type { BotLevel } from './bot';
 import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 import type { MissionStatus } from './daily';
-import type { TripotView } from './tripot';
+import type { EventResult as TripotEvent, TripotView } from './tripot';
 import type { Progress } from './progression';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
@@ -13,7 +13,7 @@ export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 export type { Progress, Reward, Unlocks } from './progression';
 export type { MissionStatus } from './daily';
-export type { TripotView } from './tripot';
+export type { DealtHand, EventResult as TripotEvent, HandType, TripotView } from './tripot';
 export { FELTS, FRAMES, LEVEL_TITLES, SEASON_FRAME, SEASON_MIN_GAMES, SEASON_XP } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
@@ -247,9 +247,15 @@ export interface ClientToServerEvents {
   'tripot:get': (ack: Ack<{ tripot: TripotView }>) => void;
   /** Envoie les donnes distribuées depuis le dernier envoi (groupées, plafonnées par le serveur). */
   'tripot:sync': (payload: { deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
-  'tripot:buy': (payload: { kind: 'building' | 'upgrade'; id: string; deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
-  /** Repartir de zéro dans un établissement plus grand, avec un bonus permanent. */
+  /** Achat d'une activité (1, 10 ou autant que possible) ou d'une amélioration, avec les donnes en attente. */
+  'tripot:buy': (
+    payload: { kind: 'building' | 'upgrade'; id: string; deals: number; count?: number | 'max' },
+    ack: Ack<{ tripot: TripotView }>,
+  ) => void;
+  /** S'agrandir : repartir de zéro en encaissant la réputation méritée. */
   'tripot:prestige': (ack: Ack<{ tripot: TripotView }>) => void;
+  /** Attraper le Dragon ou le Phénix qui passe sur la table. */
+  'tripot:catch': (payload: { deals: number }, ack: Ack<{ tripot: TripotView; event: TripotEvent }>) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;
 }

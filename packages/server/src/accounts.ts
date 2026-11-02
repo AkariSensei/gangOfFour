@@ -80,9 +80,17 @@ export class AccountStore {
     return !!account && !!this.adminEmail && account.email.toLowerCase() === this.adminEmail.toLowerCase();
   }
 
+  /** Le Tripot est ouvert à tous (« * » dans TRIPOT_EMAILS) : sa rente d'expérience compte alors. */
+  get tripotOpen(): boolean {
+    return this.tripotEmails.includes('*');
+  }
+
   /** Le Tripot est encore en essai : seuls l'admin et les adresses choisies y ont accès (les autres ne le voient pas). */
   canPlayTripot(account: Account | undefined): boolean {
-    return !!account && (this.isAdmin(account) || this.tripotEmails.some((e) => e.toLowerCase() === account.email.toLowerCase()));
+    return (
+      !!account &&
+      (this.tripotOpen || this.isAdmin(account) || this.tripotEmails.some((e) => e.toLowerCase() === account.email.toLowerCase()))
+    );
   }
 
   view(account: Account): AccountView {

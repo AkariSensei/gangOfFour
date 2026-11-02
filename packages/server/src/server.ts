@@ -5,7 +5,23 @@ import { AccountStore } from './accounts';
 import type { Badge } from './badges';
 import { ChallengeStore, dayOf, seedOf } from './challenges';
 import { newRewards, seasonName } from './progression';
-import { type BuyError, type TripotSave, TripotStore, advance, buyBuilding, buyUpgrade, deal, prestige, viewOf } from './tripot';
+import {
+  type BuyError,
+  type DealtHand,
+  type EventResult,
+  type TripotSave,
+  advance,
+  buyBuilding,
+  buyUpgrade,
+  catchEvent,
+  checkAchievements,
+  deal,
+  markDay,
+  prestige,
+  skipMissedEvent,
+  viewOf,
+} from './tripot';
+import { TripotStore } from './tripotStore';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -85,7 +101,7 @@ export interface GameServerOptions {
   googleClientId?: string;
   /** Adresse Google de l'admin (ADMIN_EMAIL) : il gère les comptes et peut tenir plusieurs sièges pour tester seul. */
   adminEmail?: string;
-  /** Adresses autorisées à jouer au Tripot pendant ses essais (TRIPOT_EMAILS), en plus de l'admin. */
+  /** Adresses autorisées à jouer au Tripot pendant ses essais (TRIPOT_EMAILS), en plus de l'admin ; « * » l'ouvre à tous. */
   tripotEmails?: string[];
   /** Fichier JSON des parties du Tripot ; sans fichier, elles restent en mémoire. */
   tripotFile?: string;
@@ -109,8 +125,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const rooms = new RoomManager();
   const accounts = new AccountStore(options.accountsFile, options.adminEmail, options.tripotEmails);
   const tripot = new TripotStore(options.tripotFile);
+  // La rente d'expérience du Tripot ne compte qu'une fois le Tripot ouvert à tous.
+  const tripotOpen = accounts.tripotOpen;
   const challenges = new ChallengeStore(options.challengesFile, accounts);
-  const history = new GameHistory(options.historyFile, accounts, challenges);
+  const history = new GameHistory(options.historyFile, accounts, challenges, tripotOpen ? (owner) => tripot.rentOf(owner) : undefined);
   // Au démarrage (après une mise à jour qui change les règles de l'expérience), on retire à chacun les récompenses
   // qu'il avait choisies mais qui ne sont plus débloquées à son niveau.
   for (const account of accounts.list()) {
@@ -677,24 +695,35 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
      * Le Tripot : chaque commande fait d'abord tourner la production jusqu'à maintenant, compte les donnes envoyées
      * (plafonnées selon le temps écoulé depuis le dernier envoi), puis renvoie la partie à jour.
      */
-    function withTripot(ack: AnyAck, deals: unknown, run?: (save: TripotSave) => BuyError | null) {
+    function withTripot(ack: AnyAck, deals: unknown, run?: (save: TripotSave, now: number) => BuyError | null | object) {
       const account = me();
       if (!accounts.canPlayTripot(account)) return ack({ ok: false, error: 'forbidden' });
       const now = Date.now();
       const save = tripot.get(account!.id, now);
       const elapsed = (now - save.updatedAt) / 1000;
       const awayGain = advance(save, now);
-      if (typeof deals === 'number' && deals > 0) deal(save, deals, elapsed);
-      const error = run?.(save) ?? null;
+      const dealt: DealtHand[] = typeof deals === 'number' && deals > 0 ? deal(save, deals, elapsed, now) : [];
+      const result = run?.(save, now) ?? null;
+      skipMissedEvent(save, now);
+      const newAchievements = checkAchievements(save);
+      if (tripotOpen) markDay(save, dayOf(new Date(now)));
       tripot.save();
-      ack(error ? { ok: false, error } : { ok: true, tripot: viewOf(save, awayGain) });
+      if (typeof result === 'string') return ack({ ok: false, error: result });
+      ack({ ok: true, ...result, tripot: viewOf(save, now, { awayGain, rentOpen: tripotOpen, newAchievements, dealt }) });
     }
     on('tripot:get', (_payload, ack) => withTripot(ack, 0));
     on('tripot:sync', (payload, ack) => withTripot(ack, payload.deals));
-    on('tripot:buy', (payload, ack) =>
-      withTripot(ack, payload.deals, (save) => (payload.kind === 'upgrade' ? buyUpgrade(save, text(payload.id)) : buyBuilding(save, text(payload.id)))),
-    );
+    on('tripot:buy', (payload, ack) => {
+      const count = payload.count === 'max' ? 'max' : typeof payload.count === 'number' ? payload.count : 1;
+      withTripot(ack, payload.deals, (save) => (payload.kind === 'upgrade' ? buyUpgrade(save, text(payload.id)) : buyBuilding(save, text(payload.id), count)));
+    });
     on('tripot:prestige', (_payload, ack) => withTripot(ack, 0, prestige));
+    on('tripot:catch', (payload, ack) =>
+      withTripot(ack, payload.deals, (save, now) => {
+        const event: EventResult | BuyError = catchEvent(save, now);
+        return typeof event === 'string' ? event : { event };
+      }),
+    );
     on('daily:get', (_payload, ack) => {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });

@@ -899,14 +899,26 @@ describe('serveur de jeu', () => {
     await waitFor(() => curieux.connected && joueur.connected);
     expect(await curieux.emitWithAck('tripot:get')).toEqual({ ok: false, error: 'forbidden' });
     const first = await joueur.emitWithAck('tripot:get');
-    expect(first).toMatchObject({ ok: true, tripot: { chips: 0, venue: 'Arrière-salle' } });
-    // 12 donnes envoyées d'un coup : chacune rapporte un jeton. Plus qu'une main n'en distribue d'affilée, c'est plafonné.
-    expect(await joueur.emitWithAck('tripot:sync', { deals: 12 })).toMatchObject({ ok: true, tripot: { chips: 12, deals: 12 } });
+    // Pas de rente tant que le Tripot n'est pas ouvert à tous.
+    expect(first).toMatchObject({ ok: true, tripot: { chips: 0, venue: 'Arrière-salle', rent: null } });
+    // 12 cartes envoyées d'un coup : un jeton chacune, et deux mains complètes (avec leur combinaison).
+    const synced = await joueur.emitWithAck('tripot:sync', { deals: 12 });
+    expect(synced).toMatchObject({ ok: true, tripot: { deals: 12, dealt: [{ index: 0 }, { index: 1 }] } });
+    expect(synced.ok && synced.tripot.chips).toBeGreaterThanOrEqual(12);
+    // Plus qu'une main n'en distribue d'affilée, c'est plafonné.
     expect(await joueur.emitWithAck('tripot:sync', { deals: 500 })).toMatchObject({ ok: true, tripot: { deals: expect.toBeOneOf([27, 28]) } });
-    // Un donneur du dimanche coûte 15 jetons.
     const bought = await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'donneur', deals: 0 });
     expect(bought).toMatchObject({ ok: true, tripot: { buildings: expect.arrayContaining([expect.objectContaining({ id: 'donneur', owned: 1 })]) } });
     expect(await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'dragon', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
+    // Le Dragon ne passe pas dès l'ouverture.
+    expect(await joueur.emitWithAck('tripot:catch', { deals: 0 })).toEqual({ ok: false, error: 'notAvailable' });
+  });
+
+  it('ouvre le Tripot à tous avec « * », et sa rente compte alors', async () => {
+    await start({ tripotEmails: ['*'] });
+    const joueur = connect('Joueur');
+    await waitFor(() => joueur.connected);
+    expect(await joueur.emitWithAck('tripot:get')).toMatchObject({ ok: true, tripot: { rent: 0, venue: 'Arrière-salle' } });
   });
 
   it('ne lance pas de minuteur par défaut', async () => {
