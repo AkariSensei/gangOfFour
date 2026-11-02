@@ -5,7 +5,17 @@ import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
 import { type DayActivity, type MissionStatus, missionStatus, missionXp, streakOf } from './daily';
-import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
+import {
+  type GameForXp,
+  type Progress,
+  SEASON_MIN_GAMES,
+  SEASON_XP,
+  type SeasonPlace,
+  type Unlocks,
+  progressOf,
+  totalXp,
+  unlocksOf,
+} from './progression';
 
 export interface GameRecord {
   finishedAt: string;
@@ -266,6 +276,13 @@ export class GameHistory {
    * `mode` sépare les parties en ligne de celles jouées seul contre des bots (sans : toutes).
    */
   leaderboard(limit = 10, month?: string, mode?: RankingMode): LeaderboardEntry[] {
+    return this.ranking(month, mode)
+      .slice(0, limit)
+      .map(({ owner: _owner, ...entry }) => entry);
+  }
+
+  /** Classement complet, avec le compte (ou « pseudo:… ») de chaque ligne. */
+  private ranking(month?: string, mode?: RankingMode): (LeaderboardEntry & { owner: string })[] {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
     for (const record of this.ofMode(mode)) {
       if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
@@ -280,10 +297,35 @@ export class GameHistory {
         byName.set(owner, entry);
       }
     }
-    return [...byName.values()]
-      .map(({ total, ...e }) => ({ ...e, averageScore: Math.round(total / e.games) }))
-      .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || a.averageScore - b.averageScore)
-      .slice(0, limit);
+    return [...byName]
+      .map(([owner, { total, ...e }]) => ({ ...e, owner, averageScore: Math.round(total / e.games) }))
+      .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || a.averageScore - b.averageScore);
+  }
+
+  /**
+   * Podium de chaque saison terminée (chaque mois avant le mois en cours, à l'heure de Paris), du plus récent au plus
+   * ancien : les trois premiers du classement en ligne du mois, parmi ceux qui y ont joué assez de parties.
+   */
+  seasons(now = new Date()): { month: string; podium: { owner: string; name: string; wins: number; games: number }[] }[] {
+    const current = monthOf(now);
+    const months = [...new Set(this.ofMode('online').map((r) => monthOf(new Date(r.finishedAt))))].filter((m) => m < current).sort().reverse();
+    return months
+      .map((month) => ({
+        month,
+        podium: this.ranking(month, 'online')
+          .filter((e) => e.games >= SEASON_MIN_GAMES)
+          .slice(0, 3)
+          .map(({ owner, name, wins, games }) => ({ owner, name, wins, games })),
+      }))
+      .filter((s) => s.podium.length > 0);
+  }
+
+  /** Places d'un joueur sur les podiums des saisons terminées. */
+  private seasonsOf(owner: string): SeasonPlace[] {
+    return this.seasons().flatMap((s) => {
+      const index = s.podium.findIndex((p) => p.owner === owner);
+      return index >= 0 ? [{ month: s.month, place: index + 1 }] : [];
+    });
   }
 
   /**
@@ -325,7 +367,7 @@ export class GameHistory {
   /** Récompenses qu'un joueur a débloquées, pour vérifier celles qu'il choisit. */
   unlocksOfAccount(owner: string): Unlocks {
     const badges = badgesOf(this.gamesOf(owner), this.challengesOf(owner));
-    return unlocksOf(progressOf(this.xpOf(owner, badges)).level, badges);
+    return unlocksOf(progressOf(this.xpOf(owner, badges)).level, badges, this.seasonsOf(owner));
   }
 
   private xpOf(owner: string, badges: Badge[]): number {
@@ -339,7 +381,8 @@ export class GameHistory {
     // Missions accomplies chaque jour, et série de jours joués.
     const days = this.daysOf(owner);
     const missions = [...days].reduce((total, [day, activity]) => total + missionXp(day, activity), 0);
-    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus;
+    const seasons = this.seasonsOf(owner).reduce((total, s) => total + (SEASON_XP[s.place - 1] ?? 0), 0);
+    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus + seasons;
   }
 
   /**
@@ -444,7 +487,7 @@ export class GameHistory {
       badges,
       showcase: [...chosen, ...rarest].slice(0, SHOWCASE_SIZE),
       progress,
-      unlocks: unlocksOf(progress.level, badges),
+      unlocks: unlocksOf(progress.level, badges, this.seasonsOf(owner)),
       ...(account?.title ? { title: account.title } : {}),
       ...(account?.frame ? { frame: account.frame } : {}),
     };

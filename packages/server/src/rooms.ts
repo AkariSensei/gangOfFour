@@ -3,7 +3,7 @@ import { type Action, type ActionError, type GameState, applyAction, createGame,
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
 import { AVATARS, COLORS, type Cosmetics, type Look, type RoomError, type RoomView, type Session } from './protocol';
-import { FRAMES } from './progression';
+import { FRAMES, SEASON_FRAME } from './progression';
 
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 3;
@@ -93,7 +93,7 @@ export function cleanName(name: unknown): string | null {
 export function cleanCosmetics(source: unknown): Cosmetics {
   const { frame, title } = (source && typeof source === 'object' ? source : {}) as Record<string, unknown>;
   return {
-    ...(typeof frame === 'string' && FRAMES.some((f) => f.id === frame) ? { frame } : {}),
+    ...(typeof frame === 'string' && (FRAMES.some((f) => f.id === frame) || frame === SEASON_FRAME.id) ? { frame } : {}),
     ...(typeof title === 'string' && title.length > 0 && title.length <= 40 ? { title } : {}),
   };
 }

@@ -324,4 +324,36 @@ describe('GameHistory', () => {
     expect(showcase()).toHaveLength(3);
     expect(showcase()).not.toContain('games-25');
   });
+
+  it("récompense le podium de chaque saison terminée, parmi ceux qui ont assez joué", () => {
+    const accounts = new AccountStore();
+    for (const [id, name] of [
+      ['a', 'Alice'],
+      ['b', 'Bruno'],
+      ['c', 'Chloé'],
+      ['d', 'David'],
+    ]) {
+      accounts.signIn({ sub: id!, email: `${id}@exemple.fr` });
+      accounts.update(id!, { name });
+    }
+    const history = new GameHistory(undefined, accounts);
+    const october = (day: number) => new Date(`2026-10-${String(day).padStart(2, '0')}T12:00:00Z`);
+    // Six parties en octobre à quatre : Alice en gagne 4, Bruno 2. David n'en joue qu'une, et la gagne.
+    for (let day = 1; day <= 6; day++) {
+      const aliceWins = day <= 4;
+      history.record(finished({ Alice: aliceWins ? 10 : 40, Bruno: aliceWins ? 40 : 10, Chloé: 60, Emma: 80 }), october(day), [], ['a', 'b', 'c']);
+    }
+    history.record(finished({ David: 5, Alice: 50, Bruno: 60 }), october(7), [], ['d', 'a', 'b']);
+    const seasons = history.seasons(new Date('2026-11-02T12:00:00Z'));
+    expect(seasons).toHaveLength(1);
+    expect(seasons[0]!.podium.map((p) => p.name)).toEqual(['Alice', 'Bruno', 'Chloé']);
+    // Le mois en cours n'est pas encore une saison terminée.
+    expect(history.seasons(new Date('2026-10-20T12:00:00Z'))).toEqual([]);
+    // Titres et cadre de champion, et l'expérience du podium.
+    expect(history.unlocksOfAccount('a').titles).toContain('Champion d’octobre 2026');
+    expect(history.unlocksOfAccount('a').frames).toContain('couronne');
+    expect(history.unlocksOfAccount('b').titles).toContain('Vice-champion d’octobre 2026');
+    expect(history.unlocksOfAccount('b').frames).not.toContain('couronne');
+    expect(history.unlocksOfAccount('d').titles.some((t) => t.includes('octobre'))).toBe(false);
+  });
 });

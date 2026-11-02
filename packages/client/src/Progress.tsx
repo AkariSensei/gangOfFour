@@ -1,5 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
-import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, type PlayerProfile, type Progress } from '../../server/src/protocol';
+import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, type PlayerProfile, type Progress, SEASON_FRAME } from '../../server/src/protocol';
 import { AccountForm } from './Account';
 import { Avatar } from './Avatar';
 import { errorLabel } from './labels';
@@ -130,6 +130,18 @@ export function ProfileScreen({
                   </button>
                 );
               })}
+              {/* Le cadre des champions ne se débloque pas avec le niveau : il faut gagner une saison. */}
+              <button
+                type="button"
+                className={`reward season-reward ${chosen.frame === SEASON_FRAME.id ? 'on' : ''} ${unlocks.frames.includes(SEASON_FRAME.id) ? '' : 'locked'}`}
+                disabled={!unlocks.frames.includes(SEASON_FRAME.id)}
+                onClick={() => void choose({ frame: SEASON_FRAME.id })}
+                aria-pressed={chosen.frame === SEASON_FRAME.id}
+              >
+                <Avatar name={account.name} look={{ ...account, frame: SEASON_FRAME.id }} />
+                <span>{SEASON_FRAME.name}</span>
+                {!unlocks.frames.includes(SEASON_FRAME.id) && <small>👑 Gagne une saison</small>}
+              </button>
             </div>
           </section>
 

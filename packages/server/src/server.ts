@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { AccountStore } from './accounts';
 import type { Badge } from './badges';
 import { ChallengeStore, dayOf, seedOf } from './challenges';
-import { newRewards } from './progression';
+import { newRewards, seasonName } from './progression';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -811,6 +811,11 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         botMonthly: history.leaderboard(10, month, 'bots'),
         recent: history.recent(),
         streak: history.bestStreak('online'),
+        // Palmarès des dernières saisons (sans les comptes, seulement les pseudos).
+        seasons: history
+          .seasons()
+          .slice(0, 6)
+          .map(({ month, podium }) => ({ month, name: seasonName(month), podium: podium.map(({ name, wins, games }) => ({ name, wins, games })) })),
       });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));

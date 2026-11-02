@@ -12,7 +12,7 @@ export type { BotLevel } from './bot';
 export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 export type { Progress, Reward, Unlocks } from './progression';
 export type { MissionStatus } from './daily';
-export { FELTS, FRAMES, LEVEL_TITLES } from './progression';
+export { FELTS, FRAMES, LEVEL_TITLES, SEASON_FRAME, SEASON_MIN_GAMES, SEASON_XP } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
 export const REACTIONS = ['👍', '😂', '😱', '😡', '👏', '🔥'];
@@ -76,6 +76,13 @@ export interface ChallengeView {
   mine: { finished: boolean; won?: boolean; moves?: number; cardsLeft?: number; rank?: number } | null;
   today: ChallengeRankEntry[];
   overall: ChallengeOverallEntry[];
+}
+
+/** Podium d'une saison terminée (`month` : « 2026-10 », `name` : « octobre 2026 »). */
+export interface SeasonResult {
+  month: string;
+  name: string;
+  podium: { name: string; wins: number; games: number }[];
 }
 
 /** Missions du jour et série de jours joués d'un joueur. */
@@ -217,6 +224,8 @@ export interface ClientToServerEvents {
       botMonthly: LeaderboardEntry[];
       recent: GameRecord[];
       streak: WinStreak | null;
+      /** Podiums des saisons terminées (une par mois), de la plus récente à la plus ancienne. */
+      seasons: SeasonResult[];
     }>,
   ) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;

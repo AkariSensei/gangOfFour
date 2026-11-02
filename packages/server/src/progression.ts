@@ -158,12 +158,45 @@ export function progressOf(xp: number): Progress {
 }
 
 /** Récompenses débloquées : tapis et cadres par le niveau, titres par le niveau et par chaque badge obtenu. */
-export function unlocksOf(level: number, badges: Badge[]): Unlocks {
+export function unlocksOf(level: number, badges: Badge[], seasons: SeasonPlace[] = []): Unlocks {
   return {
     felts: FELTS.filter((f) => f.level <= level).map((f) => f.id),
-    frames: FRAMES.filter((f) => f.level <= level).map((f) => f.id),
-    titles: [...LEVEL_TITLES.filter((t) => t.level <= level).map((t) => t.title), ...badges.filter((b) => b.value >= b.goal).map((b) => b.name)],
+    frames: [...FRAMES.filter((f) => f.level <= level).map((f) => f.id), ...(seasons.some((s) => s.place === 1) ? [SEASON_FRAME.id] : [])],
+    titles: [
+      ...LEVEL_TITLES.filter((t) => t.level <= level).map((t) => t.title),
+      ...badges.filter((b) => b.value >= b.goal).map((b) => b.name),
+      ...seasons.map(seasonTitle),
+    ],
   };
+}
+
+/*
+ * Saisons : chaque mois est une saison. Le podium du classement en ligne d'un mois terminé gagne de l'expérience, un
+ * titre à son nom (« Champion d'octobre 2026 »), et le premier un cadre réservé aux champions de saison.
+ */
+
+/** Place d'un joueur sur le podium d'une saison (`month` : « 2026-10 »). */
+export interface SeasonPlace {
+  month: string;
+  place: number;
+}
+
+/** Il faut avoir joué au moins ce nombre de parties en ligne dans le mois pour être classé dans la saison. */
+export const SEASON_MIN_GAMES = 5;
+/** Expérience du podium de la saison : premier, deuxième, troisième. */
+export const SEASON_XP = [500, 300, 150];
+/** Cadre des champions de saison, qui ne se débloque pas avec le niveau. */
+export const SEASON_FRAME: Reward = { id: 'couronne', name: 'Couronne de champion', level: 0 };
+
+const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** « octobre 2026 », pour « 2026-10 ». */
+export const seasonName = (month: string) => monthFormat.format(new Date(`${month}-15T12:00:00Z`));
+
+/** Titre gagné sur le podium d'une saison : « Champion d'octobre 2026 », « Vice-champion de mars 2027 »… */
+export function seasonTitle({ month, place }: SeasonPlace): string {
+  const name = seasonName(month);
+  const of = /^[aeiouyâéèêîôû]/i.test(name) ? 'd’' : 'de ';
+  return `${['Champion', 'Vice-champion', 'Troisième'][place - 1]} ${of}${name}`;
 }
 
 /** Récompenses gagnées en passant du niveau `before` au niveau `after`, pour les annoncer. */

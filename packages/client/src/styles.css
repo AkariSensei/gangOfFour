@@ -4131,3 +4131,71 @@ button.danger {
 .mission-help {
   text-align: center;
 }
+
+/* Saison du mois et palmarès, en tête de l'écran Classement */
+.season {
+  grid-column: 1 / -1;
+  padding: 1.1rem 1.25rem;
+}
+.season-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.season-head h2 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 1.3rem;
+}
+.season-head p {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+}
+.season-crown {
+  font-size: 2.6rem;
+  filter: drop-shadow(0 0 12px rgba(232, 185, 49, 0.6));
+}
+.season h3 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.palmares {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.palmares li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.palmares-month {
+  min-width: 9rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.palmares-podium {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+}
+
+/* Cadre des champions de saison : une couronne d'or rouge, qui se voit de loin. */
+.avatar.frame.frame-couronne {
+  box-shadow:
+    0 0 0 2px #fff0b0,
+    0 0 0 4px #c8321e,
+    0 0 0 6px var(--gold),
+    0 0 18px rgba(232, 185, 49, 0.7);
+}
+.reward.season-reward small {
+  color: var(--gold);
+}
