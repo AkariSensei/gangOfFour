@@ -27,6 +27,8 @@ const errorsFile = process.env.ERRORS_FILE ?? join(dirname(historyFile), 'erreur
 
 // Les comptes des joueurs (et la clé qui signe leurs sessions) sont gardés à côté aussi.
 const accountsFile = process.env.ACCOUNTS_FILE ?? join(dirname(historyFile), 'comptes.json');
+// Le mur de la communauté (idées, bugs, votes et commentaires).
+const communityFile = process.env.COMMUNITY_FILE ?? join(dirname(historyFile), 'communaute.json');
 
 // Connexion Google : identifiant du client OAuth (GOOGLE_CLIENT_ID), et adresse Google de l'admin (ADMIN_EMAIL).
 const googleClientId = process.env.GOOGLE_CLIENT_ID || undefined;
@@ -40,6 +42,7 @@ const { http, saveRooms, errors } = createGameServer({
   roomsFile,
   errorsFile,
   accountsFile,
+  communityFile,
   googleClientId,
   adminEmail,
 });

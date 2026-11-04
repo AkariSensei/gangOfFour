@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type GameState, createGame } from '@gof/engine';
 import { describe, expect, it } from 'vitest';
-import { AccountStore, GameHistory, monthOf } from '../src';
+import { AccountStore, GameHistory, seasonOf, seasonOfDay } from '../src';
 
 function finished(scores: Record<string, number>): GameState {
   const names = Object.keys(scores);
@@ -87,19 +87,29 @@ describe('GameHistory', () => {
     expect(history.recent(1)[0]!.players.find((p) => p.winner)!.name).toBe('alice');
   });
 
-  it('fait un classement du mois à l\'heure de Paris', () => {
+  it('fait un classement de la saison à l\'heure de Paris', () => {
     const history = new GameHistory();
-    history.record(finished({ Alice: 20, Bruno: 104, David: 60 }), new Date('2026-09-30T22:30:00Z')); // déjà le 1er octobre à Paris
-    history.record(finished({ Alice: 101, Bruno: 30, David: 50 }), new Date('2026-10-15T12:00:00Z'));
-    history.record(finished({ Alice: 10, Chloé: 50, David: 40 }), new Date('2026-09-30T20:00:00Z'));
-    expect(monthOf(new Date('2026-09-30T22:30:00Z'))).toBe('2026-10');
-    expect(history.leaderboard(10, '2026-10').map((e) => [e.name, e.games, e.wins])).toEqual([
+    history.record(finished({ Alice: 20, Bruno: 104, David: 60 }), new Date('2026-11-30T23:30:00Z')); // déjà le 1er décembre à Paris
+    history.record(finished({ Alice: 101, Bruno: 30, David: 50 }), new Date('2027-01-15T12:00:00Z'));
+    history.record(finished({ Alice: 10, Chloé: 50, David: 40 }), new Date('2026-11-30T20:00:00Z'));
+    expect(seasonOf(new Date('2026-11-30T23:30:00Z')).id).toBe('2026-hiver');
+    expect(history.leaderboard(10, '2026-hiver').map((e) => [e.name, e.games, e.wins])).toEqual([
       ['Alice', 2, 1],
       ['Bruno', 2, 1],
       ['David', 2, 0],
     ]);
-    expect(history.leaderboard(10, '2026-09').map((e) => e.name)).toEqual(['Alice', 'David', 'Chloé']);
-    expect(history.leaderboard(10, '2026-11')).toEqual([]);
+    expect(history.leaderboard(10, '2026-automne').map((e) => e.name)).toEqual(['Alice', 'David', 'Chloé']);
+    expect(history.leaderboard(10, '2027-printemps')).toEqual([]);
+    // Les parties d'un autre jeu ne comptent pas dans le classement de Gang of Four.
+    expect(history.leaderboard(10, undefined, undefined, 'president')).toEqual([]);
+  });
+
+  it("découpe l'année en quatre saisons, l'hiver à cheval sur deux années", () => {
+    expect(seasonOfDay('2026-11-04')).toEqual({ id: '2026-automne', name: "Saison d'automne 2026", start: '2026-09-01', end: '2026-11-30' });
+    expect(seasonOfDay('2027-02-28')).toEqual({ id: '2026-hiver', name: "Saison d'hiver 2026-2027", start: '2026-12-01', end: '2027-02-28' });
+    expect(seasonOfDay('2028-02-10').end).toBe('2028-02-29');
+    expect(seasonOfDay('2027-03-01')).toMatchObject({ id: '2027-printemps', name: 'Saison de printemps 2027', end: '2027-05-31' });
+    expect(seasonOfDay('2027-08-31')).toMatchObject({ id: '2027-ete', name: "Saison d'été 2027", start: '2027-06-01' });
   });
 
   it('enregistre dans un fichier et le relit au démarrage', () => {

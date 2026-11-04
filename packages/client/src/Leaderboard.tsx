@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react';
-import { type GameRecord, type LeaderboardEntry, type WinStreak } from '../../server/src/protocol';
+import type { GameRecord, LeaderboardEntry, Season, WinStreak } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
-const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long' });
-
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-/** Classement du bureau et dernières parties : deux blocs de l'accueil. */
-export function Leaderboard() {
-  const [stats, setStats] = useState<{
-    leaderboard: LeaderboardEntry[];
-    monthly: LeaderboardEntry[];
-    botLeaderboard: LeaderboardEntry[];
-    botMonthly: LeaderboardEntry[];
-    recent: GameRecord[];
-    streak: WinStreak | null;
-  } | null>(null);
-  const [shown, setShown] = useState<string | null>(null);
-  const [tab, setTab] = useState<'month' | 'all'>('month');
-  // Parties en ligne (au moins deux personnes) ou jouées seul contre des bots : deux classements séparés.
-  const [mode, setMode] = useState<'online' | 'bots'>('online');
+export interface Stats {
+  season: Season;
+  leaderboard: LeaderboardEntry[];
+  seasonal: LeaderboardEntry[];
+  botLeaderboard: LeaderboardEntry[];
+  botSeasonal: LeaderboardEntry[];
+  recent: GameRecord[];
+  streak: WinStreak | null;
+}
 
+/** Jours qu'il reste dans la saison, aujourd'hui compris. */
+export function daysLeft(season: Season, now = new Date()): number {
+  const end = new Date(`${season.end}T23:59:59`);
+  return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 86_400_000));
+}
+
+/** Classements et dernières parties, rechargés à chaque partie terminée. */
+export function useStats(): Stats | null {
+  const [stats, setStats] = useState<Stats | null>(null);
   useEffect(() => {
     const load = async () => {
       const result = await socket.emitWithAck('stats:get');
@@ -38,29 +40,43 @@ export function Leaderboard() {
       socket.off('stats:changed', load);
     };
   }, []);
+  return stats;
+}
 
-  if (!stats || (stats.leaderboard.length === 0 && stats.botLeaderboard.length === 0)) return null;
+/**
+ * Classement de Gang of Four et dernières parties. `seasonOnly` (écran Saison) : seulement le classement de la saison,
+ * sans les dernières parties.
+ */
+export function Leaderboard({ stats, title = 'Classement du bureau', seasonOnly }: { stats: Stats | null; title?: string; seasonOnly?: boolean }) {
+  const [shown, setShown] = useState<string | null>(null);
+  const [tab, setTab] = useState<'season' | 'all'>('season');
+  // Parties en ligne (au moins deux personnes) ou jouées seul contre des bots : deux classements séparés.
+  const [mode, setMode] = useState<'online' | 'bots'>('online');
 
-  const month = monthFormat.format(new Date());
-  const ranking = mode === 'online' ? (tab === 'month' ? stats.monthly : stats.leaderboard) : tab === 'month' ? stats.botMonthly : stats.botLeaderboard;
+  if (!stats) return null;
+  const period = seasonOnly ? 'season' : tab;
+  const ranking =
+    mode === 'online' ? (period === 'season' ? stats.seasonal : stats.leaderboard) : period === 'season' ? stats.botSeasonal : stats.botLeaderboard;
 
   return (
     <>
       <section className="panel leaderboard">
         <div className="leaderboard-head">
-          <h2>Classement du bureau</h2>
-          <div className="segmented" role="tablist" aria-label="Période du classement">
-            {(
-              [
-                ['month', month[0]!.toUpperCase() + month.slice(1)],
-                ['all', 'Général'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <h2>{title}</h2>
+          {!seasonOnly && (
+            <div className="segmented" role="tablist" aria-label="Période du classement">
+              {(
+                [
+                  ['season', 'Saison'],
+                  ['all', 'Général'],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="segmented ranking-mode" role="tablist" aria-label="Type de parties">
           {(
@@ -78,7 +94,7 @@ export function Leaderboard() {
         <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>
         {ranking.length === 0 && (
           <p className="muted">
-            Aucune partie {mode === 'online' ? 'en ligne' : 'contre les bots'} terminée {tab === 'month' ? `en ${month} ` : ''}pour l'instant.
+            Aucune partie {mode === 'online' ? 'en ligne' : 'contre les bots'} terminée {period === 'season' ? 'cette saison ' : ''}pour l'instant.
           </p>
         )}
         <ol className="ranking">
@@ -109,7 +125,7 @@ export function Leaderboard() {
           </p>
         )}
       </section>
-      {stats.recent.length > 0 && (
+      {!seasonOnly && stats.recent.length > 0 && (
         <section className="panel recent-games">
           <h2>Dernières parties</h2>
           <ul className="recent">

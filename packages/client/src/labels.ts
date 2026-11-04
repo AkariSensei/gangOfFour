@@ -39,6 +39,8 @@ export const ERROR_LABELS: Record<RoomError | ActionError | 'disconnected', stri
   loginTaken: 'Cet identifiant est déjà pris.',
   weakPassword: 'Mot de passe trop court : 8 caractères au moins.',
   wrongPassword: 'Identifiant ou mot de passe incorrect.',
+  ideaNotFound: 'Cette idée n’est plus sur le mur.',
+  invalidStatus: 'Statut inconnu.',
   gameAlreadyStarted: 'La partie a déjà commencé dans ce salon.',
   invalidName: 'Choisis un pseudo.',
   notInRoom: "Tu n'es pas dans un salon.",

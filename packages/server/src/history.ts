@@ -3,9 +3,13 @@ import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { dayOf, streakOf } from './daily';
+import { DEFAULT_GAME } from './games';
+import { seasonOf } from './seasons';
 import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
 export interface GameRecord {
+  /** Jeu de la partie (absent des parties d'avant les autres jeux : Gang of Four). */
+  game?: string;
   finishedAt: string;
   rounds: number;
   /** Partie d'avant une remise à zéro du classement : gardée dans le fichier, mais plus comptée nulle part. */
@@ -87,10 +91,6 @@ export interface AccountNames {
   byName(name: string): { id: string } | undefined;
 }
 
-/** Mois d'une date à l'heure de Paris, sous la forme « 2026-10 ». */
-const parisMonth = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit' });
-export const monthOf = (date: Date) => parisMonth.format(date).slice(0, 7);
-
 /** Historique des parties terminées, gardé dans un fichier JSON (ou en mémoire sans fichier). */
 export class GameHistory {
   private records: GameRecord[] = [];
@@ -126,6 +126,7 @@ export class GameHistory {
 
   private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[], levels: (BotLevel | undefined)[] = []): GameRecord {
     return {
+      game: DEFAULT_GAME,
       finishedAt: finishedAt.toISOString(),
       rounds: game.round,
       players: game.players.map((p, i) => ({
@@ -228,20 +229,21 @@ export class GameHistory {
 
   /**
    * Classement par victoires, puis taux de victoire, puis score moyen (le plus bas est le meilleur).
-   * `month` (« 2026-10 ») ne compte que les parties finies ce mois-là, à l'heure de Paris.
+   * `season` (« 2026-automne ») ne compte que les parties finies pendant cette saison, à l'heure de Paris.
    * `mode` sépare les parties en ligne de celles jouées seul contre des bots (sans : toutes).
    */
-  leaderboard(limit = 10, month?: string, mode?: RankingMode): LeaderboardEntry[] {
-    return this.ranking(month, mode)
+  leaderboard(limit = 10, season?: string, mode?: RankingMode, game = DEFAULT_GAME): LeaderboardEntry[] {
+    return this.ranking(season, mode, game)
       .slice(0, limit)
       .map(({ owner: _owner, ...entry }) => entry);
   }
 
   /** Classement complet, avec le compte (ou « pseudo:… ») de chaque ligne. */
-  private ranking(month?: string, mode?: RankingMode): (LeaderboardEntry & { owner: string })[] {
+  private ranking(season?: string, mode?: RankingMode, game = DEFAULT_GAME): (LeaderboardEntry & { owner: string })[] {
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
     for (const record of this.ofMode(mode)) {
-      if (month && monthOf(new Date(record.finishedAt)) !== month) continue;
+      if ((record.game ?? DEFAULT_GAME) !== game) continue;
+      if (season && seasonOf(new Date(record.finishedAt)).id !== season) continue;
       for (const p of record.players) {
         if (!this.ranked(p)) continue;
         const owner = this.owner(p);

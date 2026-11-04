@@ -316,6 +316,60 @@ describe('serveur de jeu', () => {
     expect(await client.emitWithAck('account:login', { login: 'camille', password: 'x' })).toEqual({ ok: false, error: 'slowDown' });
   });
 
+  it('tient le mur de la communauté : idées, votes, commentaires, et statut donné par l’admin', async () => {
+    await start({ adminEmail: 'chef@exemple.fr' });
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    server.accounts.update('chef', { name: 'Chef' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    const alice = connect('Alice');
+    const bruno = connect('Bruno');
+    const visitor = connect(null);
+    expect(await visitor.emitWithAck('community:post', { kind: 'idea', title: 'Coucou', text: '' })).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(await alice.emitWithAck('community:post', { kind: 'idea', title: '   ', text: '' })).toEqual({ ok: false, error: 'emptyMessage' });
+    const changed = new Promise<void>((resolve) => bruno.once('community:changed', resolve));
+    const posted = await alice.emitWithAck('community:post', { kind: 'idea', title: 'Ajouter le Président', text: 'Pour jouer à plus de quatre.' });
+    if (!posted.ok) throw new Error(posted.error);
+    await changed;
+    await alice.emitWithAck('community:post', { kind: 'bug', title: 'Le chat masque mes cartes', text: '' });
+
+    // Bruno vote pour la première idée : elle passe devant, avec deux voix (l'autrice vote d'office).
+    expect(await bruno.emitWithAck('community:vote', { id: posted.id, on: true })).toEqual({ ok: true });
+    expect(await bruno.emitWithAck('community:comment', { id: posted.id, text: 'Oui !' })).toEqual({ ok: true });
+    const list = await bruno.emitWithAck('community:list');
+    if (!list.ok) throw new Error(list.error);
+    expect(list.ideas.map((i) => [i.title, i.votes, i.voted, i.mine])).toEqual([
+      ['Ajouter le Président', 2, true, false],
+      ['Le chat masque mes cartes', 1, false, false],
+    ]);
+    expect(list.ideas[0]).toMatchObject({ kind: 'idea', author: 'Alice', status: 'new', comments: [{ author: 'Bruno', text: 'Oui !' }] });
+    // Un vote retiré ne compte plus ; sans compte, on lit le mur sans pouvoir voter.
+    expect(await bruno.emitWithAck('community:vote', { id: posted.id, on: false })).toEqual({ ok: true });
+    expect(await visitor.emitWithAck('community:list')).toMatchObject({ ok: true, ideas: [{ votes: 1, voted: false }, { votes: 1 }] });
+
+    // Seul l'admin change le statut ; une demande faite passe en fin de mur.
+    expect(await alice.emitWithAck('community:status', { id: posted.id, status: 'done' })).toEqual({ ok: false, error: 'notAdmin' });
+    expect(await admin.emitWithAck('community:status', { id: posted.id, status: 'n’importe quoi' as 'done' })).toEqual({ ok: false, error: 'invalidStatus' });
+    expect(await admin.emitWithAck('community:status', { id: posted.id, status: 'done' })).toEqual({ ok: true });
+    const after = await alice.emitWithAck('community:list');
+    expect(after.ok && after.ideas.map((i) => [i.title, i.status, i.mine])).toEqual([
+      ['Le chat masque mes cartes', 'new', true],
+      ['Ajouter le Président', 'done', true],
+    ]);
+
+    // On retire sa propre idée, pas celle des autres (sauf l'admin).
+    const bug = after.ok ? after.ideas[0]!.id : '';
+    expect(await bruno.emitWithAck('community:remove', { id: bug })).toEqual({ ok: false, error: 'notAdmin' });
+    expect(await alice.emitWithAck('community:remove', { id: bug })).toEqual({ ok: true });
+    expect(await admin.emitWithAck('community:remove', { id: posted.id })).toEqual({ ok: true });
+    expect(await alice.emitWithAck('community:list')).toEqual({ ok: true, ideas: [] });
+  });
+
+  it('donne la saison en cours avec les classements', async () => {
+    await start();
+    const stats = await connect('Alice').emitWithAck('stats:get');
+    expect(stats).toMatchObject({ ok: true, season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) }, seasonal: [] });
+  });
+
   it('supprime un salon abandonné après le délai', async () => {
     await start({ abandonDelayMs: 50 });
     const { code, players } = await lobby(3);

@@ -5,7 +5,9 @@ import { AccountStore } from './accounts';
 import { newRewards } from './progression';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
-import { GameHistory, monthOf } from './history';
+import { CommunityStore } from './community';
+import { GameHistory } from './history';
+import { seasonOf } from './seasons';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
 import { type ClientToServerEvents, REACTIONS, type ServerToClientEvents } from './protocol';
@@ -26,6 +28,9 @@ export const AWAY_DELAY_MS = 60 * 1000;
 const CHAT_MAX_LENGTH = 200;
 const CHAT_MESSAGES = 6;
 const CHAT_WINDOW_MS = 10 * 1000;
+/** Idées et commentaires qu'un compte peut poster par heure sur le mur de la communauté. */
+const IDEAS_PER_HOUR = 5;
+const COMMENTS_PER_HOUR = 30;
 /** Fenêtre des essais de mot de passe (et d'invitation) limités par adresse et par identifiant. */
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 /** Réactions : quelques-unes à la suite, pas plus, pour ne pas inonder la table. */
@@ -76,6 +81,8 @@ export interface GameServerOptions {
   cutPauseMs?: number;
   /** Fichier JSON des salons en cours, rechargé au démarrage ; sans fichier, un redémarrage les perd. */
   roomsFile?: string;
+  /** Fichier JSON du mur de la communauté ; sans fichier, il reste en mémoire. */
+  communityFile?: string;
   /** Fichier JSON des comptes ; sans fichier, les comptes restent en mémoire. */
   accountsFile?: string;
   /** Identifiant du client OAuth Google (GOOGLE_CLIENT_ID) ; sans lui, personne ne peut se connecter. */
@@ -102,6 +109,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const rooms = new RoomManager();
   const accounts = new AccountStore(options.accountsFile, options.adminEmail);
   const history = new GameHistory(options.historyFile, accounts);
+  const community = new CommunityStore(options.communityFile);
   // Au démarrage (après une mise à jour qui change les règles de l'expérience), on retire à chacun les récompenses
   // qu'il avait choisies mais qui ne sont plus débloquées à son niveau.
   for (const account of accounts.list()) {
@@ -370,6 +378,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   // Mots de passe : quelques essais par quart d'heure, par adresse et par identifiant, pour qu'on ne les devine pas.
   const loginsPerIp = new RateLimiter(limits.loginsPerIp, LOGIN_WINDOW_MS);
   const loginsPerName = new RateLimiter(limits.loginsPerIp, LOGIN_WINDOW_MS);
+  // Le mur de la communauté : quelques idées par heure, un peu plus de commentaires, par compte.
+  const ideasPerAccount = new RateLimiter(IDEAS_PER_HOUR, 60 * 60 * 1000);
+  const commentsPerAccount = new RateLimiter(COMMENTS_PER_HOUR, 60 * 60 * 1000);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
   io.use((socket, next) => {
@@ -760,18 +771,55 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     // Deux classements : les parties en ligne (au moins deux personnes) et celles jouées seul contre des bots.
     // Le record de série ne compte que les parties en ligne.
     on('stats:get', (_payload, ack) => {
-      const month = monthOf(new Date());
+      const season = seasonOf(new Date());
       ack({
         ok: true,
+        season,
         leaderboard: history.leaderboard(10, undefined, 'online'),
-        monthly: history.leaderboard(10, month, 'online'),
+        seasonal: history.leaderboard(10, season.id, 'online'),
         botLeaderboard: history.leaderboard(10, undefined, 'bots'),
-        botMonthly: history.leaderboard(10, month, 'bots'),
+        botSeasonal: history.leaderboard(10, season.id, 'bots'),
         recent: history.recent(),
         streak: history.bestStreak('online'),
       });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
+
+    /** Pseudo actuel d'un compte, pour le mur de la communauté. */
+    const nameOf = (id: string) => accounts.get(id)?.name ?? 'Ancien joueur';
+    /** Après chaque changement du mur, chacun recharge l'écran s'il l'a ouvert. */
+    const changed = <T extends { ok: boolean }>(ack: AnyAck, result: T) => {
+      ack(result);
+      if (result.ok) io.emit('community:changed');
+    };
+    on('community:list', (_payload, ack) => ack({ ok: true, ideas: community.view(me()?.id, nameOf) }));
+    on('community:post', (payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      if (!ideasPerAccount.allow(seated.account.id)) return ack({ ok: false, error: 'slowDown' });
+      const result = community.post(seated.account.id, payload.kind, payload.title, payload.text);
+      changed(ack, result.ok ? { ok: true, id: result.idea.id } : result);
+    });
+    on('community:vote', (payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      changed(ack, community.vote(seated.account.id, payload.id, payload.on === true));
+    });
+    on('community:comment', (payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      if (!commentsPerAccount.allow(seated.account.id)) return ack({ ok: false, error: 'slowDown' });
+      changed(ack, community.comment(seated.account.id, payload.id, payload.text));
+    });
+    on('community:status', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      changed(ack, community.setStatus(payload.id, payload.status));
+    });
+    on('community:remove', (payload, ack) => {
+      const seated = player();
+      if (!seated.ok) return ack(seated);
+      changed(ack, community.remove(seated.account.id, accounts.isAdmin(seated.account), payload.id, payload.commentId));
+    });
 
     socket.on('disconnect', () => {
       const { code, playerId, spectator } = socket.data;

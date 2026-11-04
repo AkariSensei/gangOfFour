@@ -1,10 +1,14 @@
 import type { ActionError, Card, PlayerView } from '@gof/engine';
 import type { BotLevel } from './bot';
 import type { Progress } from './progression';
+import type { Season } from './seasons';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
 export type { BotLevel } from './bot';
+export type { Season } from './seasons';
+export type { GameInfo } from './games';
+export { GAMES } from './games';
 export type { Progress, Reward, Unlocks } from './progression';
 export { FELTS, FRAMES, LEVEL_TITLES, MAX_LEVEL } from './progression';
 
@@ -69,6 +73,22 @@ export interface DailyView {
   playedToday: boolean;
 }
 
+/** Une idée (ou un bug) du mur de la communauté, vue par un joueur. */
+export interface IdeaView {
+  id: string;
+  kind: 'idea' | 'bug';
+  title: string;
+  text: string;
+  /** Pseudo de l'auteur ; `mine` : c'est le joueur qui regarde. */
+  author: string;
+  mine: boolean;
+  createdAt: string;
+  status: 'new' | 'planned' | 'done' | 'declined';
+  votes: number;
+  voted: boolean;
+  comments: { id: string; author: string; text: string; at: string }[];
+}
+
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
 export type GameView = PlayerView & { hands?: Card[][] };
 
@@ -113,7 +133,9 @@ export type RoomError =
   | 'invalidLogin'
   | 'loginTaken'
   | 'weakPassword'
-  | 'wrongPassword';
+  | 'wrongPassword'
+  | 'ideaNotFound'
+  | 'invalidStatus';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -211,13 +233,17 @@ export interface ClientToServerEvents {
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
-  /** `leaderboard` et `monthly` : parties en ligne ; `botLeaderboard` et `botMonthly` : parties seul contre des bots. */
+  /**
+   * Classements de Gang of Four, de la saison en cours (`seasonal`) et de toujours : `leaderboard` et `seasonal` pour
+   * les parties en ligne, `botLeaderboard` et `botSeasonal` pour celles jouées seul contre des bots.
+   */
   'stats:get': (
     ack: Ack<{
+      season: Season;
       leaderboard: LeaderboardEntry[];
-      monthly: LeaderboardEntry[];
+      seasonal: LeaderboardEntry[];
       botLeaderboard: LeaderboardEntry[];
-      botMonthly: LeaderboardEntry[];
+      botSeasonal: LeaderboardEntry[];
       recent: GameRecord[];
       streak: WinStreak | null;
     }>,
@@ -225,6 +251,16 @@ export interface ClientToServerEvents {
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
   /** Série de jours joués du joueur connecté. */
   'daily:get': (ack: Ack<{ daily: DailyView }>) => void;
+  /** Le mur de la communauté (sans compte : en lecture seule). */
+  'community:list': (ack: Ack<{ ideas: IdeaView[] }>) => void;
+  /** Poste une idée ou un bug ; son auteur vote d'office pour. */
+  'community:post': (payload: { kind: 'idea' | 'bug'; title: string; text: string }, ack: Ack<{ id: string }>) => void;
+  'community:vote': (payload: { id: string; on: boolean }, ack: Ack) => void;
+  'community:comment': (payload: { id: string; text: string }, ack: Ack) => void;
+  /** L'admin indique où en est une demande. */
+  'community:status': (payload: { id: string; status: 'new' | 'planned' | 'done' | 'declined' }, ack: Ack) => void;
+  /** Retire une idée, ou un de ses commentaires (`commentId`) : son auteur ou l'admin. */
+  'community:remove': (payload: { id: string; commentId?: string }, ack: Ack) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;
 }
@@ -248,6 +284,8 @@ export interface ServerToClientEvents {
   'room:kicked': () => void;
   /** Le classement a changé (partie finie, remise à zéro…) : l'accueil le recharge. */
   'stats:changed': () => void;
+  /** Le mur de la communauté a changé : l'écran ouvert le recharge. */
+  'community:changed': () => void;
   /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */
   'progress:gained': (gain: { gained: number; before: Progress; after: Progress; rewards: string[] }) => void;
 }

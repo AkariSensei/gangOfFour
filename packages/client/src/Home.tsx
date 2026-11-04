@@ -1,10 +1,13 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import type { BotLevel, LiveRoom, Session } from '../../server/src/protocol';
+import { type BotLevel, GAMES, type LiveRoom, type Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
 import { Avatar } from './Avatar';
-import { Leaderboard } from './Leaderboard';
+import { CommunityScreen } from './Community';
+import { Leaderboard, useStats } from './Leaderboard';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
+import { SeasonBadge, SeasonScreen } from './Season';
+import { SITE_NAME, SITE_TAGLINE } from './site';
 import { useDaily, useMyProfile } from './useProfile';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
@@ -12,13 +15,28 @@ import { socket, type useAccount } from './socket';
 /** Le joueur a vu (suivi ou refusé) la proposition de tutoriel sur ce navigateur. */
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
-/** Écrans de l'accueil : le menu principal, et un écran par entrée du menu (chacun a son adresse, #jouer…). */
-const SCREENS = ['menu', 'jouer', 'regarder', 'classement', 'profil'] as const;
+/**
+ * Écrans de l'accueil, chacun avec son adresse (#saison…) : les trois onglets du site (les jeux, la saison, la
+ * communauté), le profil, et les écrans d'un jeu (sa page, puis jouer, regarder, son classement).
+ */
+const SCREENS = ['jeux', 'saison', 'communaute', 'profil', 'gof', 'jouer', 'regarder', 'classement'] as const;
 type Screen = (typeof SCREENS)[number];
+
+const TABS: { id: Screen; label: string }[] = [
+  { id: 'jeux', label: 'Jeux' },
+  { id: 'saison', label: 'Saison' },
+  { id: 'communaute', label: 'Communauté' },
+];
+
+/** Où ramène le bouton retour de chaque écran (les onglets n'en ont pas). */
+const PARENT: Partial<Record<Screen, Screen>> = { gof: 'jeux', jouer: 'gof', regarder: 'gof', classement: 'gof', profil: 'jeux' };
+const depth = (s: Screen): number => (PARENT[s] ? 1 + depth(PARENT[s]!) : 0);
+/** L'onglet d'un écran : lui-même, ou celui de son parent. */
+const tabOf = (s: Screen): Screen => (PARENT[s] ? tabOf(PARENT[s]!) : s);
 
 const screenOf = (hash: string): Screen => {
   const name = hash.replace('#', '');
-  return (SCREENS as readonly string[]).includes(name) ? (name as Screen) : 'menu';
+  return (SCREENS as readonly string[]).includes(name) ? (name as Screen) : 'jeux';
 };
 
 /** Durée de la transition entre deux écrans (doit suivre l'animation de styles.css). */
@@ -53,14 +71,15 @@ export function Home({
   // Sans partie terminée, pas encore de fiche : niveau 1.
   const progress = profile?.progress ?? FIRST_LEVEL;
   const live = useLiveRooms();
+  const stats = useStats();
   const daily = useDaily(account?.name ? account.id : null);
 
-  // Navigation entre les écrans : l'adresse suit l'écran, pour que le bouton Retour du navigateur ramène au menu.
+  // Navigation entre les écrans : l'adresse suit l'écran, pour que le bouton Retour du navigateur ramène en arrière.
   // Un lien d'invitation (?salon=1234) ouvre directement l'écran « Jouer », le code déjà rempli.
   const [screen, setScreen] = useState<Screen>(() => (invite ? 'jouer' : screenOf(location.hash)));
   const [leaving, setLeaving] = useState<{ screen: Screen; back: boolean } | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
-  function show(next: Screen, back: boolean) {
+  function show(next: Screen, back = depth(next) < depth(screen)) {
     if (next === screen) return;
     setError('');
     clearTimeout(leaveTimer.current);
@@ -69,24 +88,29 @@ export function Home({
     leaveTimer.current = setTimeout(() => setLeaving(null), TRANSITION_MS);
   }
   useEffect(() => {
-    const onPop = () => show(screenOf(location.hash), screenOf(location.hash) === 'menu');
+    const onPop = () => show(screenOf(location.hash));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   });
   useEffect(() => () => clearTimeout(leaveTimer.current), []);
-  // Déconnecté (ou pas encore de pseudo) depuis un autre écran : retour au menu, qui propose la connexion.
+  // Déconnecté (ou pas encore de pseudo) depuis un autre écran : retour à l'accueil, qui propose la connexion.
   useEffect(() => {
-    if (account === undefined || signedIn || screen === 'menu') return;
+    if (account === undefined || signedIn || screen === 'jeux') return;
     history.replaceState(null, '', `${location.pathname}${location.search}`);
-    show('menu', true);
+    show('jeux', true);
   });
   function open(next: Screen) {
-    history.pushState(null, '', `${location.pathname}${location.search}#${next}`);
-    show(next, false);
+    history.pushState({ inApp: true }, '', `${location.pathname}${location.search}#${next}`);
+    show(next);
   }
-  function backToMenu() {
-    if (location.hash) history.back();
-    else show('menu', true);
+  /** Retour à l'écran parent : par l'historique si on y est arrivé en naviguant, sinon directement. */
+  function back() {
+    const parent = PARENT[screen] ?? 'jeux';
+    if ((history.state as { inApp?: boolean } | null)?.inApp) history.back();
+    else {
+      history.replaceState(null, '', `${location.pathname}${location.search}#${parent}`);
+      show(parent, true);
+    }
   }
 
   // Première fois : tant qu'il n'a fini aucune partie et n'a pas refusé, on lui propose le tutoriel.
@@ -120,15 +144,112 @@ export function Home({
     if (failure) setError(errorLabel(failure));
   }
 
+  /** Sans compte (ou sans pseudo) : le nom du site et la connexion. */
+  function landing(): ReactNode {
+    return (
+      <div className="menu-screen">
+        <div className="menu-title">
+          <div className="home-fan" aria-hidden>
+            <img src="/cards/PV.webp" alt="" />
+            <img src="/cards/1M.webp" alt="" />
+            <img src="/cards/DR.webp" alt="" />
+            <img src="/cards/PJ.webp" alt="" />
+            <img className="home-logo" src="/cards/dos.webp" alt="" />
+          </div>
+          <h1 className="game-title site-title">{SITE_NAME}</h1>
+          <p className="tagline">{SITE_TAGLINE}</p>
+        </div>
+        <div className="menu-side">
+          {account === undefined ? (
+            <p className="muted menu-loading">Connexion…</p>
+          ) : account === null ? (
+            <section className="panel signin-panel">
+              {invitation ? (
+                <InviteForm code={invitation} onRegister={me.register} onDone={closeInvitation} />
+              ) : (
+                <>
+                  <p className="signin-hint">Connecte-toi avec ton compte Google pour jouer.</p>
+                  {me.googleClientId ? (
+                    <GoogleButton clientId={me.googleClientId} onCredential={signIn} />
+                  ) : (
+                    <p className="error">La connexion Google n'est pas encore configurée sur le serveur.</p>
+                  )}
+                  <p className="signin-or">ou, sans compte Google</p>
+                  <PasswordSignIn onSignIn={me.signInWithPassword} />
+                  <p className="muted small signin-note">Pas encore de compte ? Demande un lien d’invitation à l’admin.</p>
+                </>
+              )}
+            </section>
+          ) : (
+            <section className="panel signin-panel">
+              <AccountForm account={account} onSaved={(a) => me.setAccount(a)} />
+            </section>
+          )}
+          {error && <p className="error">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
   function render(s: Screen): ReactNode {
-    // Sans compte (ou sans pseudo), seul le menu s'affiche, avec la connexion à la place des entrées.
-    if (!signedIn && s !== 'menu') return render('menu');
+    if (!signedIn) return landing();
     switch (s) {
-      case 'menu':
+      case 'jeux':
         return (
-          <div className="menu-screen">
+          <div className="catalog">
+            <div className="catalog-hero">
+              <h1 className="site-title">{SITE_NAME}</h1>
+              <p className="tagline">{SITE_TAGLINE}</p>
+            </div>
+            <SeasonBadge stats={stats} onClick={() => open('saison')} />
+            <h2 className="catalog-title">Jeux</h2>
+            <div className="game-cards">
+              {GAMES.map((g) =>
+                g.status === 'live' ? (
+                  <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open('gof')}>
+                    {live.length > 0 && <span className="menu-pill live">{live.length} en cours</span>}
+                    <span className="game-card-art" aria-hidden>
+                      <img src="/cards/PV.webp" alt="" />
+                      <img src="/cards/DR.webp" alt="" />
+                      <img src="/cards/1M.webp" alt="" />
+                    </span>
+                    <strong>{g.name}</strong>
+                    <small>{g.tagline}</small>
+                    <span className="game-card-players">{g.players}</span>
+                  </button>
+                ) : (
+                  <div key={g.id} className={`game-card soon game-${g.id}`}>
+                    <span className="game-card-status">{g.status === 'soon' ? 'Bientôt' : 'Plus tard'}</span>
+                    <strong>{g.name}</strong>
+                    <small>{g.tagline}</small>
+                    <span className="game-card-players">{g.players}</span>
+                  </div>
+                ),
+              )}
+            </div>
+            {error && <p className="error">{error}</p>}
+          </div>
+        );
+      case 'saison':
+        return (
+          <SubScreen title="Saison">
+            <SeasonScreen stats={stats} />
+          </SubScreen>
+        );
+      case 'communaute':
+        return (
+          <SubScreen title="Communauté" narrow>
+            <CommunityScreen admin={!!account?.admin} />
+          </SubScreen>
+        );
+      case 'gof':
+        return (
+          <div className="menu-screen game-hub">
+            <button type="button" className="back-button hub-back" onClick={back}>
+              ← Jeux
+            </button>
             <div className="menu-title">
-              {/* Écran titre : les cartes maîtresses du jeu en éventail derrière le dos de carte. */}
+              {/* Les cartes maîtresses du jeu en éventail derrière le dos de carte. */}
               <div className="home-fan" aria-hidden>
                 <img src="/cards/PV.webp" alt="" />
                 <img src="/cards/1M.webp" alt="" />
@@ -139,119 +260,108 @@ export function Home({
               <h1 className="game-title">
                 Gang <span>of</span> Four
               </h1>
-              <p className="tagline">Le jeu de cartes, entre collègues, chacun sur son poste.</p>
+              <p className="tagline">Débarrasse-toi de tes cartes avant les autres.</p>
             </div>
             <div className="menu-side">
-              {account === undefined ? (
-                <p className="muted menu-loading">Connexion…</p>
-              ) : account === null ? (
-                <section className="panel signin-panel">
-                  {invitation ? (
-                    <InviteForm code={invitation} onRegister={me.register} onDone={closeInvitation} />
-                  ) : (
-                    <>
-                      <p className="signin-hint">Connecte-toi avec ton compte Google pour jouer.</p>
-                      {me.googleClientId ? (
-                        <GoogleButton clientId={me.googleClientId} onCredential={signIn} />
-                      ) : (
-                        <p className="error">La connexion Google n'est pas encore configurée sur le serveur.</p>
-                      )}
-                      <p className="signin-or">ou, sans compte Google</p>
-                      <PasswordSignIn onSignIn={me.signInWithPassword} />
-                      <p className="muted small signin-note">Pas encore de compte ? Demande un lien d’invitation à l’admin.</p>
-                    </>
-                  )}
-                </section>
-              ) : !account.name ? (
-                <section className="panel signin-panel">
-                  <AccountForm account={account} onSaved={(a) => me.setAccount(a)} />
-                </section>
-              ) : (
-                <>
-                  {firstTime && (
-                    <div className="first-time">
-                      <strong>🎓 Première partie ?</strong>
-                      <p>
-                        Un tutoriel de deux minutes t'apprend les règles en jouant : une manche guidée contre trois bots, que tu gagnes à
-                        coup sûr.
-                      </p>
-                      <div className="first-time-actions">
-                        <button type="button" className="primary" onClick={startTutorial}>
-                          Suivre le tutoriel
-                        </button>
-                        <button type="button" className="ghost" onClick={dismissTutorial}>
-                          Non merci, partie classique
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <nav className="game-menu" aria-label="Menu principal">
-                    <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon, rejoindre des collègues, partie rapide" onClick={() => open('jouer')} />
-                    <MenuItem
-                      icon="👀"
-                      title="Regarder"
-                      subtitle={live.length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
-                      pill={live.length > 0 ? { text: `${live.length} en cours`, live: true } : undefined}
-                      onClick={() => open('regarder')}
-                    />
-                    <div className="menu-tiles">
-                      <MenuItem tile icon="🏆" title="Classement" subtitle="Le bureau, ce mois-ci" onClick={() => open('classement')} />
-                      <MenuItem tile icon="🎓" title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
-                      <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules(true)} />
-                    </div>
-                  </nav>
-                </>
+              {firstTime && (
+                <div className="first-time">
+                  <strong>🎓 Première partie ?</strong>
+                  <p>
+                    Un tutoriel de deux minutes t'apprend les règles en jouant : une manche guidée contre trois bots, que tu gagnes à coup
+                    sûr.
+                  </p>
+                  <div className="first-time-actions">
+                    <button type="button" className="primary" onClick={startTutorial}>
+                      Suivre le tutoriel
+                    </button>
+                    <button type="button" className="ghost" onClick={dismissTutorial}>
+                      Non merci, partie classique
+                    </button>
+                  </div>
+                </div>
               )}
+              <nav className="game-menu" aria-label="Gang of Four">
+                <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon, rejoindre des collègues, partie rapide" onClick={() => open('jouer')} />
+                <MenuItem
+                  icon="👀"
+                  title="Regarder"
+                  subtitle={live.length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
+                  pill={live.length > 0 ? { text: `${live.length} en cours`, live: true } : undefined}
+                  onClick={() => open('regarder')}
+                />
+                <div className="menu-tiles">
+                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('classement')} />
+                  <MenuItem tile icon="🎓" title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
+                  <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules(true)} />
+                </div>
+              </nav>
               {error && <p className="error">{error}</p>}
             </div>
           </div>
         );
       case 'jouer':
         return (
-          <SubScreen title="Jouer" onBack={backToMenu}>
+          <SubScreen title="Jouer" onBack={back} backLabel="Gang of Four">
             <PlayScreen initialCode={invite} onEnter={onEnter} />
           </SubScreen>
         );
       case 'regarder':
         return (
-          <SubScreen title="Regarder" onBack={backToMenu} narrow>
+          <SubScreen title="Regarder" onBack={back} backLabel="Gang of Four" narrow>
             <LiveRooms rooms={live} onWatch={onEnter} />
           </SubScreen>
         );
       case 'classement':
         return (
-          <SubScreen title="Classement" onBack={backToMenu}>
+          <SubScreen title="Classement" onBack={back} backLabel="Gang of Four">
             <div className="ranking-screen">
-              <Leaderboard />
+              <Leaderboard stats={stats} />
             </div>
           </SubScreen>
         );
       case 'profil':
         return account?.name ? (
-          <SubScreen title="Mon profil" onBack={backToMenu}>
+          <SubScreen title="Mon profil" onBack={back} backLabel="Jeux">
             <ProfileScreen account={account} profile={profile} onAccount={(a) => me.setAccount(a)} />
           </SubScreen>
         ) : null;
     }
   }
 
+  const currentTab = tabOf(screen);
   return (
     <main className="home-menu">
       {signedIn && account && (
         <header className="menu-topbar">
-          <button type="button" className="player-card" onClick={() => open('profil')} title="Mon profil : pseudo, avatar, récompenses">
-            <span className="level-avatar">
-              <Avatar name={account.name} look={account} />
-            </span>
-            <span className="player-card-text">
-              <strong>{account.name}</strong>
-              <small>
-                {account.title || progress.title}
-                {daily && daily.streak > 0 && <span title={`Série de ${daily.streak} jours de jeu d'affilée`}> · 🔥 {daily.streak}</span>}
-              </small>
-            </span>
+          <button type="button" className="site-brand" onClick={() => (screen === 'jeux' ? undefined : open('jeux'))}>
+            {SITE_NAME}
           </button>
+          <nav className="site-tabs" aria-label="Menu principal">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={currentTab === t.id ? 'on' : ''}
+                aria-current={currentTab === t.id ? 'page' : undefined}
+                onClick={() => (screen === t.id ? undefined : open(t.id))}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
           <div className="menu-topbar-actions">
+            <button type="button" className="player-card" onClick={() => open('profil')} title="Mon profil : pseudo, avatar, récompenses">
+              <span className="level-avatar">
+                <Avatar name={account.name} look={account} />
+              </span>
+              <span className="player-card-text">
+                <strong>{account.name}</strong>
+                <small>
+                  {account.title || progress.title}
+                  {daily && daily.streak > 0 && <span title={`Série de ${daily.streak} jours de jeu d'affilée`}> · 🔥 {daily.streak}</span>}
+                </small>
+              </span>
+            </button>
             {account.admin && (
               <button type="button" className="round-button" onClick={() => setAdmin(true)} title="Gérer les comptes">
                 ⚙️
@@ -316,24 +426,28 @@ function MenuItem({
   );
 }
 
-/** Écran secondaire de l'accueil : un titre, le retour au menu, et son contenu. */
+/** Écran secondaire de l'accueil : un titre, le retour à l'écran parent (sauf pour un onglet), et son contenu. */
 function SubScreen({
   title,
   onBack,
+  backLabel,
   narrow,
   children,
 }: {
   title: string;
-  onBack: () => void;
+  onBack?: () => void;
+  backLabel?: string;
   narrow?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className={`sub-screen ${narrow ? 'narrow' : ''}`}>
       <div className="sub-head">
-        <button type="button" className="back-button" onClick={onBack}>
-          ← Menu
-        </button>
+        {onBack && (
+          <button type="button" className="back-button" onClick={onBack}>
+            ← {backLabel}
+          </button>
+        )}
         <h2>{title}</h2>
       </div>
       {children}
