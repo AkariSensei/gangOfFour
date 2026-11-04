@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { BotLevel, LiveRoom, Session } from '../../server/src/protocol';
-import { AccountForm, AdminPanel, GoogleButton } from './Account';
+import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
 import { Avatar } from './Avatar';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
@@ -35,6 +35,15 @@ export function Home({
   notice?: string;
 }) {
   const invite = new URLSearchParams(location.search).get('salon')?.toUpperCase() ?? '';
+  // Lien d'invitation de l'admin (?invitation=…) : création d'un compte sans Google, ou nouveau mot de passe.
+  const [invitation, setInvitation] = useState(() => new URLSearchParams(location.search).get('invitation') ?? '');
+  function closeInvitation() {
+    const params = new URLSearchParams(location.search);
+    params.delete('invitation');
+    const rest = params.toString();
+    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+    setInvitation('');
+  }
   const [error, setError] = useState(notice);
   const [admin, setAdmin] = useState(false);
   const [rules, setRules] = useState(false);
@@ -137,11 +146,20 @@ export function Home({
                 <p className="muted menu-loading">Connexion…</p>
               ) : account === null ? (
                 <section className="panel signin-panel">
-                  <p className="signin-hint">Connecte-toi avec ton compte Google pour jouer.</p>
-                  {me.googleClientId ? (
-                    <GoogleButton clientId={me.googleClientId} onCredential={signIn} />
+                  {invitation ? (
+                    <InviteForm code={invitation} onRegister={me.register} onDone={closeInvitation} />
                   ) : (
-                    <p className="error">La connexion Google n'est pas encore configurée sur le serveur.</p>
+                    <>
+                      <p className="signin-hint">Connecte-toi avec ton compte Google pour jouer.</p>
+                      {me.googleClientId ? (
+                        <GoogleButton clientId={me.googleClientId} onCredential={signIn} />
+                      ) : (
+                        <p className="error">La connexion Google n'est pas encore configurée sur le serveur.</p>
+                      )}
+                      <p className="signin-or">ou, sans compte Google</p>
+                      <PasswordSignIn onSignIn={me.signInWithPassword} />
+                      <p className="muted small signin-note">Pas encore de compte ? Demande un lien d’invitation à l’admin.</p>
+                    </>
                   )}
                 </section>
               ) : !account.name ? (

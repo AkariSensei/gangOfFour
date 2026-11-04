@@ -44,6 +44,22 @@ describe('GameHistory', () => {
     expect(history.recent(1)[0]!.players[0]).not.toHaveProperty('account');
   });
 
+  it("oublie les liens d'invitation au bout d'une semaine, et garde comptes et liens dans le fichier", () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'gof-')), 'comptes.json');
+    const accounts = new AccountStore(file);
+    const result = accounts.createInvite(undefined, 0);
+    if (!result.ok) throw new Error(result.error);
+    expect(new AccountStore(file).findInvite(result.invite.code, 1000)).toBeDefined();
+    expect(accounts.findInvite(result.invite.code, 8 * 24 * 3600 * 1000)).toBeUndefined();
+    expect(accounts.register(result.invite.code, 'camille', 'motdepasse', 8 * 24 * 3600 * 1000)).toEqual({ ok: false, error: 'invalidInvite' });
+    // Le mot de passe n'est jamais gardé en clair.
+    const fresh = accounts.createInvite();
+    if (!fresh.ok) throw new Error(fresh.error);
+    expect(accounts.register(fresh.invite.code, 'camille', 'motdepasse').ok).toBe(true);
+    expect(readFileSync(file, 'utf8')).not.toContain('motdepasse');
+    expect(new AccountStore(file).passwordSignIn('camille', 'motdepasse').ok).toBe(true);
+  });
+
   it('signe des sessions que personne ne peut fabriquer, et les coupe pour un compte bloqué', () => {
     const accounts = new AccountStore();
     accounts.signIn({ sub: 'a', email: 'a@exemple.fr' });

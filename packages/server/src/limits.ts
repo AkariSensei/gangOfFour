@@ -18,6 +18,8 @@ export interface Limits {
   eventWindowMs: number;
   /** Taille maximale d'un message reçu, en octets (le jeu n'envoie que de petits messages). */
   maxMessageBytes: number;
+  /** Essais de mot de passe (ou de lien d'invitation) par quart d'heure, par adresse IP et par identifiant. */
+  loginsPerIp: number;
 }
 
 export const DEFAULT_LIMITS: Limits = {
@@ -30,6 +32,7 @@ export const DEFAULT_LIMITS: Limits = {
   eventsPerSocket: 40,
   eventWindowMs: 5 * 1000,
   maxMessageBytes: 16 * 1024,
+  loginsPerIp: 10,
 };
 
 /** Compte des événements par clé sur une fenêtre glissante. */

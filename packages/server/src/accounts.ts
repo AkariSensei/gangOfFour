@@ -1,15 +1,22 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GoogleIdentity } from './google';
-import type { AccountView, Look, RoomError } from './protocol';
+import type { AccountView, InviteView, Look, RoomError } from './protocol';
 import { cleanLook, cleanName } from './rooms';
 
-/** Compte d'un joueur, créé à sa première connexion Google. Aucun mot de passe : Google s'en charge. */
+/**
+ * Compte d'un joueur : créé à sa première connexion Google (sans mot de passe, Google s'en charge), ou par un lien
+ * d'invitation de l'admin, avec un identifiant et un mot de passe.
+ */
 export interface Account extends Look {
-  /** Identifiant Google du compte (ne change jamais, même si l'adresse change). */
+  /** Identifiant Google du compte (ne change jamais, même si l'adresse change), ou « local:… » pour un compte invité. */
   id: string;
+  /** Adresse Google ; vide pour un compte invité. */
   email: string;
+  /** Compte invité : son identifiant de connexion (en minuscules, unique) et son mot de passe chiffré. */
+  login?: string;
+  password?: { salt: string; hash: string };
   /** Pseudo unique, choisi à la première connexion ; absent tant qu'il n'est pas choisi. */
   name?: string;
   /** Compte bloqué par l'admin : il ne peut plus jouer. */
@@ -23,6 +30,36 @@ export interface Account extends Look {
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError };
 
+/** Lien d'invitation : crée un compte, ou (avec `account`) fait choisir un nouveau mot de passe à un compte invité. */
+export interface Invite {
+  code: string;
+  createdAt: string;
+  expiresAt: string;
+  account?: string;
+}
+
+/** Un lien d'invitation sert une fois, pendant une semaine. */
+const INVITE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Identifiant : 3 à 30 caractères simples ; mot de passe : 8 caractères au moins. */
+const LOGIN_PATTERN = /^[a-z0-9._-]{3,30}$/;
+const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 200;
+
+const cleanLogin = (login: unknown) => (typeof login === 'string' ? login.trim().toLowerCase() : '');
+
+function hashPassword(password: string, salt = randomBytes(16).toString('hex')) {
+  return { salt, hash: scryptSync(password, salt, 32).toString('hex') };
+}
+
+function checkPassword(password: string, stored: { salt: string; hash: string }): boolean {
+  const given = Buffer.from(hashPassword(password, stored.salt).hash, 'hex');
+  const expected = Buffer.from(stored.hash, 'hex');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+/** Un mot de passe à chiffrer, même faux : la réponse prend le même temps, que l'identifiant existe ou non. */
+const DECOY = hashPassword('leurre');
+
 /** Une session dure un an ; se déconnecter ou être bloqué l'arrête avant. */
 const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -34,6 +71,7 @@ const key = (name: string) => name.trim().toLocaleLowerCase('fr');
  */
 export class AccountStore {
   private accounts: Account[] = [];
+  private invites: Invite[] = [];
   private secret = randomBytes(32).toString('hex');
 
   constructor(
@@ -44,6 +82,7 @@ export class AccountStore {
     try {
       const saved = JSON.parse(readFileSync(file, 'utf8'));
       this.accounts = saved.accounts ?? [];
+      this.invites = saved.invites ?? [];
       this.secret = saved.secret ?? this.secret;
     } catch {
       this.save();
@@ -55,7 +94,7 @@ export class AccountStore {
     try {
       mkdirSync(dirname(this.file), { recursive: true });
       const tmp = `${this.file}.tmp`;
-      writeFileSync(tmp, JSON.stringify({ secret: this.secret, accounts: this.accounts }, null, 1));
+      writeFileSync(tmp, JSON.stringify({ secret: this.secret, accounts: this.accounts, invites: this.invites }, null, 1));
       renameSync(tmp, this.file);
     } catch (error) {
       console.error("Impossible d'enregistrer les comptes :", error);
@@ -89,7 +128,88 @@ export class AccountStore {
   }
 
   list(): Account[] {
-    return [...this.accounts].sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email, 'fr'));
+    const label = (a: Account) => a.name ?? a.login ?? a.email;
+    return [...this.accounts].sort((a, b) => label(a).localeCompare(label(b), 'fr'));
+  }
+
+  /* ——— Comptes invités ——— */
+
+  /** Liens d'invitation encore valables (les expirés sont oubliés au passage). */
+  activeInvites(now = Date.now()): Invite[] {
+    const before = this.invites.length;
+    this.invites = this.invites.filter((i) => Date.parse(i.expiresAt) > now);
+    if (this.invites.length !== before) this.save();
+    return this.invites;
+  }
+
+  /** Ce que voit l'admin d'un lien : pour un nouveau mot de passe, le compte visé. */
+  inviteView(invite: Invite): InviteView {
+    const target = this.get(invite.account);
+    return {
+      code: invite.code,
+      createdAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+      ...(target ? { account: target.name ?? target.login ?? '' } : {}),
+    };
+  }
+
+  /** L'admin crée un lien : pour un nouveau compte, ou pour qu'un compte invité choisisse un nouveau mot de passe. */
+  createInvite(forAccount?: string, now = Date.now()): Result<{ invite: Invite }> {
+    if (forAccount !== undefined && !this.get(forAccount)?.login) return { ok: false, error: 'accountNotFound' };
+    // Un seul lien de mot de passe à la fois par compte : le nouveau remplace l'ancien.
+    if (forAccount) this.invites = this.invites.filter((i) => i.account !== forAccount);
+    const invite: Invite = {
+      code: randomBytes(18).toString('base64url'),
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + INVITE_MS).toISOString(),
+      ...(forAccount ? { account: forAccount } : {}),
+    };
+    this.invites.push(invite);
+    this.save();
+    return { ok: true, invite };
+  }
+
+  revokeInvite(code: string): void {
+    this.invites = this.invites.filter((i) => i.code !== code);
+    this.save();
+  }
+
+  /** Le lien ouvert par un invité : valable ou non, et pour quel compte s'il s'agit d'un nouveau mot de passe. */
+  findInvite(code: unknown, now = Date.now()): Invite | undefined {
+    return typeof code === 'string' ? this.activeInvites(now).find((i) => i.code === code) : undefined;
+  }
+
+  /**
+   * Utilise un lien : crée le compte invité (identifiant et mot de passe), ou change le mot de passe du compte visé.
+   * Le lien ne sert qu'une fois.
+   */
+  register(code: unknown, rawLogin: unknown, password: unknown, now = Date.now()): Result<{ account: Account }> {
+    const invite = this.findInvite(code, now);
+    if (!invite) return { ok: false, error: 'invalidInvite' };
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) return { ok: false, error: 'weakPassword' };
+    let account = this.get(invite.account);
+    if (invite.account && !account) return { ok: false, error: 'invalidInvite' };
+    if (!account) {
+      const login = cleanLogin(rawLogin);
+      if (!LOGIN_PATTERN.test(login)) return { ok: false, error: 'invalidLogin' };
+      if (this.accounts.some((a) => a.login === login)) return { ok: false, error: 'loginTaken' };
+      account = { id: `local:${randomUUID()}`, email: '', login, createdAt: new Date(now).toISOString() };
+      this.accounts.push(account);
+    }
+    account.password = hashPassword(password);
+    this.invites = this.invites.filter((i) => i.code !== invite.code);
+    this.save();
+    return account.blocked ? { ok: false, error: 'blocked' } : { ok: true, account };
+  }
+
+  /** Connexion d'un compte invité avec son identifiant et son mot de passe. */
+  passwordSignIn(rawLogin: unknown, password: unknown): Result<{ account: Account }> {
+    const login = cleanLogin(rawLogin);
+    const account = login ? this.accounts.find((a) => a.login === login) : undefined;
+    const given = typeof password === 'string' ? password.slice(0, MAX_PASSWORD) : '';
+    const valid = checkPassword(given, account?.password ?? DECOY) && !!account?.password;
+    if (!account || !valid) return { ok: false, error: 'wrongPassword' };
+    return account.blocked ? { ok: false, error: 'blocked' } : { ok: true, account };
   }
 
   /** Connexion Google : retrouve le compte, ou le crée à la première connexion. */

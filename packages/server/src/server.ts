@@ -26,6 +26,8 @@ export const AWAY_DELAY_MS = 60 * 1000;
 const CHAT_MAX_LENGTH = 200;
 const CHAT_MESSAGES = 6;
 const CHAT_WINDOW_MS = 10 * 1000;
+/** Fenêtre des essais de mot de passe (et d'invitation) limités par adresse et par identifiant. */
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 /** Réactions : quelques-unes à la suite, pas plus, pour ne pas inonder la table. */
 const REACTIONS_PER_WINDOW = 4;
 const REACTIONS_WINDOW_MS = 5 * 1000;
@@ -365,6 +367,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const chatPerSocket = new RateLimiter(CHAT_MESSAGES, CHAT_WINDOW_MS);
   const reactionsPerSocket = new RateLimiter(REACTIONS_PER_WINDOW, REACTIONS_WINDOW_MS);
   const eventsPerSocket = new RateLimiter(limits.eventsPerSocket, limits.eventWindowMs);
+  // Mots de passe : quelques essais par quart d'heure, par adresse et par identifiant, pour qu'on ne les devine pas.
+  const loginsPerIp = new RateLimiter(limits.loginsPerIp, LOGIN_WINDOW_MS);
+  const loginsPerName = new RateLimiter(limits.loginsPerIp, LOGIN_WINDOW_MS);
 
   // Refuse les connexions d'une adresse qui en ouvre trop, en même temps ou à la suite.
   io.use((socket, next) => {
@@ -510,6 +515,29 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       socket.data.accountId = result.account.id;
       ack({ ok: true, account: accounts.view(result.account), session: accounts.session(result.account.id) });
     });
+    /** Connecte cette connexion au compte, et remet au navigateur la session qui le reconnectera tout seul. */
+    const signedIn = (account: NonNullable<ReturnType<typeof me>>) => {
+      socket.data.accountId = account.id;
+      return { ok: true as const, account: accounts.view(account), session: accounts.session(account.id) };
+    };
+    on('account:login', (payload, ack) => {
+      const login = text(payload.login).trim().toLowerCase();
+      if (!loginsPerIp.allow(socket.data.ip ?? '') || !loginsPerName.allow(login)) return ack({ ok: false, error: 'slowDown' });
+      const result = accounts.passwordSignIn(login, payload.password);
+      ack(result.ok ? signedIn(result.account) : result);
+    });
+    on('account:invite', (payload, ack) => {
+      if (!loginsPerIp.allow(socket.data.ip ?? '')) return ack({ ok: false, error: 'slowDown' });
+      const invite = accounts.findInvite(payload.code);
+      if (!invite) return ack({ ok: false, error: 'invalidInvite' });
+      const target = accounts.get(invite.account);
+      ack({ ok: true, invite: { reset: !!invite.account, ...(target?.login ? { login: target.login } : {}) } });
+    });
+    on('account:register', (payload, ack) => {
+      if (!loginsPerIp.allow(socket.data.ip ?? '')) return ack({ ok: false, error: 'slowDown' });
+      const result = accounts.register(payload.code, payload.login, payload.password);
+      ack(result.ok ? signedIn(result.account) : result);
+    });
     on('account:update', (payload, ack) => {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });
@@ -543,6 +571,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         accounts: accounts.list().map((a) => ({
           id: a.id,
           email: a.email,
+          ...(a.login ? { login: a.login } : {}),
           name: a.name ?? '',
           blocked: !!a.blocked,
           createdAt: a.createdAt,
@@ -563,6 +592,20 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       });
       if (result.ok && payload.name !== undefined) history.claim(accounts.get(id)!.name!, id);
       ack(result);
+    });
+    on('admin:invites', (_payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      ack({ ok: true, invites: accounts.activeInvites().map((i) => accounts.inviteView(i)) });
+    });
+    on('admin:invite', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      const result = accounts.createInvite(payload.accountId === undefined ? undefined : text(payload.accountId));
+      ack(result.ok ? { ok: true, invite: accounts.inviteView(result.invite) } : result);
+    });
+    on('admin:revokeInvite', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      accounts.revokeInvite(text(payload.code));
+      ack({ ok: true });
     });
     on('admin:unrank', (payload, ack) => {
       if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });

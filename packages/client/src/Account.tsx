@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { AVATARS, type AccountView, type AdminAccount, COLORS, type Look } from '../../server/src/protocol';
+import { AVATARS, type AccountView, type AdminAccount, COLORS, type InviteView, type Look } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { errorLabel } from './labels';
 import { socket } from './socket';
@@ -66,6 +66,200 @@ export function GoogleButton({ clientId, onCredential }: { clientId: string; onC
       <div className="google-button" ref={ref} />
       {failed && <p className="error">Impossible de joindre Google. Recharge la page.</p>}
     </>
+  );
+}
+
+/** Connexion d'un compte invité (sans Google) : identifiant et mot de passe. */
+export function PasswordSignIn({ onSignIn }: { onSignIn: (login: string, password: string) => Promise<string | null> }) {
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    const failure = await onSignIn(login, password);
+    setBusy(false);
+    if (failure) setError(errorLabel(failure));
+  }
+
+  return (
+    <form className="password-form" onSubmit={submit}>
+      <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Identifiant" autoComplete="username" aria-label="Identifiant" />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Mot de passe"
+        autoComplete="current-password"
+        aria-label="Mot de passe"
+      />
+      <button type="submit" disabled={busy || !login.trim() || !password}>
+        Se connecter
+      </button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+/**
+ * Lien d'invitation ouvert (?invitation=…) : l'invité choisit son identifiant et son mot de passe, ou seulement un
+ * nouveau mot de passe si l'admin lui a envoyé un lien pour son compte.
+ */
+export function InviteForm({
+  code,
+  onRegister,
+  onDone,
+}: {
+  code: string;
+  onRegister: (code: string, login: string, password: string) => Promise<string | null>;
+  onDone: () => void;
+}) {
+  const [invite, setInvite] = useState<{ reset: boolean; login?: string } | null | undefined>(undefined);
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [again, setAgain] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void socket.emitWithAck('account:invite', { code }).then((r) => {
+      setInvite(r.ok ? r.invite : null);
+      if (!r.ok && r.error !== 'invalidInvite') setError(errorLabel(r.error));
+    });
+  }, [code]);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (password !== again) return setError('Les deux mots de passe ne sont pas les mêmes.');
+    setBusy(true);
+    setError('');
+    const failure = await onRegister(code, login, password);
+    setBusy(false);
+    if (failure) setError(errorLabel(failure));
+    else onDone();
+  }
+
+  if (invite === undefined) return <p className="muted">Vérification du lien…</p>;
+  if (invite === null)
+    return (
+      <>
+        <p className="error">{error || 'Ce lien d’invitation n’est plus valable (il sert une fois, pendant une semaine). Demande-en un autre à l’admin.'}</p>
+        <button type="button" className="link" onClick={onDone}>
+          Retour à la connexion
+        </button>
+      </>
+    );
+  return (
+    <form className="password-form" onSubmit={submit}>
+      <p className="signin-hint">
+        {invite.reset ? (
+          <>
+            Choisis un nouveau mot de passe pour <b>{invite.login}</b>.
+          </>
+        ) : (
+          'Bienvenue ! Choisis ton identifiant et ton mot de passe : ils te serviront à te connecter.'
+        )}
+      </p>
+      {!invite.reset && (
+        <input
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+          placeholder="Identifiant (lettres, chiffres, . _ -)"
+          autoComplete="username"
+          aria-label="Identifiant"
+          maxLength={30}
+          autoFocus
+        />
+      )}
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Mot de passe (8 caractères au moins)"
+        autoComplete="new-password"
+        aria-label="Mot de passe"
+      />
+      <input
+        type="password"
+        value={again}
+        onChange={(e) => setAgain(e.target.value)}
+        placeholder="Le même, encore une fois"
+        autoComplete="new-password"
+        aria-label="Confirmation du mot de passe"
+      />
+      <button type="submit" className="primary" disabled={busy || (!invite.reset && !login.trim()) || !password || !again}>
+        {invite.reset ? 'Changer le mot de passe' : 'Créer mon compte'}
+      </button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+const inviteDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+/** Adresse complète d'un lien d'invitation, à envoyer à l'invité. */
+const inviteUrl = (code: string) => `${location.origin}/?invitation=${encodeURIComponent(code)}`;
+
+/** Liens d'invitation de l'admin : en créer un, le copier pour l'envoyer, ou le révoquer. */
+function Invites({ invites, onChange }: { invites: InviteView[]; onChange: () => Promise<void> }) {
+  const [copied, setCopied] = useState('');
+  const [error, setError] = useState('');
+
+  async function copy(code: string) {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(code));
+      setCopied(code);
+    } catch {
+      // Sans presse-papiers (navigateur ancien ou refus) : le lien reste affiché, à copier à la main.
+      setCopied('');
+    }
+  }
+
+  async function create() {
+    setError('');
+    const result = await socket.emitWithAck('admin:invite', {});
+    if (!result.ok) return setError(errorLabel(result.error));
+    await onChange();
+    await copy(result.invite.code);
+  }
+
+  async function revoke(code: string) {
+    await socket.emitWithAck('admin:revokeInvite', { code });
+    await onChange();
+  }
+
+  return (
+    <section className="admin-invites">
+      <h3>Invitations</h3>
+      <p className="muted small">
+        Pour un collègue sans compte Google : un lien qu’il ouvre pour choisir son identifiant et son mot de passe. Chaque lien sert
+        une fois, pendant une semaine.
+      </p>
+      <button type="button" onClick={() => void create()}>
+        ✉️ Créer un lien d’invitation
+      </button>
+      {error && <p className="error">{error}</p>}
+      {invites.length > 0 && (
+        <ul>
+          {invites.map((i) => (
+            <li key={i.code}>
+              <input readOnly value={inviteUrl(i.code)} onFocus={(e) => e.target.select()} aria-label="Lien d’invitation" />
+              <span className="muted small">
+                {i.account ? `Nouveau mot de passe pour ${i.account}` : 'Nouveau compte'} · jusqu’au {inviteDate.format(new Date(i.expiresAt))}
+              </span>
+              <button type="button" onClick={() => void copy(i.code)}>
+                {copied === i.code ? 'Copié ✓' : 'Copier'}
+              </button>
+              <button type="button" className="danger" onClick={() => void revoke(i.code)}>
+                Révoquer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -151,6 +345,7 @@ export function AccountForm({ account, onSaved, onCancel }: { account: AccountVi
 /** Gestion des comptes par l'admin : renommer, bloquer, retirer du classement, ou remettre le classement à zéro. */
 export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [accounts, setAccounts] = useState<AdminAccount[] | null>(null);
+  const [invites, setInvites] = useState<InviteView[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
 
@@ -159,6 +354,16 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     if (!result.ok) return setError(errorLabel(result.error));
     setAccounts(result.accounts);
     setNames(Object.fromEntries(result.accounts.map((a) => [a.id, a.name])));
+    const links = await socket.emitWithAck('admin:invites');
+    if (links.ok) setInvites(links.invites);
+  }
+
+  /** Mot de passe oublié : un lien pour que ce compte invité en choisisse un nouveau. */
+  async function resetLink(a: AdminAccount) {
+    setError('');
+    const result = await socket.emitWithAck('admin:invite', { accountId: a.id });
+    if (!result.ok) setError(errorLabel(result.error));
+    await load();
   }
 
   useEffect(() => {
@@ -176,7 +381,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   }
 
   async function unrank(a: AdminAccount) {
-    if (!confirm(`Retirer ${a.name || a.email} du classement ? Ses parties jouées jusqu'ici ne compteront plus.`)) return;
+    if (!confirm(`Retirer ${a.name || a.login || a.email} du classement ? Ses parties jouées jusqu'ici ne compteront plus.`)) return;
     setError('');
     const result = await socket.emitWithAck('admin:unrank', { id: a.id });
     if (!result.ok) setError(errorLabel(result.error));
@@ -198,6 +403,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           ✕
         </button>
         <h2>Comptes</h2>
+        {accounts && <Invites invites={invites} onChange={load} />}
         {!accounts && !error && <p className="muted">Chargement…</p>}
         {error && <p className="error">{error}</p>}
         <ul className="admin-accounts">
@@ -210,11 +416,16 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setNames({ ...names, [a.id]: e.target.value })}
                   maxLength={20}
                   placeholder="(pas de pseudo)"
-                  aria-label={`Pseudo de ${a.email}`}
+                  aria-label={`Pseudo de ${a.email || a.login}`}
                 />
-                <span className="muted small">{a.email}</span>
+                <span className="muted small">{a.login ? `🔑 ${a.login}` : a.email}</span>
               </div>
               {names[a.id] !== a.name && <button onClick={() => update(a.id, { name: names[a.id] })}>Renommer</button>}
+              {a.login && (
+                <button className="icon" onClick={() => void resetLink(a)} title="Lien pour choisir un nouveau mot de passe" aria-label={`Nouveau mot de passe pour ${a.login}`}>
+                  🔑
+                </button>
+              )}
               {a.ranked && (
                 <button className="danger icon" onClick={() => unrank(a)} title="Retirer du classement" aria-label={`Retirer ${a.name} du classement`}>
                   🏆✕

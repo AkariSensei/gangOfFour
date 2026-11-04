@@ -108,7 +108,12 @@ export type RoomError =
   | 'kicked'
   | 'paused'
   | 'tutorialMove'
-  | 'locked';
+  | 'locked'
+  | 'invalidInvite'
+  | 'invalidLogin'
+  | 'loginTaken'
+  | 'weakPassword'
+  | 'wrongPassword';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -134,10 +139,20 @@ export interface AccountView extends Look {
   title?: string;
 }
 
+/** Lien d'invitation, vu par l'admin ; `account` : le compte qui choisira un nouveau mot de passe avec. */
+export interface InviteView {
+  code: string;
+  createdAt: string;
+  expiresAt: string;
+  account?: string;
+}
+
 /** Ligne de la liste des comptes, vue par l'admin. */
 export interface AdminAccount extends Look {
   id: string;
+  /** Adresse Google, ou vide pour un compte invité (qui a alors un identifiant). */
   email: string;
+  login?: string;
   name: string;
   blocked: boolean;
   createdAt: string;
@@ -150,12 +165,23 @@ export interface ClientToServerEvents {
   'account:get': (ack: Ack<{ account: AccountView | null; googleClientId: string | null }>) => void;
   /** Connexion avec le jeton du bouton Google : renvoie la session à garder dans le navigateur. */
   'account:google': (payload: { credential: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
+  /** Connexion d'un compte invité, avec son identifiant et son mot de passe. */
+  'account:login': (payload: { login: string; password: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
+  /** Lien d'invitation ouvert : valable ou non, et pour un nouveau mot de passe, l'identifiant du compte visé. */
+  'account:invite': (payload: { code: string }, ack: Ack<{ invite: { reset: boolean; login?: string } }>) => void;
+  /** Utilise un lien d'invitation : crée le compte (ou change son mot de passe) et connecte aussitôt. */
+  'account:register': (payload: { code: string; login: string; password: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
   'account:update': (payload: { name: string } & Look, ack: Ack<{ account: AccountView }>) => void;
   'account:signOut': (ack: Ack) => void;
   /** Choisit son tapis, son cadre et son titre parmi ce qu'il a débloqué (vide : celui par défaut). */
   'account:cosmetics': (payload: { felt: string; frame: string; title: string }, ack: Ack<{ account: AccountView }>) => void;
   'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
   'admin:update': (payload: { id: string; name?: string; blocked?: boolean }, ack: Ack) => void;
+  /** Liens d'invitation encore valables. */
+  'admin:invites': (ack: Ack<{ invites: InviteView[] }>) => void;
+  /** Crée un lien d'invitation (une semaine, une fois) ; avec `accountId`, un lien de nouveau mot de passe pour ce compte invité. */
+  'admin:invite': (payload: { accountId?: string }, ack: Ack<{ invite: InviteView }>) => void;
+  'admin:revokeInvite': (payload: { code: string }, ack: Ack) => void;
   /** L'admin retire un compte du classement (ses parties jouées jusqu'ici ne comptent plus). */
   'admin:unrank': (payload: { id: string }, ack: Ack) => void;
   /** L'admin remet le classement à zéro : les parties jouées jusqu'ici sont archivées. */

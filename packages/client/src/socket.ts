@@ -66,15 +66,24 @@ export function useAccount() {
 
   const setAccount = useCallback((account: AccountView | null) => setState((s) => ({ ...s, account })), []);
 
-  const signIn = useCallback(
-    async (credential: string) => {
-      const result = await socket.emitWithAck('account:google', { credential });
+  /** Garde la session remise par le serveur (connexion Google, identifiant ou invitation) ; renvoie l'erreur sinon. */
+  const keep = useCallback(
+    (result: { ok: true; account: AccountView; session: string } | { ok: false; error: string }) => {
       if (!result.ok) return result.error;
       writeStorage('local', ACCOUNT_KEY, result.session);
       setAccount(result.account);
       return null;
     },
     [setAccount],
+  );
+  const signIn = useCallback(async (credential: string) => keep(await socket.emitWithAck('account:google', { credential })), [keep]);
+  const signInWithPassword = useCallback(
+    async (login: string, password: string) => keep(await socket.emitWithAck('account:login', { login, password })),
+    [keep],
+  );
+  const register = useCallback(
+    async (code: string, login: string, password: string) => keep(await socket.emitWithAck('account:register', { code, login, password })),
+    [keep],
   );
 
   const signOut = useCallback(async () => {
@@ -84,7 +93,7 @@ export function useAccount() {
     setAccount(null);
   }, [setAccount]);
 
-  return { ...state, setAccount, signIn, signOut };
+  return { ...state, setAccount, signIn, signInWithPassword, register, signOut };
 }
 
 function readSession(kind: 'local' | 'session', key: string): Session | null {

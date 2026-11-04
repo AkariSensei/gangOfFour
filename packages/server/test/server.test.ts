@@ -253,6 +253,69 @@ describe('serveur de jeu', () => {
     await changed; // l'accueil de chacun recharge le classement
   });
 
+  it("crée un compte sans Google par un lien d'invitation de l'admin, qui ne sert qu'une fois", async () => {
+    // Beaucoup d'essais d'affilée depuis la même adresse : la limite est vérifiée dans le test suivant.
+    await start({ adminEmail: 'chef@exemple.fr', limits: { loginsPerIp: 100 } });
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    const invited = connect(null);
+    expect(await invited.emitWithAck('admin:invite', {})).toEqual({ ok: false, error: 'notAdmin' });
+    const created = await admin.emitWithAck('admin:invite', {});
+    if (!created.ok) throw new Error(created.error);
+    const { code } = created.invite;
+    expect(await admin.emitWithAck('admin:invites')).toMatchObject({ ok: true, invites: [{ code }] });
+
+    // L'invité ouvre le lien, choisit un identifiant et un mot de passe, et le voilà connecté (sans pseudo encore).
+    expect(await invited.emitWithAck('account:invite', { code: 'inventé' })).toEqual({ ok: false, error: 'invalidInvite' });
+    expect(await invited.emitWithAck('account:invite', { code })).toEqual({ ok: true, invite: { reset: false } });
+    expect(await invited.emitWithAck('account:register', { code, login: 'a', password: 'motdepasse' })).toEqual({ ok: false, error: 'invalidLogin' });
+    expect(await invited.emitWithAck('account:register', { code, login: 'camille', password: 'court' })).toEqual({ ok: false, error: 'weakPassword' });
+    const registered = await invited.emitWithAck('account:register', { code, login: ' Camille ', password: 'motdepasse' });
+    if (!registered.ok) throw new Error(registered.error);
+    expect(registered.account).toMatchObject({ email: '', name: '' });
+    expect(await invited.emitWithAck('account:update', { name: 'Camille' })).toMatchObject({ ok: true });
+    // Le lien a servi : il ne marche plus, et la session reconnecte toute seule.
+    expect(await invited.emitWithAck('account:register', { code, login: 'autre', password: 'motdepasse' })).toEqual({ ok: false, error: 'invalidInvite' });
+    expect(await admin.emitWithAck('admin:invites')).toEqual({ ok: true, invites: [] });
+    expect(await connectWith({ session: registered.session }).emitWithAck('account:get')).toMatchObject({ account: { name: 'Camille' } });
+
+    // Connexion avec l'identifiant (sans tenir compte des majuscules), et refus d'un mauvais mot de passe.
+    const other = connect(null);
+    expect(await other.emitWithAck('account:login', { login: 'camille', password: 'mauvais' })).toEqual({ ok: false, error: 'wrongPassword' });
+    expect(await other.emitWithAck('account:login', { login: 'personne', password: 'motdepasse' })).toEqual({ ok: false, error: 'wrongPassword' });
+    expect(await other.emitWithAck('account:login', { login: 'CAMILLE', password: 'motdepasse' })).toMatchObject({ ok: true, account: { name: 'Camille' } });
+
+    // Mot de passe oublié : l'admin fait un lien pour ce compte, qui garde son identifiant.
+    const list = await admin.emitWithAck('admin:accounts');
+    const id = list.ok ? list.accounts.find((a) => a.login === 'camille')!.id : '';
+    expect(await admin.emitWithAck('admin:invite', { accountId: 'chef' })).toEqual({ ok: false, error: 'accountNotFound' });
+    const reset = await admin.emitWithAck('admin:invite', { accountId: id });
+    if (!reset.ok) throw new Error(reset.error);
+    expect(reset.invite.account).toBe('Camille');
+    expect(await other.emitWithAck('account:invite', { code: reset.invite.code })).toEqual({ ok: true, invite: { reset: true, login: 'camille' } });
+    expect(await other.emitWithAck('account:register', { code: reset.invite.code, login: 'ignoré', password: 'nouveau-mot' })).toMatchObject({
+      ok: true,
+      account: { name: 'Camille' },
+    });
+    expect(await other.emitWithAck('account:login', { login: 'camille', password: 'motdepasse' })).toEqual({ ok: false, error: 'wrongPassword' });
+    expect(await other.emitWithAck('account:login', { login: 'camille', password: 'nouveau-mot' })).toMatchObject({ ok: true });
+
+    // Un lien révoqué ne sert plus, et un compte bloqué ne se connecte plus.
+    const revoked = await admin.emitWithAck('admin:invite', {});
+    if (!revoked.ok) throw new Error(revoked.error);
+    expect(await admin.emitWithAck('admin:revokeInvite', { code: revoked.invite.code })).toEqual({ ok: true });
+    expect(await other.emitWithAck('account:invite', { code: revoked.invite.code })).toEqual({ ok: false, error: 'invalidInvite' });
+    expect(await admin.emitWithAck('admin:update', { id, blocked: true })).toEqual({ ok: true });
+    expect(await other.emitWithAck('account:login', { login: 'camille', password: 'nouveau-mot' })).toEqual({ ok: false, error: 'blocked' });
+  });
+
+  it("limite les essais de mot de passe par identifiant", async () => {
+    await start({ limits: { loginsPerIp: 3 } });
+    const client = connect(null);
+    for (let i = 0; i < 3; i++) expect(await client.emitWithAck('account:login', { login: 'camille', password: 'x' })).toMatchObject({ error: 'wrongPassword' });
+    expect(await client.emitWithAck('account:login', { login: 'camille', password: 'x' })).toEqual({ ok: false, error: 'slowDown' });
+  });
+
   it('supprime un salon abandonné après le délai', async () => {
     await start({ abandonDelayMs: 50 });
     const { code, players } = await lobby(3);
