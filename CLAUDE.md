@@ -22,7 +22,7 @@ Avant de considérer un changement terminé : `npm run typecheck && npm test && 
 - `packages/server` : Node + Socket.IO, fait autorité sur la partie. Types du protocole partagés avec le client dans `src/protocol.ts`.
   - `server.ts` (commandes Socket.IO), `rooms.ts` (salons, sièges, bots remplaçants, pause, exclusion), `bot.ts` (IA des bots).
   - `accounts.ts` + `google.ts` : comptes Google, sessions signées, admin (`ADMIN_EMAIL`).
-  - `history.ts` (parties terminées, classements), `badges.ts`, `limits.ts` (anti-abus), `errors.ts` (journal d'erreurs), `static.ts` (sert l'interface en production).
+  - `history.ts` (parties terminées, classements), `progression.ts` (niveau Gang of Four et récompenses), `daily.ts` (série de jours joués), `limits.ts` (anti-abus), `errors.ts` (journal d'erreurs), `static.ts` (sert l'interface en production).
   - `scripts/` : bot de test et `demo`.
 - `packages/client` : React 18 + Vite. Ne contient pas de règles du jeu : il affiche la vue (`game:state`) envoyée par le serveur. L'essentiel de la partie est dans `Table.tsx` ; les cartes sont des images dans `public/cards/`. Thème sombre uniquement, pas de sons.
 - `client` et `server` dépendent de `@gof/engine` (importé directement depuis ses sources).

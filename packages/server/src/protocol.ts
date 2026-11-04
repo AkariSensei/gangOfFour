@@ -1,20 +1,12 @@
 import type { ActionError, Card, PlayerView } from '@gof/engine';
-import type { Badge } from './badges';
 import type { BotLevel } from './bot';
-import type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
-import type { MissionStatus } from './daily';
-import type { EventResult as TripotEvent, TripotView } from './tripot';
 import type { Progress } from './progression';
 import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
 
 export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
-export type { Badge } from './badges';
 export type { BotLevel } from './bot';
-export type { ChallengeOverallEntry, ChallengeRankEntry } from './challenges';
 export type { Progress, Reward, Unlocks } from './progression';
-export type { MissionStatus } from './daily';
-export type { DealtHand, EventResult as TripotEvent, HandType, TripotView } from './tripot';
-export { FELTS, FRAMES, LEVEL_TITLES, SEASON_FRAME, SEASON_MIN_GAMES, SEASON_XP } from './progression';
+export { FELTS, FRAMES, LEVEL_TITLES, MAX_LEVEL } from './progression';
 
 /** Réactions qu'un joueur peut envoyer à la table pendant la partie (le serveur refuse tout le reste). */
 export const REACTIONS = ['👍', '😂', '😱', '😡', '👏', '🔥'];
@@ -62,8 +54,6 @@ export interface RoomView {
   spectators: number;
   /** L'hôte a mis la partie en pause : personne ne joue, le minuteur est gelé. */
   paused: boolean;
-  /** Défi du jour (une seule manche contre trois bots difficiles) : son jour et les coups joués jusqu'ici. */
-  challenge?: { day: string; moves: number };
   /**
    * Tutoriel : quand c'est au joueur, l'explication (`coach`) et les cartes à poser (`expect`, vide pour passer) ;
    * pendant le tour des bots, les deux sont null. `step` sur `total` : où il en est.
@@ -71,26 +61,9 @@ export interface RoomView {
   tutorial?: { coach: string | null; expect: string[] | null; step: number; total: number };
 }
 
-/** Le défi du jour vu par un joueur : son essai, et les classements. */
-export interface ChallengeView {
-  day: string;
-  /** Son essai du jour : absent s'il n'a pas encore joué, sans résultat tant que la manche est en cours. */
-  mine: { finished: boolean; won?: boolean; moves?: number; cardsLeft?: number; rank?: number } | null;
-  today: ChallengeRankEntry[];
-  overall: ChallengeOverallEntry[];
-}
-
-/** Podium d'une saison terminée (`month` : « 2026-10 », `name` : « octobre 2026 »). */
-export interface SeasonResult {
-  month: string;
-  name: string;
-  podium: { name: string; wins: number; games: number }[];
-}
-
-/** Missions du jour et série de jours joués d'un joueur. */
+/** Série de jours joués d'un joueur. */
 export interface DailyView {
   day: string;
-  missions: MissionStatus[];
   /** Jours de jeu d'affilée (le week-end ne casse pas la série) ; `playedToday` : la série a déjà avancé aujourd'hui. */
   streak: number;
   playedToday: boolean;
@@ -134,13 +107,8 @@ export type RoomError =
   | 'muted'
   | 'kicked'
   | 'paused'
-  | 'challengeAlreadyPlayed'
   | 'tutorialMove'
-  | 'locked'
-  | 'forbidden'
-  | 'tooExpensive'
-  | 'notAvailable'
-  | 'unknownItem';
+  | 'locked';
 
 export type Ack<T = object> = (result: ({ ok: true } & T) | { ok: false; error: RoomError | ActionError }) => void;
 
@@ -160,10 +128,6 @@ export interface AccountView extends Look {
   /** Pseudo unique ; vide tant que le joueur ne l'a pas choisi. */
   name: string;
   admin: boolean;
-  /** Accès au Tripot, encore réservé à quelques comptes. */
-  tripot: boolean;
-  /** Badges choisis pour sa fiche. */
-  showcase: string[];
   /** Récompenses choisies : le tapis (vu par lui seul), le cadre et le titre (vus de tous). */
   felt?: string;
   frame?: string;
@@ -188,8 +152,6 @@ export interface ClientToServerEvents {
   'account:google': (payload: { credential: string }, ack: Ack<{ account: AccountView; session: string }>) => void;
   'account:update': (payload: { name: string } & Look, ack: Ack<{ account: AccountView }>) => void;
   'account:signOut': (ack: Ack) => void;
-  /** Choisit les badges (trois au plus) montrés sur sa fiche ; une liste vide revient aux plus rares. */
-  'account:showcase': (payload: { badgeIds: string[] }, ack: Ack<{ account: AccountView }>) => void;
   /** Choisit son tapis, son cadre et son titre parmi ce qu'il a débloqué (vide : celui par défaut). */
   'account:cosmetics': (payload: { felt: string; frame: string; title: string }, ack: Ack<{ account: AccountView }>) => void;
   'admin:accounts': (ack: Ack<{ accounts: AdminAccount[] }>) => void;
@@ -232,33 +194,11 @@ export interface ClientToServerEvents {
       botMonthly: LeaderboardEntry[];
       recent: GameRecord[];
       streak: WinStreak | null;
-      /** Podiums des saisons terminées (une par mois), de la plus récente à la plus ancienne. */
-      seasons: SeasonResult[];
     }>,
   ) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
-  /** Défi du jour : son essai et les classements (sans compte, `mine` est null). */
-  'challenge:get': (ack: Ack<{ challenge: ChallengeView }>) => void;
-  /** Relève le défi du jour : une seule fois par jour, la manche démarre aussitôt. */
-  'challenge:start': (ack: Ack<Session>) => void;
-  /** Missions du jour du joueur connecté (les mêmes pour tous, avec son avancée), et sa série de jours joués. */
+  /** Série de jours joués du joueur connecté. */
   'daily:get': (ack: Ack<{ daily: DailyView }>) => void;
-  /** Le Tripot (réservé) : sa partie, avec la production pendant l'absence. */
-  'tripot:get': (ack: Ack<{ tripot: TripotView }>) => void;
-  /** Envoie les donnes distribuées depuis le dernier envoi (groupées, plafonnées par le serveur). */
-  'tripot:sync': (payload: { deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
-  /**
-   * Achat d'une activité (1, 10 ou autant que possible), d'une amélioration, de toutes celles qu'on peut s'offrir
-   * (`allUpgrades`, sans `id`) ou d'une faveur du milieu, avec les donnes en attente.
-   */
-  'tripot:buy': (
-    payload: { kind: 'building' | 'upgrade' | 'allUpgrades' | 'favor'; id?: string; deals: number; count?: number | 'max' },
-    ack: Ack<{ tripot: TripotView }>,
-  ) => void;
-  /** S'agrandir : repartir de zéro en encaissant la réputation méritée. */
-  'tripot:prestige': (ack: Ack<{ tripot: TripotView }>) => void;
-  /** Attraper le Dragon, le Phénix ou le 1 multicolore qui passe sur la table. */
-  'tripot:catch': (payload: { deals: number }, ack: Ack<{ tripot: TripotView; event: TripotEvent }>) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;
 }
@@ -282,8 +222,6 @@ export interface ServerToClientEvents {
   'room:kicked': () => void;
   /** Le classement a changé (partie finie, remise à zéro…) : l'accueil le recharge. */
   'stats:changed': () => void;
-  /** Badges que ce joueur vient d'obtenir avec la partie qui se termine. */
-  'badges:won': (badges: Badge[]) => void;
   /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */
   'progress:gained': (gain: { gained: number; before: Progress; after: Progress; rewards: string[] }) => void;
 }

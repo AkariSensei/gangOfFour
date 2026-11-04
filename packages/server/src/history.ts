@@ -1,21 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
-import { type Badge, SHOWCASE_SIZE, badgesOf, liveBadgesOf } from './badges';
 import { BOT_LEVELS, type BotLevel } from './bot';
-import { type ChallengeStats, NO_CHALLENGE, dayOf } from './challenges';
-import { type DayActivity, type MissionStatus, missionStatus, missionXp, streakOf } from './daily';
-import {
-  type GameForXp,
-  type Progress,
-  SEASON_MIN_GAMES,
-  SEASON_XP,
-  type SeasonPlace,
-  type Unlocks,
-  progressOf,
-  totalXp,
-  unlocksOf,
-} from './progression';
+import { dayOf, streakOf } from './daily';
+import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
 export interface GameRecord {
   finishedAt: string;
@@ -59,9 +47,6 @@ export interface PlayerProfile {
    * niveaux, sans niveau enregistré, n'y sont pas).
    */
   vsBots: { level: BotLevel; games: number; wins: number }[];
-  badges: Badge[];
-  /** Badges montrés sur sa fiche : ceux qu'il a choisis, complétés par ses plus rares. */
-  showcase: Badge[];
   /** Niveau et expérience, et ce qu'ils débloquent (tapis, cadres, titres). */
   progress: Progress;
   unlocks: Unlocks;
@@ -98,7 +83,7 @@ function topBotLevel(record: GameRecord): BotLevel | undefined {
 
 /** Ce que l'historique doit savoir des comptes : leur pseudo actuel, et quel compte porte un pseudo. */
 export interface AccountNames {
-  get(id: string | undefined): { name?: string; showcase?: string[]; title?: string; frame?: string } | undefined;
+  get(id: string | undefined): { name?: string; title?: string; frame?: string } | undefined;
   byName(name: string): { id: string } | undefined;
 }
 
@@ -113,15 +98,6 @@ export class GameHistory {
   constructor(
     private file?: string,
     private accounts?: AccountNames,
-    /** Défis du jour, qui donnent eux aussi des badges. */
-    private challenges?: {
-      statsOf(account: string): ChallengeStats;
-      players(): string[];
-      resultsOf(account: string): { day: string; won: boolean }[];
-      version: number;
-    },
-    /** Expérience versée par la rente du Tripot (une fois le Tripot ouvert à tous). */
-    private tripotRent?: (owner: string) => number,
   ) {
     if (!file) return;
     try {
@@ -146,22 +122,6 @@ export class GameHistory {
     this.records.push(record);
     this.save();
     return record;
-  }
-
-  /**
-   * Badges « en direct » d'un compte en comptant la partie en cours (gangs posés, manches gagnées, pire manche…) :
-   * ceux qu'on peut gagner pendant la partie, et donc annoncer dès qu'ils tombent.
-   */
-  liveBadgesOfAccount(
-    accountId: string,
-    game: GameState,
-    bots: number[],
-    accounts: (string | undefined)[],
-    levels: (BotLevel | undefined)[] = [],
-  ): Badge[] {
-    const record = this.toRecord(game, new Date(), bots, accounts, levels);
-    const me = record.players.find((p) => this.ranked(p) && this.owner(p) === accountId);
-    return liveBadgesOf(me ? [...this.gamesOf(accountId), { record, me }] : this.gamesOf(accountId));
   }
 
   private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[], levels: (BotLevel | undefined)[] = []): GameRecord {
@@ -194,7 +154,7 @@ export class GameHistory {
     return mode ? this.counted.filter((r) => this.online(r) === (mode === 'online')) : this.counted;
   }
 
-  /** Ce joueur compte-t-il dans le classement, les records et les badges ? */
+  /** Ce joueur compte-t-il dans le classement, les records et le niveau ? */
   private ranked(player: GameRecord['players'][number]): boolean {
     return !player.bot && !player.removed;
   }
@@ -216,13 +176,7 @@ export class GameHistory {
     return this.counted.some((r) => r.players.some((p) => this.ranked(p) && p.account === accountId));
   }
 
-  /** Change à chaque modification de l'historique (partie ajoutée, remise à zéro, retrait, pseudo repris). */
-  private version = 0;
-  /** Rareté des badges, recalculée seulement quand l'historique ou les défis ont changé. */
-  private rarity?: { key: string; value: Record<string, number> };
-
   private save() {
-    this.version += 1;
     if (!this.file) return;
     try {
       mkdirSync(dirname(this.file), { recursive: true });
@@ -305,32 +259,6 @@ export class GameHistory {
   }
 
   /**
-   * Podium de chaque saison terminée (chaque mois avant le mois en cours, à l'heure de Paris), du plus récent au plus
-   * ancien : les trois premiers du classement en ligne du mois, parmi ceux qui y ont joué assez de parties.
-   */
-  seasons(now = new Date()): { month: string; podium: { owner: string; name: string; wins: number; games: number }[] }[] {
-    const current = monthOf(now);
-    const months = [...new Set(this.ofMode('online').map((r) => monthOf(new Date(r.finishedAt))))].filter((m) => m < current).sort().reverse();
-    return months
-      .map((month) => ({
-        month,
-        podium: this.ranking(month, 'online')
-          .filter((e) => e.games >= SEASON_MIN_GAMES)
-          .slice(0, 3)
-          .map(({ owner, name, wins, games }) => ({ owner, name, wins, games })),
-      }))
-      .filter((s) => s.podium.length > 0);
-  }
-
-  /** Places d'un joueur sur les podiums des saisons terminées. */
-  private seasonsOf(owner: string): SeasonPlace[] {
-    return this.seasons().flatMap((s) => {
-      const index = s.podium.findIndex((p) => p.owner === owner);
-      return index >= 0 ? [{ month: s.month, place: index + 1 }] : [];
-    });
-  }
-
-  /**
    * Record du bureau : la plus longue série de parties gagnées d'affilée par un compte (une victoire partagée compte).
    * À égalité, le record reste à celui qui l'a atteint en premier. Null tant que personne n'a gagné deux fois de suite.
    */
@@ -356,23 +284,17 @@ export class GameHistory {
     });
   }
 
-  /** Badges d'un compte, pour repérer ceux qu'une partie vient de lui faire gagner. */
-  badgesOfAccount(accountId: string): Badge[] {
-    return badgesOf(this.gamesOf(accountId), this.challengesOf(accountId));
-  }
-
-  /** Niveau d'un joueur (compte, ou « pseudo:… » d'avant les comptes), calculé depuis toutes ses parties, défis et badges. */
+  /** Niveau d'un joueur à Gang of Four (compte, ou « pseudo:… » d'avant les comptes), calculé depuis toutes ses parties. */
   progressOfAccount(owner: string): Progress {
-    return progressOf(this.xpOf(owner, badgesOf(this.gamesOf(owner), this.challengesOf(owner))));
+    return progressOf(this.xpOf(owner));
   }
 
   /** Récompenses qu'un joueur a débloquées, pour vérifier celles qu'il choisit. */
   unlocksOfAccount(owner: string): Unlocks {
-    const badges = badgesOf(this.gamesOf(owner), this.challengesOf(owner));
-    return unlocksOf(progressOf(this.xpOf(owner, badges)).level, badges, this.seasonsOf(owner));
+    return unlocksOf(this.progressOfAccount(owner).level);
   }
 
-  private xpOf(owner: string, badges: Badge[]): number {
+  private xpOf(owner: string): number {
     const games: GameForXp[] = this.gamesOf(owner).map(({ record, me }) => ({
       rank: 1 + record.players.filter((p) => p.score < me.score).length,
       players: record.players.length,
@@ -380,95 +302,36 @@ export class GameHistory {
       gangs: me.gangs ?? 0,
       vsBots: record.players.filter((p) => !p.bot).length >= 2 ? null : (topBotLevel(record) ?? 'unknown'),
     }));
-    // Missions accomplies chaque jour, et série de jours joués.
-    const days = this.daysOf(owner);
-    const missions = [...days].reduce((total, [day, activity]) => total + missionXp(day, activity), 0);
-    const seasons = this.seasonsOf(owner).reduce((total, s) => total + (SEASON_XP[s.place - 1] ?? 0), 0);
-    const rent = this.tripotRent?.(owner) ?? 0;
-    return totalXp(games, this.challengesOf(owner), badges) + missions + streakOf([...days.keys()], dayOf(new Date())).bonus + seasons + rent;
+    return totalXp(games);
   }
 
   /**
-   * Ce qu'un joueur a fait chaque jour (à l'heure de Paris) : ses parties qui rapportent de l'expérience (en ligne, ou
-   * seul contre des bots tous difficiles) et son défi du jour terminé.
+   * Série de jours joués d'un joueur : les jours (à l'heure de Paris) où il a fini une partie qui rapporte de
+   * l'expérience (en ligne, ou seul contre des bots tous difficiles).
    */
-  private daysOf(owner: string): Map<string, DayActivity> {
-    const days = new Map<string, DayActivity>();
-    const at = (day: string) => {
-      if (!days.has(day)) days.set(day, { games: [], challenge: null });
-      return days.get(day)!;
-    };
-    for (const { record, me } of this.gamesOf(owner)) {
-      const online = record.players.filter((p) => !p.bot).length >= 2;
-      if (!online && topBotLevel(record) !== 'hard') continue;
-      at(dayOf(new Date(record.finishedAt))).games.push({
-        online,
-        rank: 1 + record.players.filter((p) => p.score < me.score).length,
-        players: record.players.length,
-        score: me.score,
-        roundsWon: me.roundsWon ?? 0,
-        gangs: me.gangs ?? 0,
-      });
-    }
-    if (!owner.startsWith('pseudo:')) for (const r of this.challenges?.resultsOf(owner) ?? []) at(r.day).challenge = { won: r.won };
-    return days;
-  }
-
-  /** Les missions du jour d'un joueur et sa série de jours joués. */
-  dailyOfAccount(owner: string, now = new Date()): { day: string; missions: MissionStatus[]; streak: number; playedToday: boolean } {
+  dailyOfAccount(owner: string, now = new Date()): { day: string; streak: number; playedToday: boolean } {
     const today = dayOf(now);
-    const days = this.daysOf(owner);
-    const streak = streakOf([...days.keys()], today);
-    return { day: today, missions: missionStatus(today, days.get(today) ?? { games: [], challenge: null }), streak: streak.current, playedToday: streak.playedToday };
+    const days = this.gamesOf(owner)
+      .filter(({ record }) => record.players.filter((p) => !p.bot).length >= 2 || topBotLevel(record) === 'hard')
+      .map(({ record }) => dayOf(new Date(record.finishedAt)));
+    const streak = streakOf(days, today);
+    return { day: today, streak: streak.current, playedToday: streak.playedToday };
   }
 
-  /**
-   * Part des joueurs (tous ceux qui ont une partie au classement ou un défi terminé) qui ont obtenu chaque badge,
-   * en pourcentage arrondi : plus il est bas, plus le badge est rare.
-   */
-  badgeRarity(): Record<string, number> {
-    // Le podium du défi dépend aussi du jour : le cache change donc à minuit, heure de Paris.
-    const key = `${this.version}/${this.challenges?.version ?? 0}/${dayOf(new Date())}`;
-    if (this.rarity?.key !== key) this.rarity = { key, value: this.computeRarity() };
-    return this.rarity.value;
-  }
-
-  private computeRarity(): Record<string, number> {
-    const owners = new Set([
-      ...this.counted.flatMap((r) => r.players.filter((p) => this.ranked(p)).map((p) => this.owner(p))),
-      ...(this.challenges?.players() ?? []),
-    ]);
-    const counts: Record<string, number> = {};
-    for (const owner of owners) {
-      for (const b of badgesOf(this.gamesOf(owner), this.challengesOf(owner))) if (b.value >= b.goal) counts[b.id] = (counts[b.id] ?? 0) + 1;
-    }
-    return Object.fromEntries(badgesOf([]).map((b) => [b.id, owners.size ? Math.round((100 * (counts[b.id] ?? 0)) / owners.size) : 0]));
-  }
-
-  private challengesOf(owner: string): ChallengeStats {
-    return owner.startsWith('pseudo:') ? NO_CHALLENGE : (this.challenges?.statsOf(owner) ?? NO_CHALLENGE);
-  }
-
-  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué (ni relevé de défi). */
+  /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
   profile(name: string): PlayerProfile | null {
     const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
     const games = this.gamesOf(owner);
-    const challenges = this.challengesOf(owner);
-    if (games.length === 0 && challenges.played === 0) return null;
+    if (games.length === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
-    const rarity = this.badgeRarity();
-    const badges = badgesOf(games, challenges).map((b) => ({ ...b, percent: rarity[b.id] ?? 0 }));
-    const earned = badges.filter((b) => b.value >= b.goal);
-    const chosen = (this.accounts?.get(owner)?.showcase ?? []).flatMap((id) => earned.filter((b) => b.id === id));
-    const rarest = [...earned].sort((a, b) => a.percent - b.percent).filter((b) => !chosen.includes(b));
-    const progress = progressOf(this.xpOf(owner, badges));
+    const progress = progressOf(this.xpOf(owner));
     const account = this.accounts?.get(owner);
     return {
-      name: games.length > 0 ? this.displayName(games[games.length - 1]!.me) : (this.accounts?.get(owner)?.name ?? name),
+      name: this.displayName(games[games.length - 1]!.me),
       games: games.length,
       wins: games.filter((g) => g.me.winner).length,
-      averageScore: games.length > 0 ? Math.round(sum((g) => g.me.score) / games.length) : 0,
-      bestScore: games.length > 0 ? Math.min(...games.map((g) => g.me.score)) : 0,
+      averageScore: Math.round(sum((g) => g.me.score) / games.length),
+      bestScore: Math.min(...games.map((g) => g.me.score)),
       roundsPlayed: sum((g) => g.record.rounds),
       roundsWon: sum((g) => g.me.roundsWon ?? 0),
       gangs: sum((g) => g.me.gangs ?? 0),
@@ -487,10 +350,8 @@ export class GameHistory {
           rank: 1 + record.players.filter((p) => p.score < me.score).length,
           players: record.players.length,
         })),
-      badges,
-      showcase: [...chosen, ...rarest].slice(0, SHOWCASE_SIZE),
       progress,
-      unlocks: unlocksOf(progress.level, badges, this.seasonsOf(owner)),
+      unlocks: unlocksOf(progress.level),
       ...(account?.title ? { title: account.title } : {}),
       ...(account?.frame ? { frame: account.frame } : {}),
     };

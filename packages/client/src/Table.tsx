@@ -160,7 +160,7 @@ function Opponent({
 
 /**
  * Jauge du score vers le score de fin de partie, sous chaque score de l'en-tête : elle se remplit manche après manche,
- * rougit passé les trois quarts, et bat quand le joueur approche de la fin. Rien pour le défi ou le tutoriel (une seule manche).
+ * rougit passé les trois quarts, et bat quand le joueur approche de la fin. Rien pour le tutoriel (une seule manche).
  */
 function ScoreGauge({ score, target }: { score: number; target: number }) {
   if (target <= 1) return null;
@@ -279,34 +279,15 @@ function TutorialOutcome() {
   );
 }
 
-/** Fin du défi du jour : manche gagnée en N coups, ou cartes restées en main. */
-function ChallengeOutcome({ game, moves }: { game: PlayerView; moves: number }) {
-  const won = game.lastRound?.winnerIndex === game.you;
-  const left = game.lastRound?.hands[game.you]?.length ?? 0;
-  return (
-    <div className={`challenge-outcome ${won ? 'won' : 'lost'}`}>
-      <h2>{won ? '🎉 Défi relevé !' : '😬 Défi raté'}</h2>
-      <p>
-        {won
-          ? `Tu as vidé ta main en ${moves} coup${moves > 1 ? 's' : ''}.`
-          : `Il te restait ${left} carte${left > 1 ? 's' : ''} en main.`}{' '}
-        Ta place du jour est dans le classement du défi, sur l'accueil. Prochain défi demain !
-      </p>
-    </div>
-  );
-}
-
 function RoundOver({
   game,
   seats,
-  challenge,
   tutorial,
   gain,
   onExit,
 }: {
   game: PlayerView;
   seats: RoomView['players'];
-  challenge?: RoomView['challenge'];
   tutorial?: boolean;
   /** Expérience que la partie vient de rapporter au joueur. */
   gain?: ProgressGain | null;
@@ -324,8 +305,6 @@ function RoundOver({
       <div className={`panel modal pop-in ${over ? 'game-over' : ''}`}>
         {over && tutorial ? (
           <TutorialOutcome />
-        ) : over && challenge && game.you >= 0 ? (
-          <ChallengeOutcome game={game} moves={challenge.moves} />
         ) : over ? (
           <>
             <h2>{winnerNames} gagne la partie !</h2>
@@ -383,12 +362,12 @@ function RoundOver({
         {over && gain && <XpGain gain={gain} />}
         {over ? (
           <div className="end-actions">
-            {game.you >= 0 && !challenge && !tutorial && (
+            {game.you >= 0 && !tutorial && (
               <button className="primary big" disabled={wait > 0} onClick={() => socket.emitWithAck('game:rematch')}>
                 Revanche{suffix}
               </button>
             )}
-            <button className={game.you >= 0 && !challenge && !tutorial ? 'big' : 'primary big'} onClick={onExit}>
+            <button className={game.you >= 0 && !tutorial ? 'big' : 'primary big'} onClick={onExit}>
               Retour à l'accueil
             </button>
           </div>
@@ -1046,9 +1025,7 @@ export function Table({
   }
 
   function leave() {
-    const question = room.challenge
-      ? "Abandonner le défi du jour ? Ton essai compte quand même, avec les cartes qu'il te reste."
-      : 'Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.';
+    const question = 'Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.';
     if (spectator || room.tutorial || game.phase === 'gameOver' || confirm(question)) void exit();
   }
 
@@ -1091,8 +1068,6 @@ export function Table({
         <div className="header-left">
           {room.tutorial ? (
             <span className="round">Tutoriel</span>
-          ) : room.challenge ? (
-            <span className="round">Défi du jour</span>
           ) : (
             <>
               <span className="round">Manche {game.round}</span>
@@ -1342,7 +1317,7 @@ export function Table({
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       {/* Dans le tutoriel, l'explication au-dessus de la main dit déjà quoi faire : pas de grande annonce par-dessus. */}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown || room.tutorial ? null : bannerText} />
-      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} challenge={room.challenge} tutorial={!!room.tutorial} gain={gain} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} tutorial={!!room.tutorial} gain={gain} onExit={exit} />}
       {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );

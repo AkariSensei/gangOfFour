@@ -1,7 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { BADGE_IDS, SHOWCASE_SIZE } from './badges';
 import type { GoogleIdentity } from './google';
 import type { AccountView, Look, RoomError } from './protocol';
 import { cleanLook, cleanName } from './rooms';
@@ -15,8 +14,6 @@ export interface Account extends Look {
   name?: string;
   /** Compte bloqué par l'admin : il ne peut plus jouer. */
   blocked?: boolean;
-  /** Badges que le joueur a choisi de montrer sur sa fiche (trois au plus) ; sans choix, ses plus rares. */
-  showcase?: string[];
   /** Récompenses choisies (vérifiées comme débloquées avant d'être enregistrées) : tapis, cadre d'avatar, titre. */
   felt?: string;
   frame?: string;
@@ -42,8 +39,6 @@ export class AccountStore {
   constructor(
     private file?: string,
     private adminEmail?: string,
-    /** Adresses autorisées à jouer au Tripot pendant ses essais (l'admin l'est toujours). */
-    private tripotEmails: string[] = [],
   ) {
     if (!file) return;
     try {
@@ -80,19 +75,6 @@ export class AccountStore {
     return !!account && !!this.adminEmail && account.email.toLowerCase() === this.adminEmail.toLowerCase();
   }
 
-  /** Le Tripot est ouvert à tous (« * » dans TRIPOT_EMAILS) : sa rente d'expérience compte alors. */
-  get tripotOpen(): boolean {
-    return this.tripotEmails.includes('*');
-  }
-
-  /** Le Tripot est encore en essai : seuls l'admin et les adresses choisies y ont accès (les autres ne le voient pas). */
-  canPlayTripot(account: Account | undefined): boolean {
-    return (
-      !!account &&
-      (this.tripotOpen || this.isAdmin(account) || this.tripotEmails.some((e) => e.toLowerCase() === account.email.toLowerCase()))
-    );
-  }
-
   view(account: Account): AccountView {
     return {
       id: account.id,
@@ -100,8 +82,6 @@ export class AccountStore {
       name: account.name ?? '',
       ...cleanLook(account),
       admin: this.isAdmin(account),
-      tripot: this.canPlayTripot(account),
-      showcase: account.showcase ?? [],
       ...(account.felt ? { felt: account.felt } : {}),
       ...(account.frame ? { frame: account.frame } : {}),
       ...(account.title ? { title: account.title } : {}),
@@ -127,7 +107,7 @@ export class AccountStore {
   /** Modifie un compte : pseudo, apparence, ou blocage (ce dernier par l'admin seulement). */
   update(
     id: string,
-    change: { name?: unknown; look?: unknown; blocked?: boolean; showcase?: unknown; cosmetics?: { felt: string; frame: string; title: string } },
+    change: { name?: unknown; look?: unknown; blocked?: boolean; cosmetics?: { felt: string; frame: string; title: string } },
   ): Result {
     const account = this.get(id);
     if (!account) return { ok: false, error: 'accountNotFound' };
@@ -149,12 +129,6 @@ export class AccountStore {
         if (change.cosmetics[key]) account[key] = change.cosmetics[key];
         else delete account[key];
       }
-    }
-    if (change.showcase !== undefined) {
-      const ids = Array.isArray(change.showcase) ? change.showcase.filter((id): id is string => typeof id === 'string' && BADGE_IDS.has(id)) : [];
-      const showcase = [...new Set(ids)].slice(0, SHOWCASE_SIZE);
-      if (showcase.length > 0) account.showcase = showcase;
-      else delete account.showcase;
     }
     if (change.blocked !== undefined) {
       if (change.blocked) account.blocked = true;

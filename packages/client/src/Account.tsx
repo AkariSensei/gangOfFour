@@ -184,7 +184,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   }
 
   async function resetRanking() {
-    if (!confirm('Remettre le classement à zéro ? Classement, records et badges repartent de zéro pour tout le monde.')) return;
+    if (!confirm('Remettre le classement à zéro ? Classement, records et niveaux repartent de zéro pour tout le monde.')) return;
     setError('');
     const result = await socket.emitWithAck('admin:resetRanking');
     if (!result.ok) setError(errorLabel(result.error));

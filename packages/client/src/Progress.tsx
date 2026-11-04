@@ -1,17 +1,20 @@
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
-import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, type PlayerProfile, type Progress, SEASON_FRAME } from '../../server/src/protocol';
+import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, MAX_LEVEL, type PlayerProfile, type Progress } from '../../server/src/protocol';
 import { AccountForm } from './Account';
 import { Avatar } from './Avatar';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
-/** Niveau d'un joueur qui n'a encore fini ni partie ni défi. */
-export const FIRST_LEVEL: Progress = { xp: 0, level: 1, levelXp: 0, levelSpan: 100, title: LEVEL_TITLES[0]!.title };
+/** Niveau d'un joueur qui n'a encore fini aucune partie. */
+export const FIRST_LEVEL: Progress = { xp: 0, level: 1, levelXp: 0, levelSpan: 100, title: LEVEL_TITLES[0]!.title, maxed: false };
+
+/** Où en est la barre, en mots : l'expérience vers le niveau suivant, ou le niveau maximal atteint. */
+const barLabel = (p: Progress) => (p.maxed ? `Niveau maximal (${MAX_LEVEL}) atteint` : `${p.levelXp} / ${p.levelSpan} XP vers le niveau ${p.level + 1}`);
 
 /** Barre d'expérience vers le niveau suivant. */
 export function LevelBar({ progress, compact }: { progress: Progress; compact?: boolean }) {
   return (
-    <span className={`level-bar ${compact ? 'compact' : ''}`} title={`${progress.levelXp} / ${progress.levelSpan} XP vers le niveau ${progress.level + 1}`}>
+    <span className={`level-bar ${compact ? 'compact' : ''}`} title={barLabel(progress)}>
       <span style={{ width: `${(100 * progress.levelXp) / progress.levelSpan}%` }} />
     </span>
   );
@@ -27,7 +30,7 @@ export function LevelBadge({ level }: { level: number }) {
 }
 
 /**
- * Écran « Mon profil » : son niveau et son expérience, son pseudo et son avatar, et les récompenses à choisir
+ * Écran « Mon profil » : son niveau à Gang of Four, son pseudo et son avatar, et les récompenses à choisir
  * (tapis, cadre, titre), celles pas encore débloquées en retrait avec le niveau qui les débloque.
  */
 export function ProfileScreen({
@@ -51,8 +54,6 @@ export function ProfileScreen({
     else setError(errorLabel(result.error));
   }
 
-  // Les titres de niveau dans l'ordre (verrouillés compris), puis ceux gagnés avec les badges.
-  const badgeTitles = unlocks.titles.filter((t) => !LEVEL_TITLES.some((l) => l.title === t));
   const remaining = progress.levelSpan - progress.levelXp;
 
   return (
@@ -67,7 +68,8 @@ export function ProfileScreen({
           <span className="level-title">{account.title || progress.title}</span>
           <LevelBar progress={progress} />
           <small className="muted">
-            Niveau {progress.level} · {progress.xp} XP au total · encore {remaining} XP pour le niveau {progress.level + 1}
+            Gang of Four · niveau {progress.level} · {progress.xp} XP au total ·{' '}
+            {progress.maxed ? 'niveau maximal atteint' : `encore ${remaining} XP pour le niveau ${progress.level + 1}`}
           </small>
         </div>
       </section>
@@ -130,24 +132,12 @@ export function ProfileScreen({
                   </button>
                 );
               })}
-              {/* Le cadre des champions ne se débloque pas avec le niveau : il faut gagner une saison. */}
-              <button
-                type="button"
-                className={`reward season-reward ${chosen.frame === SEASON_FRAME.id ? 'on' : ''} ${unlocks.frames.includes(SEASON_FRAME.id) ? '' : 'locked'}`}
-                disabled={!unlocks.frames.includes(SEASON_FRAME.id)}
-                onClick={() => void choose({ frame: SEASON_FRAME.id })}
-                aria-pressed={chosen.frame === SEASON_FRAME.id}
-              >
-                <Avatar name={account.name} look={{ ...account, frame: SEASON_FRAME.id }} />
-                <span>{SEASON_FRAME.name}</span>
-                {!unlocks.frames.includes(SEASON_FRAME.id) && <small>👑 Gagne une saison</small>}
-              </button>
             </div>
           </section>
 
           <section className="panel">
             <h3>Titre</h3>
-            <p className="muted small">Sous ton pseudo. Les badges obtenus en donnent d'autres.</p>
+            <p className="muted small">Sous ton pseudo.</p>
             <div className="title-chips">
               {LEVEL_TITLES.map((t) => {
                 const open = unlocks.titles.includes(t.title);
@@ -165,11 +155,6 @@ export function ProfileScreen({
                   </button>
                 );
               })}
-              {badgeTitles.map((title) => (
-                <button key={title} type="button" className={`chip ${chosen.title === title ? 'on' : ''}`} onClick={() => void choose({ title })}>
-                  🏅 {title}
-                </button>
-              ))}
             </div>
           </section>
           {error && <p className="error">{error}</p>}
@@ -178,10 +163,9 @@ export function ProfileScreen({
 
       <p className="muted small xp-help">
         L'expérience d'une partie dépend de ta place : à quatre, 120 XP pour le premier, 70 pour le deuxième, 35 pour le troisième
-        (à trois : 110, puis 50), plus 8 par manche gagnée et 10 par gang posé. Le dernier ne gagne rien. S'y ajoutent 30 XP par
-        défi du jour (80 s'il est gagné), 25 par badge, 30 à 80 par mission du jour accomplie, et chaque jour de série de 10 à
-        70 XP. Seules comptent les parties en ligne, ou seul contre des bots tous en difficile. Chaque niveau demande un peu plus
-        d'expérience que le précédent.
+        (à trois : 110, puis 50), plus 8 par manche gagnée et 10 par gang posé. Le dernier ne gagne rien. Seules comptent les
+        parties en ligne, ou seul contre des bots tous en difficile. Chaque niveau demande un peu plus d'expérience que le
+        précédent, jusqu'au niveau {MAX_LEVEL}.
       </p>
     </div>
   );
@@ -227,9 +211,7 @@ export function XpGain({ gain }: { gain: ProgressGain }) {
       <span className="level-bar big">
         <span style={{ width: `${width}%` } as CSSProperties} />
       </span>
-      <small className="muted">
-        {after.levelXp} / {after.levelSpan} XP vers le niveau {after.level + 1}
-      </small>
+      <small className="muted">{barLabel(after)}</small>
       {gain.rewards.length > 0 && <p className="xp-rewards">🎁 Débloqué : {gain.rewards.join(' · ')}</p>}
     </div>
   );

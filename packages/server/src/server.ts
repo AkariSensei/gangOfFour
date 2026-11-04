@@ -2,30 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { AccountStore } from './accounts';
-import type { Badge } from './badges';
-import { ChallengeStore, dayOf, seedOf } from './challenges';
-import { newRewards, seasonName } from './progression';
-import {
-  type BuyError,
-  type DealtHand,
-  type EventResult,
-  ONLINE_GAP_S,
-  type TripotSave,
-  advance,
-  buyAllUpgrades,
-  buyBuilding,
-  buyFavor,
-  buyUpgrade,
-  catchEvent,
-  checkAchievements,
-  deal,
-  markDay,
-  openGift,
-  prestige,
-  skipMissedEvent,
-  viewOf,
-} from './tripot';
-import { TripotStore } from './tripotStore';
+import { newRewards } from './progression';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { GameHistory, monthOf } from './history';
@@ -87,8 +64,6 @@ export interface GameServerOptions {
   staticDir?: string;
   /** Fichier JSON de l'historique des parties ; sans fichier, l'historique reste en mémoire. */
   historyFile?: string;
-  /** Fichier JSON des défis du jour ; sans fichier, ils restent en mémoire. */
-  challengesFile?: string;
   /** Journal des erreurs (une ligne JSON par erreur), relevé par la surveillance GitHub. */
   errorsFile?: string;
   /** Durée d'une « seconde » du minuteur de tour, en millisecondes (raccourcie dans les tests). */
@@ -105,10 +80,6 @@ export interface GameServerOptions {
   googleClientId?: string;
   /** Adresse Google de l'admin (ADMIN_EMAIL) : il gère les comptes et peut tenir plusieurs sièges pour tester seul. */
   adminEmail?: string;
-  /** Adresses autorisées à jouer au Tripot pendant ses essais (TRIPOT_EMAILS), en plus de l'admin ; « * » l'ouvre à tous. */
-  tripotEmails?: string[];
-  /** Fichier JSON des parties du Tripot ; sans fichier, elles restent en mémoire. */
-  tripotFile?: string;
   /** Vérification du jeton Google (remplacée dans les tests). */
   verifyGoogle?: VerifyGoogle;
 }
@@ -127,12 +98,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     maxHttpBufferSize: limits.maxMessageBytes,
   });
   const rooms = new RoomManager();
-  const accounts = new AccountStore(options.accountsFile, options.adminEmail, options.tripotEmails);
-  const tripot = new TripotStore(options.tripotFile);
-  // La rente d'expérience du Tripot ne compte qu'une fois le Tripot ouvert à tous.
-  const tripotOpen = accounts.tripotOpen;
-  const challenges = new ChallengeStore(options.challengesFile, accounts);
-  const history = new GameHistory(options.historyFile, accounts, challenges, tripotOpen ? (owner) => tripot.rentOf(owner) : undefined);
+  const accounts = new AccountStore(options.accountsFile, options.adminEmail);
+  const history = new GameHistory(options.historyFile, accounts);
   // Au démarrage (après une mise à jour qui change les règles de l'expérience), on retire à chacun les récompenses
   // qu'il avait choisies mais qui ne sont plus débloquées à son niveau.
   for (const account of accounts.list()) {
@@ -157,9 +124,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (room?.game?.phase !== 'gameOver' || room.recorded) return;
     room.recorded = true;
-    // Un défi ne compte pas dans l'historique (ni les classements et badges des parties) : il a les siens.
-    if (room.challenge) return finishChallenge(room);
-    // Le tutoriel non plus : c'est une manche écrite à l'avance.
+    // Le tutoriel ne compte pas : c'est une manche écrite à l'avance.
     if (room.tutorial) return;
     const game = room.game;
     withProgress(room, () =>
@@ -175,7 +140,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   }
 
   /**
-   * Enregistre une fin de partie (ou de défi), puis annonce à chaque joueur de la table l'expérience qu'elle lui a
+   * Enregistre une fin de partie, puis annonce à chaque joueur de la table l'expérience qu'elle lui a
    * rapportée : niveau avant et après, et les récompenses débloquées en passant de niveau.
    */
   function withProgress(room: Room, record: () => unknown) {
@@ -186,60 +151,17 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { progress: was, daily: wasDaily } = before.get(id)!;
       const now = history.progressOfAccount(id);
       if (now.xp === was.xp) continue;
-      // Ce qui s'annonce : missions accomplies, série prolongée, puis les récompenses d'un niveau supérieur.
+      // Ce qui s'annonce : la série prolongée, puis les récompenses d'un niveau supérieur.
       const daily = history.dailyOfAccount(id);
-      const missions = daily.missions
-        .filter((m) => m.done && !wasDaily.missions.find((w) => w.id === m.id)?.done)
-        .map((m) => `Mission « ${m.text} » (+${m.xp} XP)`);
-      const streak = daily.playedToday && !wasDaily.playedToday ? [`Série de ${daily.streak} jour${daily.streak > 1 ? 's' : ''} (+${10 * Math.min(daily.streak, 7)} XP)`] : [];
-      const gain = { gained: now.xp - was.xp, before: was, after: now, rewards: [...missions, ...streak, ...newRewards(was.level, now.level)] };
+      const streak = daily.playedToday && !wasDaily.playedToday ? [`Série de ${daily.streak} jour${daily.streak > 1 ? 's' : ''}`] : [];
+      const gain = { gained: now.xp - was.xp, before: was, after: now, rewards: [...streak, ...newRewards(was.level, now.level)] };
       for (const s of io.sockets.sockets.values()) if (s.data.accountId === id && s.data.code === room.code && !s.data.spectator) s.emit('progress:gained', gain);
     }
   }
 
-  /** Termine l'essai du défi : à la fin de la manche, ou quand le joueur abandonne la table avant. */
-  function finishChallenge(room: Room) {
-    const seat = room.seats.find((s) => !s.bot);
-    const game = room.game;
-    if (!room.challenge || !seat?.account || !game) return;
-    const index = room.seats.indexOf(seat);
-    const won = game.phase === 'gameOver' && game.lastRound?.winnerIndex === index;
-    const { day, moves } = room.challenge;
-    const account = seat.account;
-    withProgress(room, () => challenges.finish(account, day, { won, moves, cardsLeft: game.players[index]?.hand.length ?? 0 }));
-    io.emit('stats:changed');
-  }
-
-  /** Niveau de chaque bot de la table (ajouté par l'hôte), pour l'historique et les badges. */
+  /** Niveau de chaque bot de la table (ajouté par l'hôte), pour l'historique. */
   const botLevels = (room: Room) => room.seats.map((s) => (s.bot ? (s.level ?? 'normal') : undefined));
   const botSeats = (room: Room) => room.seats.flatMap((s, i) => (s.bot || s.vacant ? [i] : []));
-  const won = (b: Badge) => b.value >= b.goal;
-
-  /**
-   * Annonce chaque badge dès qu'il est gagné, comme un succès : pendant la partie pour ceux qui en dépendent
-   * (un gang posé, une manche gagnée…), et à la fin pour les autres (victoire, places, parties jouées…).
-   * Chaque badge n'est annoncé qu'une fois par partie (`room.announced`), sur tous les onglets du joueur ouverts dans le salon.
-   */
-  function announceBadges(room: Room, sockets: { data: SocketData; emit: (event: 'badges:won', badges: Badge[]) => unknown }[]) {
-    const game = room.game;
-    if (!game) return;
-    const seen = (room.announced ??= {});
-    const bots = botSeats(room);
-    const seatAccounts = room.seats.map((s) => s.account);
-    for (const accountId of new Set(room.seats.flatMap((s, i) => (s.account && !bots.includes(i) ? [s.account] : [])))) {
-      // Première fois qu'on regarde ce joueur dans cette partie : ce qu'il avait déjà ne s'annonce pas.
-      const had = (seen[accountId] ??= history.badgesOfAccount(accountId).filter(won).map((b) => b.id));
-      // Pendant un défi ou le tutoriel, rien ne s'annonce en direct : la manche ne compte pas pour les badges des parties.
-      if ((room.challenge && !room.recorded) || room.tutorial) continue;
-      const now = room.recorded ? history.badgesOfAccount(accountId) : history.liveBadgesOfAccount(accountId, game, bots, seatAccounts, botLevels(room));
-      const fresh = now.filter((b) => won(b) && !had.includes(b.id));
-      if (fresh.length === 0) continue;
-      had.push(...fresh.map((b) => b.id));
-      saved.schedule();
-      for (const s of sockets) if (s.data.accountId === accountId && !s.data.spectator) s.emit('badges:won', fresh);
-    }
-  }
-
   const botTimers = new Map<string, NodeJS.Timeout>();
   /** Temps de réflexion d'un bot : 3 à 4 secondes, pour que chacun voie passer ses coups. */
   const botDelay = () => options.botDelayMs ?? 3000 + Math.random() * 1000;
@@ -396,7 +318,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
       if (gameView) socket.emit('game:state', gameView);
     }
-    announceBadges(room, sockets);
   }
 
   const awayTimers = new Map<string, NodeJS.Timeout>();
@@ -419,12 +340,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
 
   /** Ferme un salon : il disparaît des parties en cours et ne peut plus être rejoint. */
   function closeRoom(code: string) {
-    // Défi abandonné en cours de route : l'essai du jour est consommé, avec les cartes restées en main.
-    const room = rooms.get(code);
-    if (room?.challenge && !room.recorded) {
-      room.recorded = true;
-      finishChallenge(room);
-    }
     clearTimeout(cleanupTimers.get(code));
     cleanupTimers.delete(code);
     rooms.delete(code);
@@ -602,12 +517,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (result.ok) history.claim(account.name!, account.id);
       ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
     });
-    on('account:showcase', (payload, ack) => {
-      const account = me();
-      if (!account) return ack({ ok: false, error: 'notSignedIn' });
-      const result = accounts.update(account.id, { showcase: payload.badgeIds });
-      ack(result.ok ? { ok: true, account: accounts.view(account) } : result);
-    });
     on('account:cosmetics', (payload, ack) => {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });
@@ -677,17 +586,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       return allowed.ok ? enter(rooms.create(name, account, account.id), ack) : ack(allowed);
     });
-    on('challenge:start', (_payload, ack) => {
-      const seated = player();
-      if (!seated.ok) return ack(seated);
-      const { account, name } = seated;
-      const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      if (!allowed.ok) return ack(allowed);
-      const now = new Date();
-      if (!challenges.start(account.id, now)) return ack({ ok: false, error: 'challengeAlreadyPlayed' });
-      const day = dayOf(now);
-      return enter(rooms.createChallenge(name, account, account.id, day, seedOf(day)), ack);
-    });
     on('tutorial:start', (_payload, ack) => {
       const seated = player();
       if (!seated.ok) return ack(seated);
@@ -695,60 +593,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       return allowed.ok ? enter(rooms.createTutorial(name, account, account.id), ack) : ack(allowed);
     });
-    /**
-     * Le Tripot : chaque commande fait d'abord tourner la production jusqu'à maintenant, compte les donnes envoyées
-     * (plafonnées selon le temps écoulé depuis le dernier envoi), puis renvoie la partie à jour.
-     */
-    function withTripot(ack: AnyAck, deals: unknown, run?: (save: TripotSave, now: number) => BuyError | null | object) {
-      const account = me();
-      if (!accounts.canPlayTripot(account)) return ack({ ok: false, error: 'forbidden' });
-      const now = Date.now();
-      const save = tripot.get(account!.id, now);
-      const elapsed = (now - save.updatedAt) / 1000;
-      const awayGain = advance(save, now);
-      const gift = openGift(save, dayOf(new Date(now)), now);
-      const dealt: DealtHand[] = typeof deals === 'number' && deals > 0 ? deal(save, deals, elapsed, now) : [];
-      const result = run?.(save, now) ?? null;
-      skipMissedEvent(save, now);
-      const newAchievements = checkAchievements(save);
-      if (tripotOpen) markDay(save, dayOf(new Date(now)));
-      tripot.save();
-      if (typeof result === 'string') return ack({ ok: false, error: result });
-      ack({ ok: true, ...result, tripot: viewOf(save, now, { awayGain, awaySeconds: Math.max(0, elapsed - ONLINE_GAP_S), gift, rentOpen: tripotOpen, newAchievements, dealt }) });
-    }
-    on('tripot:get', (_payload, ack) => withTripot(ack, 0));
-    on('tripot:sync', (payload, ack) => withTripot(ack, payload.deals));
-    on('tripot:buy', (payload, ack) => {
-      const count = payload.count === 'max' ? 'max' : typeof payload.count === 'number' ? payload.count : 1;
-      withTripot(ack, payload.deals, (save) => {
-        if (payload.kind === 'upgrade') return buyUpgrade(save, text(payload.id));
-        if (payload.kind === 'allUpgrades') return buyAllUpgrades(save);
-        if (payload.kind === 'favor') return buyFavor(save, text(payload.id));
-        return buyBuilding(save, text(payload.id), count);
-      });
-    });
-    on('tripot:prestige', (_payload, ack) => withTripot(ack, 0, prestige));
-    on('tripot:catch', (payload, ack) =>
-      withTripot(ack, payload.deals, (save, now) => {
-        const event: EventResult | BuyError = catchEvent(save, now);
-        return typeof event === 'string' ? event : { event };
-      }),
-    );
     on('daily:get', (_payload, ack) => {
       const account = me();
       if (!account) return ack({ ok: false, error: 'notSignedIn' });
       ack({ ok: true, daily: history.dailyOfAccount(account.id) });
-    });
-    on('challenge:get', (_payload, ack) => {
-      const day = dayOf(new Date());
-      const account = me();
-      const attempt = account && challenges.attempt(account.id, day);
-      const mine = attempt
-        ? attempt.finishedAt
-          ? { finished: true, won: attempt.won, moves: attempt.moves, cardsLeft: attempt.cardsLeft, rank: challenges.rankOf(attempt.account, day) ?? undefined }
-          : { finished: false }
-        : null;
-      ack({ ok: true, challenge: { day, mine, today: challenges.ranking(day), overall: challenges.overall() } });
     });
     on('room:join', (payload, ack) => {
       const seated = player();
@@ -765,8 +613,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const room = rooms.get(text(payload.code));
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });
-      // Regarder un défi dévoilerait la donne du jour ; le tutoriel se joue seul.
-      if (room.challenge || room.tutorial) return ack({ ok: false, error: 'roomNotFound' });
+      // Le tutoriel se joue seul.
+      if (room.tutorial) return ack({ ok: false, error: 'roomNotFound' });
       // Le spectateur voit toutes les mains : on ne regarde pas une partie où l'on est assis (un second onglet tricherait).
       if (socket.data.accountId && room.seats.some((s) => s.account === socket.data.accountId)) return ack({ ok: false, error: 'alreadySeated' });
       if (socket.data.code) leaveCurrent();
@@ -878,11 +726,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         botMonthly: history.leaderboard(10, month, 'bots'),
         recent: history.recent(),
         streak: history.bestStreak('online'),
-        // Palmarès des dernières saisons (sans les comptes, seulement les pseudos).
-        seasons: history
-          .seasons()
-          .slice(0, 6)
-          .map(({ month, podium }) => ({ month, name: seasonName(month), podium: podium.map(({ name, wins, games }) => ({ name, wins, games })) })),
       });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
@@ -919,9 +762,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     history,
     accounts,
     errors,
-    saveRooms: () => {
-      saved.saveNow();
-      tripot.saveNow();
-    },
+    saveRooms: () => saved.saveNow(),
   };
 }

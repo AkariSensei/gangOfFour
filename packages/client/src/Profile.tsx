@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
-import { BadgeGrid } from './Badges';
 import { LevelBadge, LevelBar } from './Progress';
 import { LEVEL_LABELS } from './labels';
 import { socket } from './socket';
@@ -39,7 +38,6 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
         {profile === undefined && <p className="muted">Chargement…</p>}
         {profile === null && <p className="muted">Pas encore de partie terminée.</p>}
         {profile && (
-          // Grand écran : les chiffres et les dernières parties à gauche, tous les badges à droite.
           <div className="profile-body">
             <aside className="profile-side">
               <div className="profile-stats">
@@ -83,12 +81,6 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
                 Score : le plus bas est le meilleur. Manches gagnées, gangs et pire manche sont comptés depuis le 26 octobre.
               </p>
             </aside>
-            <div className="profile-badges">
-              <h3>
-                Badges · {profile.badges.filter((b) => b.value >= b.goal).length} / {profile.badges.length}
-              </h3>
-              {profile.showcase.length === 0 ? <p className="muted">Pas encore de badge.</p> : <BadgeGrid badges={profile.showcase} />}
-            </div>
           </div>
         )}
       </div>

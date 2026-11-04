@@ -131,50 +131,13 @@ describe('GameHistory', () => {
     expect(history.profile('David')).toBeNull();
   });
 
-  it('calcule les badges d\'un joueur', () => {
+  it('retient le niveau des bots, et range sur la fiche les parties seul contre eux par niveau', () => {
     const history = new GameHistory();
-    const first = finished({ Alice: 5, Bruno: 160, Chloé: 60 });
-    first.round = 21;
-    first.stats = [
-      { roundsWon: 60, gangs: 3, worstRound: 10 },
-      { roundsWon: 0, gangs: 0, worstRound: 80 },
-      { roundsWon: 1, gangs: 0, worstRound: 18 },
-    ];
-    history.record(first);
-    const second = finished({ Alice: 15, Bruno: 50, Chloé: 60 });
-    second.round = 4;
-    second.stats = [
-      { roundsWon: 50, gangs: 1, worstRound: 10 },
-      { roundsWon: 0, gangs: 0, worstRound: 20 },
-      { roundsWon: 0, gangs: 0, worstRound: 20 },
-    ];
-    history.record(second);
-    history.record(finished({ Alice: 90, Bruno: 50, Chloé: 60 }));
-    // Seule contre des bots moyens : compte pour « Habitué », pas pour les victoires ni « Bon collègue ».
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }));
     history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'normal', 'normal']);
-    // Seule contre des bots tous difficiles : la victoire compte.
-    history.record(finished({ Alice: 5, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'hard']);
-    const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
-    expect(badges('Alice')).toMatchObject({
-      'first-win': '1/1',
-      'games-25': '5/25',
-      'online-25': '3/25',
-      'wins-25': '3/25',
-      perfect: '0/1',
-      'streak-4': '2/4',
-      'gang-1': '1/1',
-      'gang-25': '4/25',
-      fireworks: '3/3',
-      'clean-win': '1/1',
-      steamroller: '100/100',
-      marathon: '20/20',
-      blitz: '1/1',
-      'full-table': '0/1',
-      scapegoat: '0/1',
-      castaway: '0/1',
-    });
-    expect(badges('Bruno')).toMatchObject({ 'first-win': '1/1', scapegoat: '1/1', castaway: '1/1', 'clean-win': '0/1', 'streak-4': '1/4' });
-    // Parties seule contre des bots, par niveau (celle d'avant les niveaux n'est rangée nulle part).
+    history.record(finished({ Alice: 5, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'easy']);
+    expect(history.recent(1)[0]!.players.map((p) => p.botLevel)).toEqual([undefined, 'hard', 'easy']);
+    // Le niveau d'une table est celui de son bot le plus fort.
     expect(history.profile('Alice')!.vsBots).toEqual([
       { level: 'easy', games: 0, wins: 0 },
       { level: 'normal', games: 1, wins: 1 },
@@ -182,41 +145,26 @@ describe('GameHistory', () => {
     ]);
   });
 
-  it('calcule les badges de places, d\'écart, d\'horaires et de partenaires', () => {
+  it('tire le niveau des seules parties, en ligne ou contre des bots tous difficiles', () => {
     const history = new GameHistory();
-    // Samedi 31 octobre 2026, 7 h 30 à Paris (6 h 30 UTC) : Alice gagne d'un point, Bruno finit dernier.
-    history.record(finished({ Alice: 20, Bruno: 90, Chloé: 21 }), new Date('2026-10-31T06:30:00Z'));
-    // Lundi 2 novembre, 12 h 30 à Paris : Alice gagne sans un point, avec 85 points d'avance.
-    history.record(finished({ Alice: 0, Bruno: 85, David: 100, Emma: 120 }), new Date('2026-11-02T11:30:00Z'));
-    // Lundi 2 novembre, 22 h à Paris : Alice deuxième.
-    history.record(finished({ Alice: 40, Bruno: 30, Chloé: 101 }), new Date('2026-11-02T21:00:00Z'));
-    const badges = (name: string) => Object.fromEntries(history.profile(name)!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
-    expect(badges('Alice')).toMatchObject({
-      'photo-finish': '1/1',
-      perfect: '1/1',
-      crushing: '1/1',
-      'second-10': '1/10',
-      'early-bird': '1/1',
-      'lunch-10': '1/10',
-      'night-owl': '1/1',
-      weekend: '1/1',
-      'days-20': '2/20',
-      'friends-10': '4/10',
-      'win-3': '1/1',
-      'win-4': '1/1',
-      'streak-2': '2/2',
-    });
-    expect(badges('Bruno')).toMatchObject({ 'last-10': '1/10', 'bad-streak-5': '2/5', 'friends-10': '4/10' });
+    // Première en ligne à trois : 110 XP. Contre des bots moyens : rien. Contre des bots difficiles : 110 de plus.
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }), new Date(), [], ['a', 'b', 'c']);
+    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], ['a'], [undefined, 'normal', 'normal']);
+    expect(history.progressOfAccount('a')).toMatchObject({ xp: 110, level: 2 });
+    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], ['a'], [undefined, 'hard', 'hard']);
+    expect(history.progressOfAccount('a').xp).toBe(220);
+    expect(history.unlocksOfAccount('a').frames).toEqual(['bronze']);
   });
 
-  it('retient le niveau des bots, et en tire les badges contre les bots difficiles', () => {
+  it('compte la série de jours joués, avec les parties qui rapportent de l’expérience', () => {
     const history = new GameHistory();
-    history.record(finished({ Alice: 10, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'hard']);
-    history.record(finished({ Alice: 10, 'Robot Ada': 50, 'Robot Alan': 60 }), new Date(), [1, 2], [], [undefined, 'hard', 'easy']);
-    expect(history.recent(1)[0]!.players.map((p) => p.botLevel)).toEqual([undefined, 'hard', 'easy']);
-    const badges = Object.fromEntries(history.profile('Alice')!.badges.map((b) => [b.id, `${b.value}/${b.goal}`]));
-    // Seule la première partie était contre des bots tous difficiles ; les deux avaient au moins un bot difficile.
-    expect(badges).toMatchObject({ 'beat-hard-1': '1/1', 'beat-hard-10': '1/10', 'hard-games-25': '2/25' });
+    const at = (day: string) => new Date(`${day}T12:00:00Z`);
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }), at('2026-11-02'), [], ['a', 'b', 'c']);
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }), at('2026-11-03'), [], ['a', 'b', 'c']);
+    // Seule contre des bots faciles : ne compte pas pour la série.
+    history.record(finished({ Alice: 0, 'Robot Ada': 50, 'Robot Alan': 60 }), at('2026-11-04'), [1, 2], ['a'], [undefined, 'easy', 'easy']);
+    expect(history.dailyOfAccount('a', at('2026-11-04'))).toEqual({ day: '2026-11-04', streak: 2, playedToday: false });
+    expect(history.dailyOfAccount('a', at('2026-11-06'))).toMatchObject({ streak: 0 });
   });
 
   it('sépare les parties en ligne de celles jouées seul contre des bots', () => {
@@ -295,65 +243,4 @@ describe('GameHistory', () => {
     expect(history.leaderboard()[0]).toMatchObject({ name: 'Alice', wins: 1, games: 1 });
   });
 
-  it('donne la part des joueurs qui ont obtenu chaque badge', () => {
-    const history = new GameHistory();
-    // Quatre joueurs à la table, une seule gagnante : tous ont « Bienvenue », un sur quatre « Premier sang ».
-    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60, David: 70 }));
-    const percent = Object.fromEntries(history.profile('Bruno')!.badges.map((b) => [b.id, b.percent]));
-    expect(percent).toMatchObject({ 'games-1': 100, 'first-win': 25, 'games-25': 0 });
-    // Gardé en cache, mais recalculé dès qu'une partie s'ajoute.
-    history.record(finished({ Alice: 50, Bruno: 10, Chloé: 60, David: 70 }));
-    expect(history.badgeRarity()['first-win']).toBe(50);
-  });
-
-  it('montre sur la fiche les badges choisis, complétés par les plus rares, trois au plus', () => {
-    const accounts = new AccountStore();
-    accounts.signIn({ sub: 'a', email: 'a@exemple.fr' });
-    accounts.update('a', { name: 'Alice' });
-    const history = new GameHistory(undefined, accounts);
-    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 60 }), new Date(), [], ['a']);
-    history.record(finished({ Alice: 0, Bruno: 50, Chloé: 60 }), new Date(), [], ['a']);
-    const showcase = () => history.profile('Alice')!.showcase.map((b) => b.id);
-    // Sans choix : les plus rares d'abord (« Doublé » et « Parfait » n'appartiennent qu'à elle, « Bienvenue » à tous).
-    expect(showcase()).toHaveLength(3);
-    expect(showcase()).not.toContain('games-1');
-    // Un badge pas encore obtenu ne se montre pas, même choisi.
-    accounts.update('a', { showcase: ['games-1', 'games-25', 'inconnu'] });
-    expect(accounts.get('a')!.showcase).toEqual(['games-1', 'games-25']);
-    expect(showcase()[0]).toBe('games-1');
-    expect(showcase()).toHaveLength(3);
-    expect(showcase()).not.toContain('games-25');
-  });
-
-  it("récompense le podium de chaque saison terminée, parmi ceux qui ont assez joué", () => {
-    const accounts = new AccountStore();
-    for (const [id, name] of [
-      ['a', 'Alice'],
-      ['b', 'Bruno'],
-      ['c', 'Chloé'],
-      ['d', 'David'],
-    ]) {
-      accounts.signIn({ sub: id!, email: `${id}@exemple.fr` });
-      accounts.update(id!, { name });
-    }
-    const history = new GameHistory(undefined, accounts);
-    const october = (day: number) => new Date(`2026-10-${String(day).padStart(2, '0')}T12:00:00Z`);
-    // Six parties en octobre à quatre : Alice en gagne 4, Bruno 2. David n'en joue qu'une, et la gagne.
-    for (let day = 1; day <= 6; day++) {
-      const aliceWins = day <= 4;
-      history.record(finished({ Alice: aliceWins ? 10 : 40, Bruno: aliceWins ? 40 : 10, Chloé: 60, Emma: 80 }), october(day), [], ['a', 'b', 'c']);
-    }
-    history.record(finished({ David: 5, Alice: 50, Bruno: 60 }), october(7), [], ['d', 'a', 'b']);
-    const seasons = history.seasons(new Date('2026-11-02T12:00:00Z'));
-    expect(seasons).toHaveLength(1);
-    expect(seasons[0]!.podium.map((p) => p.name)).toEqual(['Alice', 'Bruno', 'Chloé']);
-    // Le mois en cours n'est pas encore une saison terminée.
-    expect(history.seasons(new Date('2026-10-20T12:00:00Z'))).toEqual([]);
-    // Titres et cadre de champion, et l'expérience du podium.
-    expect(history.unlocksOfAccount('a').titles).toContain('Champion d’octobre 2026');
-    expect(history.unlocksOfAccount('a').frames).toContain('couronne');
-    expect(history.unlocksOfAccount('b').titles).toContain('Vice-champion d’octobre 2026');
-    expect(history.unlocksOfAccount('b').frames).not.toContain('couronne');
-    expect(history.unlocksOfAccount('d').titles.some((t) => t.includes('octobre'))).toBe(false);
-  });
 });

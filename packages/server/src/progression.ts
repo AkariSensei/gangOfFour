@@ -1,8 +1,9 @@
-import type { Badge } from './badges';
 import type { BotLevel } from './bot';
-import type { ChallengeStats } from './challenges';
 
-/** Où en est un joueur : son expérience totale, son niveau, et son avancée vers le niveau suivant. */
+/**
+ * Où en est un joueur à Gang of Four : son expérience (gagnée en partie), son niveau, plafonné à `MAX_LEVEL`, et son
+ * avancée vers le niveau suivant. Chaque jeu du site aura le sien.
+ */
 export interface Progress {
   xp: number;
   level: number;
@@ -11,6 +12,8 @@ export interface Progress {
   levelSpan: number;
   /** Titre attaché au niveau atteint (« Habitué du tripot »…). */
   title: string;
+  /** Niveau maximal atteint : l'expérience continue de compter, mais le niveau ne monte plus. */
+  maxed: boolean;
 }
 
 /** Ce que le joueur a débloqué : tapis, cadres d'avatar et titres qu'il peut choisir. */
@@ -76,13 +79,10 @@ export const LEVEL_TITLES: { level: number; title: string }[] = [
   { level: 30, title: 'Légende du tapis' },
 ];
 
-/** Ce que rapporte une partie, un défi ou un badge. */
+/** Bonus d'une partie, par manche gagnée et par gang posé. */
 const XP = {
   roundWon: 8,
   gang: 10,
-  challenge: 30,
-  challengeWin: 50,
-  badge: 25,
 };
 
 /**
@@ -123,13 +123,11 @@ export function gameXp(g: GameForXp): number {
   return Math.round(raw * (g.vsBots ? BOT_FACTOR[g.vsBots] : 1));
 }
 
-/** Expérience totale : les parties, les défis du jour terminés, et chaque badge obtenu. */
-export function totalXp(games: GameForXp[], challenges: ChallengeStats, badges: Badge[]): number {
-  const fromGames = games.reduce((sum, g) => sum + gameXp(g), 0);
-  const fromChallenges = challenges.played * XP.challenge + challenges.wins * XP.challengeWin;
-  const fromBadges = badges.filter((b) => b.value >= b.goal).length * XP.badge;
-  return fromGames + fromChallenges + fromBadges;
-}
+/** Expérience totale : celle de toutes les parties. */
+export const totalXp = (games: GameForXp[]) => games.reduce((sum, g) => sum + gameXp(g), 0);
+
+/** Niveau maximal, celui de la dernière récompense. */
+export const MAX_LEVEL = 30;
 
 /**
  * Expérience pour passer du niveau `level` au suivant : de plus en plus, comme dans un jeu (100, 280, 520, 800,
@@ -146,57 +144,27 @@ export function xpForLevel(level: number): number {
 
 export function progressOf(xp: number): Progress {
   let level = 1;
-  while (xp >= xpForLevel(level + 1)) level += 1;
+  while (level < MAX_LEVEL && xp >= xpForLevel(level + 1)) level += 1;
   const start = xpForLevel(level);
+  const maxed = level === MAX_LEVEL;
+  const span = maxed ? levelSpan(level - 1) : xpForLevel(level + 1) - start;
   return {
     xp,
     level,
-    levelXp: xp - start,
-    levelSpan: xpForLevel(level + 1) - start,
+    levelXp: maxed ? span : xp - start,
+    levelSpan: span,
+    maxed,
     title: [...LEVEL_TITLES].reverse().find((t) => t.level <= level)!.title,
   };
 }
 
-/** Récompenses débloquées : tapis et cadres par le niveau, titres par le niveau et par chaque badge obtenu. */
-export function unlocksOf(level: number, badges: Badge[], seasons: SeasonPlace[] = []): Unlocks {
+/** Récompenses débloquées par le niveau : tapis, cadres et titres. */
+export function unlocksOf(level: number): Unlocks {
   return {
     felts: FELTS.filter((f) => f.level <= level).map((f) => f.id),
-    frames: [...FRAMES.filter((f) => f.level <= level).map((f) => f.id), ...(seasons.some((s) => s.place === 1) ? [SEASON_FRAME.id] : [])],
-    titles: [
-      ...LEVEL_TITLES.filter((t) => t.level <= level).map((t) => t.title),
-      ...badges.filter((b) => b.value >= b.goal).map((b) => b.name),
-      ...seasons.map(seasonTitle),
-    ],
+    frames: FRAMES.filter((f) => f.level <= level).map((f) => f.id),
+    titles: LEVEL_TITLES.filter((t) => t.level <= level).map((t) => t.title),
   };
-}
-
-/*
- * Saisons : chaque mois est une saison. Le podium du classement en ligne d'un mois terminé gagne de l'expérience, un
- * titre à son nom (« Champion d'octobre 2026 »), et le premier un cadre réservé aux champions de saison.
- */
-
-/** Place d'un joueur sur le podium d'une saison (`month` : « 2026-10 »). */
-export interface SeasonPlace {
-  month: string;
-  place: number;
-}
-
-/** Il faut avoir joué au moins ce nombre de parties en ligne dans le mois pour être classé dans la saison. */
-export const SEASON_MIN_GAMES = 5;
-/** Expérience du podium de la saison : premier, deuxième, troisième. */
-export const SEASON_XP = [500, 300, 150];
-/** Cadre des champions de saison, qui ne se débloque pas avec le niveau. */
-export const SEASON_FRAME: Reward = { id: 'couronne', name: 'Couronne de champion', level: 0 };
-
-const monthFormat = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-/** « octobre 2026 », pour « 2026-10 ». */
-export const seasonName = (month: string) => monthFormat.format(new Date(`${month}-15T12:00:00Z`));
-
-/** Titre gagné sur le podium d'une saison : « Champion d'octobre 2026 », « Vice-champion de mars 2027 »… */
-export function seasonTitle({ month, place }: SeasonPlace): string {
-  const name = seasonName(month);
-  const of = /^[aeiouyâéèêîôû]/i.test(name) ? 'd’' : 'de ';
-  return `${['Champion', 'Vice-champion', 'Troisième'][place - 1]} ${of}${name}`;
 }
 
 /** Récompenses gagnées en passant du niveau `before` au niveau `after`, pour les annoncer. */

@@ -539,8 +539,6 @@ describe('serveur de jeu', () => {
     expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
     await waitFor(() => human.room?.players.length === 3);
     expect(human.room!.players.map((p) => p.bot)).toEqual([false, true, true]);
-    const badges: string[] = [];
-    human.on('badges:won', (won) => badges.push(...won.map((b) => b.id)));
     await human.emitWithAck('game:start', {});
     await waitFor(() => !!human.game);
 
@@ -567,9 +565,6 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
     expect(stats.ok && stats.leaderboard).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
-    // Sa première partie terminée lui fait gagner « Bienvenue », annoncé tout de suite (une seule fois).
-    await waitFor(() => badges.includes('games-1'));
-    expect(badges.filter((id) => id === 'games-1')).toHaveLength(1);
 
     // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
     const target = server.rooms.get(code)!.game!.config.targetScore;
@@ -640,30 +635,6 @@ describe('serveur de jeu', () => {
     await waitFor(() => server.rooms.get(code)!.game!.trick.length > before, 2000);
     // Et un nouveau tour relance le minuteur pour le joueur suivant.
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
-  });
-
-  it('annonce un badge au moment où il est gagné, en pleine partie (un gang posé)', async () => {
-    await start();
-    const { code, players } = await lobby(3);
-    const badges: string[][] = players.map(() => []);
-    players.forEach((p, i) => p.on('badges:won', (won) => badges[i]!.push(...won.map((b) => b.id))));
-    await players[0]!.emitWithAck('game:start', {});
-    await waitFor(() => players.every((p) => p.game));
-    // Partie arrangée : Alice ouvre un nouveau pli et a un gang de 5 en main.
-    const game = server.rooms.get(code)!.game!;
-    const deck = createDeck();
-    const cards = (...ids: string[]) => ids.map((id) => deck.find((c) => c.id === id)!);
-    Object.assign(game, { phase: 'playing', currentPlayer: 0, table: null, trick: [], passed: [false, false, false], mustPlayMultiOne: false, exchange: null });
-    game.players[0]!.hand = cards('g5a', 'y5a', 'r5a', 'g5b', 'g2a', 'g3a');
-    expect((await players[0]!.emitWithAck('game:play', { cardIds: ['g5a', 'y5a', 'r5a', 'g5b'] })).ok).toBe(true);
-    await waitFor(() => badges[0]!.includes('gang-1'));
-    expect(server.rooms.get(code)!.game!.phase).toBe('playing');
-    // Une seule annonce, même quand la table est rediffusée ensuite, et rien pour ceux qui n'ont pas posé de gang.
-    expect((await players[1]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
-    await waitFor(() => players[0]!.room!.players[1]!.autoPass === true);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(badges[0]).toEqual(['gang-1']);
-    expect(badges[1]).toEqual([]);
   });
 
   it('laisse le gagnant choisir sans minuteur la carte qu\'il rend pendant l\'échange', async () => {
@@ -753,74 +724,6 @@ describe('serveur de jeu', () => {
     await waitFor(() => !server.rooms.get(code));
   });
 
-  it('fait relever le défi du jour une seule fois, sur la même donne pour tous, sans spectateur', async () => {
-    await start();
-    const [alice, bruno, curieux] = [connect('Alice'), connect('Bruno'), connect('Curieux')];
-    const first = await alice.emitWithAck('challenge:start');
-    if (!first.ok) throw new Error(first.error);
-    expect(await bruno.emitWithAck('challenge:start')).toMatchObject({ ok: true });
-    await waitFor(() => !!alice.game && !!bruno.game);
-    expect(alice.game!.hand).toEqual(bruno.game!.hand);
-    expect(alice.room!.challenge).toEqual({ day: expect.any(String), moves: 0 });
-    expect(alice.room!.players.filter((p) => p.bot).map((p) => p.level)).toEqual(['hard', 'hard', 'hard']);
-
-    expect(await alice.emitWithAck('challenge:start')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
-    expect(await curieux.emitWithAck('room:watch', { code: first.code })).toEqual({ ok: false, error: 'roomNotFound' });
-    expect(await curieux.emitWithAck('rooms:live')).toEqual({ ok: true, rooms: [] });
-    expect(await curieux.emitWithAck('challenge:get')).toMatchObject({ ok: true, challenge: { mine: null, today: [] } });
-    expect(await alice.emitWithAck('challenge:get')).toMatchObject({ ok: true, challenge: { mine: { finished: false } } });
-  });
-
-  it('termine le défi avec la manche, le classe à part et annonce ses badges', async () => {
-    await start({ botDelayMs: 0 });
-    const alice = connect('Alice');
-    const won: string[] = [];
-    alice.on('badges:won', (badges) => won.push(...badges.map((b) => b.id)));
-    const gains: { gained: number; before: { xp: number }; after: { xp: number }; rewards: string[] }[] = [];
-    alice.on('progress:gained', (gain) => gains.push(gain));
-    await alice.emitWithAck('challenge:start');
-    const over = () => alice.game?.phase === 'gameOver';
-    for (let steps = 0; !over(); steps++) {
-      expect(steps).toBeLessThan(500);
-      await waitFor(() => over() || (alice.game?.phase === 'playing' && alice.game.currentPlayer === 0), 5000);
-      if (over()) break;
-      const before = JSON.stringify(alice.game);
-      await playBotTurn([alice]);
-      await waitFor(() => JSON.stringify(alice.game) !== before);
-    }
-    const result = await alice.emitWithAck('challenge:get');
-    if (!result.ok) throw new Error(result.error);
-    const mine = result.challenge.mine!;
-    expect(mine).toMatchObject({ finished: true, rank: 1, moves: alice.room!.challenge!.moves, cardsLeft: alice.game!.hand.length });
-    expect(mine.won).toBe(alice.game!.lastRound!.winnerIndex === 0);
-    expect(result.challenge.today).toEqual([{ rank: 1, name: 'Alice', won: mine.won, moves: mine.moves, cardsLeft: mine.cardsLeft }]);
-    expect(result.challenge.overall).toEqual([{ name: 'Alice', played: 1, wins: mine.won ? 1 : 0, bestStreak: 1 }]);
-    // Le défi n'entre pas dans l'historique des parties, et la revanche est refusée.
-    expect(server.history.recent()).toEqual([]);
-    expect(await alice.emitWithAck('game:rematch')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
-    await waitFor(() => won.includes('challenge-1'));
-    expect(won.includes('challenge-win-1')).toBe(!!mine.won);
-    // L'expérience du défi : 30 pour l'avoir joué (+50 s'il est gagné), 25 par badge obtenu, 10 pour le premier jour de
-    // série, plus les missions du jour qu'il accomplit (elles changent chaque jour).
-    await waitFor(() => gains.length === 1);
-    expect(gains[0]!.gained).toBeGreaterThanOrEqual((mine.won ? 30 + 50 + 2 * 25 : 30 + 25) + 10);
-    expect(gains[0]!.rewards).toContain('Série de 1 jour (+10 XP)');
-    const daily = await alice.emitWithAck('daily:get');
-    expect(daily).toMatchObject({ ok: true, daily: { streak: 1, playedToday: true } });
-    expect(gains[0]!.after.xp - gains[0]!.before.xp).toBe(gains[0]!.gained);
-  }, 30000);
-
-  it("consomme l'essai du jour quand le joueur quitte le défi en cours", async () => {
-    await start();
-    const alice = connect('Alice');
-    await alice.emitWithAck('challenge:start');
-    await waitFor(() => !!alice.game);
-    await alice.emitWithAck('room:leave');
-    const result = await alice.emitWithAck('challenge:get');
-    expect(result).toMatchObject({ ok: true, challenge: { mine: { finished: true, won: false, cardsLeft: 16 } } });
-    expect(await alice.emitWithAck('challenge:start')).toEqual({ ok: false, error: 'challengeAlreadyPlayed' });
-  });
-
   it('guide le joueur pas à pas dans le tutoriel, sans rien enregistrer', async () => {
     await start({ botDelayMs: 0 });
     const alice = connect('Alice');
@@ -889,43 +792,6 @@ describe('serveur de jeu', () => {
     expect(server.accounts.get('g-1')).toMatchObject({ title: 'Débutant' });
     expect(server.accounts.get('g-1')).not.toHaveProperty('felt');
     expect(server.accounts.get('g-1')).not.toHaveProperty('frame');
-  });
-
-  it("réserve le Tripot aux comptes autorisés, et garde la partie de chacun", async () => {
-    // Le deuxième compte créé ci-dessous (« Joueur ») est le seul autorisé.
-    await start({ tripotEmails: [`google-${accountCount + 2}@exemple.fr`] });
-    const curieux = connect('Curieux');
-    const joueur = connect('Joueur');
-    await waitFor(() => curieux.connected && joueur.connected);
-    expect(await curieux.emitWithAck('tripot:get')).toEqual({ ok: false, error: 'forbidden' });
-    const first = await joueur.emitWithAck('tripot:get');
-    // Pas de rente tant que le Tripot n'est pas ouvert à tous ; l'enveloppe du jour s'ouvre à la première visite.
-    expect(first).toMatchObject({ ok: true, tripot: { chips: 100, gift: { gain: 100, streak: 1 }, venue: 'Arrière-salle', rent: null } });
-    expect(await joueur.emitWithAck('tripot:get')).toMatchObject({ ok: true, tripot: { gift: null, streak: 1 } });
-    // 12 cartes envoyées d'un coup : un jeton chacune, et deux mains complètes (avec leur combinaison).
-    const synced = await joueur.emitWithAck('tripot:sync', { deals: 12 });
-    expect(synced).toMatchObject({ ok: true, tripot: { deals: 12, dealt: [{ index: 0 }, { index: 1 }] } });
-    expect(synced.ok && synced.tripot.chips).toBeGreaterThanOrEqual(12);
-    // Plus qu'une main n'en distribue d'affilée, c'est plafonné.
-    expect(await joueur.emitWithAck('tripot:sync', { deals: 500 })).toMatchObject({ ok: true, tripot: { deals: expect.toBeOneOf([27, 28]) } });
-    const bought = await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'donneur', deals: 0 });
-    expect(bought).toMatchObject({ ok: true, tripot: { buildings: expect.arrayContaining([expect.objectContaining({ id: 'donneur', owned: 1 })]) } });
-    expect(await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'dragon', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
-    // Toutes les améliorations d'un coup (les doigts de croupier, à dix cartes), et pas de faveur sans réputation.
-    expect(await joueur.emitWithAck('tripot:buy', { kind: 'allUpgrades', deals: 0 })).toMatchObject({
-      ok: true,
-      tripot: { upgrades: expect.arrayContaining([expect.objectContaining({ id: 'doigts', available: false })]) },
-    });
-    expect(await joueur.emitWithAck('tripot:buy', { kind: 'favor', id: 'mise', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
-    // Le Dragon ne passe pas dès l'ouverture.
-    expect(await joueur.emitWithAck('tripot:catch', { deals: 0 })).toEqual({ ok: false, error: 'notAvailable' });
-  });
-
-  it('ouvre le Tripot à tous avec « * », et sa rente compte alors', async () => {
-    await start({ tripotEmails: ['*'] });
-    const joueur = connect('Joueur');
-    await waitFor(() => joueur.connected);
-    expect(await joueur.emitWithAck('tripot:get')).toMatchObject({ ok: true, tripot: { rent: 0, venue: 'Arrière-salle' } });
   });
 
   it('ne lance pas de minuteur par défaut', async () => {

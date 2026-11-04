@@ -2,13 +2,10 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { BotLevel, LiveRoom, Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton } from './Account';
 import { Avatar } from './Avatar';
-import { BadgesPage, useMyProfile } from './Badges';
-import { DailyChallenge, challengeSummary, useDailyChallenge } from './Challenge';
-import { DailyScreen, dailySummary, useDaily } from './Daily';
 import { Leaderboard } from './Leaderboard';
 import { Rules } from './Rules';
-import { TripotScreen } from './Tripot';
-import { FIRST_LEVEL, LevelBadge, LevelBar, ProfileScreen } from './Progress';
+import { FIRST_LEVEL, ProfileScreen } from './Progress';
+import { useDaily, useMyProfile } from './useProfile';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
 
@@ -16,7 +13,7 @@ import { socket, type useAccount } from './socket';
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
 /** Écrans de l'accueil : le menu principal, et un écran par entrée du menu (chacun a son adresse, #jouer…). */
-const SCREENS = ['menu', 'jouer', 'missions', 'defi', 'regarder', 'classement', 'badges', 'profil', 'tripot'] as const;
+const SCREENS = ['menu', 'jouer', 'regarder', 'classement', 'profil'] as const;
 type Screen = (typeof SCREENS)[number];
 
 const screenOf = (hash: string): Screen => {
@@ -44,10 +41,8 @@ export function Home({
   const { account } = me;
   const signedIn = !!account?.name;
   const profile = useMyProfile(account?.name || undefined);
-  // Sans partie ni défi terminés, pas encore de fiche : aucun badge, niveau 1.
-  const badges = profile === undefined ? null : (profile?.badges ?? []);
+  // Sans partie terminée, pas encore de fiche : niveau 1.
   const progress = profile?.progress ?? FIRST_LEVEL;
-  const challenge = useDailyChallenge(account?.id);
   const live = useLiveRooms();
   const daily = useDaily(account?.name ? account.id : null);
 
@@ -93,7 +88,7 @@ export function Home({
       return false;
     }
   });
-  const firstTime = !tutorialSeen && !!badges && !badges.some((b) => b.id === 'games-1' && b.value >= b.goal);
+  const firstTime = !tutorialSeen && profile === null;
   function dismissTutorial() {
     try {
       localStorage.setItem(TUTORIAL_SEEN, '1');
@@ -115,13 +110,6 @@ export function Home({
     const failure = await me.signIn(credential);
     if (failure) setError(errorLabel(failure));
   }
-
-  async function setShowcase(badgeIds: string[]) {
-    const result = await socket.emitWithAck('account:showcase', { badgeIds });
-    if (result.ok) me.setAccount(result.account);
-  }
-
-  const wonBadges = badges?.filter((b) => b.value >= b.goal).length ?? 0;
 
   function render(s: Screen): ReactNode {
     // Sans compte (ou sans pseudo), seul le menu s'affiche, avec la connexion à la place des entrées.
@@ -182,33 +170,14 @@ export function Home({
                   <nav className="game-menu" aria-label="Menu principal">
                     <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon, rejoindre des collègues, partie rapide" onClick={() => open('jouer')} />
                     <MenuItem
-                      icon="🎯"
-                      title="Missions du jour"
-                      subtitle={dailySummary(daily)}
-                      pill={daily && daily.missions.some((m) => !m.done) ? { text: `${daily.missions.filter((m) => !m.done).length} à faire` } : undefined}
-                      onClick={() => open('missions')}
-                    />
-                    <MenuItem
-                      icon="🗓️"
-                      title="Défi du jour"
-                      subtitle={challengeSummary(challenge)}
-                      pill={challenge && !challenge.mine ? { text: 'Nouveau' } : undefined}
-                      onClick={() => open('defi')}
-                    />
-                    <MenuItem
                       icon="👀"
                       title="Regarder"
                       subtitle={live.length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
                       pill={live.length > 0 ? { text: `${live.length} en cours`, live: true } : undefined}
                       onClick={() => open('regarder')}
                     />
-                    {/* Le Tripot est encore en essai : seuls les comptes autorisés le voient. */}
-                    {account.tripot && (
-                      <MenuItem icon="🎲" title="Le Tripot" subtitle="Distribue, embauche, fais grandir ton tripot" pill={{ text: 'Essai' }} onClick={() => open('tripot')} />
-                    )}
                     <div className="menu-tiles">
                       <MenuItem tile icon="🏆" title="Classement" subtitle="Le bureau, ce mois-ci" onClick={() => open('classement')} />
-                      <MenuItem tile icon="🏅" title="Badges" subtitle={badges?.length ? `${wonBadges} / ${badges.length}` : 'À gagner'} onClick={() => open('badges')} />
                       <MenuItem tile icon="🎓" title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
                       <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules(true)} />
                     </div>
@@ -225,12 +194,6 @@ export function Home({
             <PlayScreen initialCode={invite} onEnter={onEnter} />
           </SubScreen>
         );
-      case 'defi':
-        return (
-          <SubScreen title="Défi du jour" onBack={backToMenu} narrow>
-            <DailyChallenge canPlay={signedIn} onEnter={onEnter} />
-          </SubScreen>
-        );
       case 'regarder':
         return (
           <SubScreen title="Regarder" onBack={backToMenu} narrow>
@@ -245,22 +208,6 @@ export function Home({
             </div>
           </SubScreen>
         );
-      case 'badges':
-        return <BadgesPage badges={badges} showcase={account?.showcase ?? []} onShowcase={(ids) => void setShowcase(ids)} onClose={backToMenu} />;
-      case 'missions':
-        return (
-          <SubScreen title="Missions du jour" onBack={backToMenu} narrow>
-            <DailyScreen daily={daily} />
-          </SubScreen>
-        );
-      case 'tripot':
-        return account?.tripot ? (
-          <SubScreen title="🎲 Le Tripot" onBack={backToMenu} wide>
-            <TripotScreen />
-          </SubScreen>
-        ) : (
-          render('menu')
-        );
       case 'profil':
         return account?.name ? (
           <SubScreen title="Mon profil" onBack={backToMenu}>
@@ -274,18 +221,16 @@ export function Home({
     <main className="home-menu">
       {signedIn && account && (
         <header className="menu-topbar">
-          <button type="button" className="player-card" onClick={() => open('profil')} title="Mon profil : niveau, pseudo, avatar, récompenses">
+          <button type="button" className="player-card" onClick={() => open('profil')} title="Mon profil : pseudo, avatar, récompenses">
             <span className="level-avatar">
               <Avatar name={account.name} look={account} />
-              <LevelBadge level={progress.level} />
             </span>
             <span className="player-card-text">
               <strong>{account.name}</strong>
               <small>
-                {account.title || progress.title} · 🏅 {wonBadges}
+                {account.title || progress.title}
                 {daily && daily.streak > 0 && <span title={`Série de ${daily.streak} jours de jeu d'affilée`}> · 🔥 {daily.streak}</span>}
               </small>
-              <LevelBar progress={progress} compact />
             </span>
           </button>
           <div className="menu-topbar-actions">
@@ -358,17 +303,15 @@ function SubScreen({
   title,
   onBack,
   narrow,
-  wide,
   children,
 }: {
   title: string;
   onBack: () => void;
   narrow?: boolean;
-  wide?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`sub-screen ${narrow ? 'narrow' : ''} ${wide ? 'wide' : ''}`}>
+    <div className={`sub-screen ${narrow ? 'narrow' : ''}`}>
       <div className="sub-head">
         <button type="button" className="back-button" onClick={onBack}>
           ← Menu
