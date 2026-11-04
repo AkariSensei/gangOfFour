@@ -247,14 +247,17 @@ export interface ClientToServerEvents {
   'tripot:get': (ack: Ack<{ tripot: TripotView }>) => void;
   /** Envoie les donnes distribuées depuis le dernier envoi (groupées, plafonnées par le serveur). */
   'tripot:sync': (payload: { deals: number }, ack: Ack<{ tripot: TripotView }>) => void;
-  /** Achat d'une activité (1, 10 ou autant que possible) ou d'une amélioration, avec les donnes en attente. */
+  /**
+   * Achat d'une activité (1, 10 ou autant que possible), d'une amélioration, de toutes celles qu'on peut s'offrir
+   * (`allUpgrades`, sans `id`) ou d'une faveur du milieu, avec les donnes en attente.
+   */
   'tripot:buy': (
-    payload: { kind: 'building' | 'upgrade'; id: string; deals: number; count?: number | 'max' },
+    payload: { kind: 'building' | 'upgrade' | 'allUpgrades' | 'favor'; id?: string; deals: number; count?: number | 'max' },
     ack: Ack<{ tripot: TripotView }>,
   ) => void;
   /** S'agrandir : repartir de zéro en encaissant la réputation méritée. */
   'tripot:prestige': (ack: Ack<{ tripot: TripotView }>) => void;
-  /** Attraper le Dragon ou le Phénix qui passe sur la table. */
+  /** Attraper le Dragon, le Phénix ou le 1 multicolore qui passe sur la table. */
   'tripot:catch': (payload: { deals: number }, ack: Ack<{ tripot: TripotView; event: TripotEvent }>) => void;
   /** Lance le tutoriel : une manche guidée contre trois bots, qui démarre aussitôt. */
   'tutorial:start': (ack: Ack<Session>) => void;

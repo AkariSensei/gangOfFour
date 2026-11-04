@@ -899,8 +899,9 @@ describe('serveur de jeu', () => {
     await waitFor(() => curieux.connected && joueur.connected);
     expect(await curieux.emitWithAck('tripot:get')).toEqual({ ok: false, error: 'forbidden' });
     const first = await joueur.emitWithAck('tripot:get');
-    // Pas de rente tant que le Tripot n'est pas ouvert à tous.
-    expect(first).toMatchObject({ ok: true, tripot: { chips: 0, venue: 'Arrière-salle', rent: null } });
+    // Pas de rente tant que le Tripot n'est pas ouvert à tous ; l'enveloppe du jour s'ouvre à la première visite.
+    expect(first).toMatchObject({ ok: true, tripot: { chips: 100, gift: { gain: 100, streak: 1 }, venue: 'Arrière-salle', rent: null } });
+    expect(await joueur.emitWithAck('tripot:get')).toMatchObject({ ok: true, tripot: { gift: null, streak: 1 } });
     // 12 cartes envoyées d'un coup : un jeton chacune, et deux mains complètes (avec leur combinaison).
     const synced = await joueur.emitWithAck('tripot:sync', { deals: 12 });
     expect(synced).toMatchObject({ ok: true, tripot: { deals: 12, dealt: [{ index: 0 }, { index: 1 }] } });
@@ -910,6 +911,12 @@ describe('serveur de jeu', () => {
     const bought = await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'donneur', deals: 0 });
     expect(bought).toMatchObject({ ok: true, tripot: { buildings: expect.arrayContaining([expect.objectContaining({ id: 'donneur', owned: 1 })]) } });
     expect(await joueur.emitWithAck('tripot:buy', { kind: 'building', id: 'dragon', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
+    // Toutes les améliorations d'un coup (les doigts de croupier, à dix cartes), et pas de faveur sans réputation.
+    expect(await joueur.emitWithAck('tripot:buy', { kind: 'allUpgrades', deals: 0 })).toMatchObject({
+      ok: true,
+      tripot: { upgrades: expect.arrayContaining([expect.objectContaining({ id: 'doigts', available: false })]) },
+    });
+    expect(await joueur.emitWithAck('tripot:buy', { kind: 'favor', id: 'mise', deals: 0 })).toEqual({ ok: false, error: 'tooExpensive' });
     // Le Dragon ne passe pas dès l'ouverture.
     expect(await joueur.emitWithAck('tripot:catch', { deals: 0 })).toEqual({ ok: false, error: 'notAvailable' });
   });

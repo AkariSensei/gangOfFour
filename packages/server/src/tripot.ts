@@ -157,6 +157,89 @@ export const UPGRADES: Upgrade[] = [
   { id: 'gang-of-seven', icon: '💥', name: 'Gang of Seven', text: 'Sept exemplaires de chacune des seize activités : tout le tripot produit deux fois plus.', cost: 1e20, target: 'all', factor: 2, needs: 7 },
 ];
 
+/* ——— Réputation et établissements ——— */
+
+/** Jetons gagnés (depuis toujours) pour le premier point de réputation ; il en faut toujours plus pour les suivants. */
+export const REPUTATION_UNIT = 1e10;
+/** Réputation totale méritée par les jetons gagnés depuis toujours (racine cubique : 8 fois plus pour le double). */
+export const reputationFor = (earnedAll: number) => Math.floor(Math.cbrt(earnedAll / REPUTATION_UNIT));
+/** Jetons à avoir gagnés (depuis toujours) pour mériter cette réputation. */
+export const earnedForReputation = (reputation: number) => reputation ** 3 * REPUTATION_UNIT;
+/** Chaque point de réputation : +2 % de production, pour toujours. */
+const REPUTATION_BONUS = 0.02;
+
+/** Un établissement : on y accède avec assez de réputation, et chacun apporte un avantage qui reste. */
+export interface Venue {
+  name: string;
+  reputation: number;
+  perk: string;
+}
+export const VENUES: Venue[] = [
+  { name: 'Arrière-salle', reputation: 0, perk: '' },
+  { name: 'Cave enfumée', reputation: 1, perk: 'Ton absence compte jusqu’à 12 h au lieu de 8.' },
+  { name: 'Tripot de quartier', reputation: 10, perk: 'Pendant ton absence, le tripot tourne aux trois quarts.' },
+  { name: 'Cercle de jeu', reputation: 100, perk: 'Le Dragon et le Phénix passent deux fois plus souvent.' },
+  { name: 'Casino clandestin', reputation: 1_000, perk: 'Ton absence compte jusqu’à 24 h.' },
+  { name: 'Palace', reputation: 10_000, perk: 'Les combinaisons de la donne rapportent trois fois plus.' },
+];
+/** Après le Palace, chaque étoile demande quatre fois plus de réputation (Palace ★, ★★…). */
+const STAR_GROWTH = 4;
+
+/** Niveau d'établissement (0 pour l'arrière-salle, 5 pour le Palace, 6 et plus pour les étoiles). */
+export function venueLevel(reputation: number): number {
+  let level = VENUES.filter((v) => reputation >= v.reputation).length - 1;
+  if (level < VENUES.length - 1) return level;
+  for (let need = VENUES[VENUES.length - 1]!.reputation * STAR_GROWTH; reputation >= need; need *= STAR_GROWTH) level++;
+  return level;
+}
+export function venueName(level: number): string {
+  const last = VENUES.length - 1;
+  return level <= last ? VENUES[level]!.name : `Palace ${'★'.repeat(level - last)}`;
+}
+/** Réputation à avoir pour l'établissement de ce niveau. */
+export function venueReputation(level: number): number {
+  const last = VENUES.length - 1;
+  return level <= last ? VENUES[level]!.reputation : VENUES[last]!.reputation * STAR_GROWTH ** (level - last);
+}
+
+/**
+ * Rente quotidienne : l'expérience que le Tripot verse chaque jour où l'on y passe, selon l'établissement
+ * (rien dans l'arrière-salle, 10 dans la cave… et 60 au plus).
+ */
+export const rentXp = (level: number) => Math.min(60, 10 * level);
+
+/**
+ * Les faveurs du milieu : chaque point de réputation gagné en s'agrandissant donne une faveur à dépenser. Ce qu'on
+ * achète avec reste pour toujours, et la réputation garde son bonus (on ne la dépense pas, on la fait valoir).
+ */
+export interface Favor {
+  id: string;
+  icon: string;
+  name: string;
+  text: string;
+  cost: number;
+}
+export const FAVORS: Favor[] = [
+  { id: 'mise', icon: '💼', name: 'Mise de départ', text: 'Après chaque agrandissement, tu repars avec 10 croupiers.', cost: 1 },
+  { id: 'indic', icon: '🕵️', name: 'Un indic au commissariat', text: 'Ton absence compte 4 h de plus.', cost: 2 },
+  { id: 'habitues', icon: '🍻', name: 'Les habitués', text: 'Le Dragon, le Phénix et le 1 multicolore restent deux fois plus longtemps sur la table.', cost: 3 },
+  { id: 'doigts-fee', icon: '🪄', name: 'Doigts de fée', text: 'Chaque carte distribuée rapporte trois fois plus.', cost: 5 },
+  { id: 'ardoise', icon: '📒', name: 'L’ardoise', text: 'Pendant ton absence, le tripot tourne 15 points plus vite.', cost: 10 },
+  { id: 'marquees', icon: '🖊️', name: 'Cartes marquées', text: 'Les combinaisons de la donne rapportent trois fois plus.', cost: 25 },
+  { id: 'parrain', icon: '🎖️', name: 'Le parrain', text: 'Tout le tripot produit 50 % de plus.', cost: 50 },
+  { id: 'apprivoise', icon: '🐲', name: 'Dragon apprivoisé', text: 'La frénésie du Dragon dure deux minutes.', cost: 100 },
+  { id: 'enveloppe', icon: '✉️', name: 'Enveloppe garnie', text: 'L’enveloppe du jour contient trois fois plus.', cost: 250 },
+  { id: 'gros-bras', icon: '💪', name: 'Les gros bras', text: 'Les activités coûtent 10 % de moins.', cost: 500 },
+  { id: 'famille', icon: '👨‍👩‍👧‍👦', name: 'La famille', text: 'Tout le tripot produit deux fois plus.', cost: 1_000 },
+  { id: 'legende', icon: '📜', name: 'Légende du milieu', text: 'Chaque succès ajoute 2 % de production au lieu de 1 %.', cost: 2_500 },
+  { id: 'empire', icon: '🏰', name: 'L’empire', text: 'Tout le tripot produit trois fois plus.', cost: 5_000 },
+];
+
+const hasFavor = (save: TripotSave, id: string) => save.favors.includes(id);
+/** Faveurs encore à dépenser : une par point de réputation. */
+export const favorPoints = (save: TripotSave) =>
+  save.reputation - FAVORS.filter((f) => hasFavor(save, f.id)).reduce((sum, f) => sum + f.cost, 0);
+
 /* ——— Succès ——— */
 
 /** Un succès : gagné une fois pour toutes (même après un agrandissement), chacun ajoute 1 % de production. */
@@ -241,59 +324,45 @@ const ACHIEVEMENT_RULES: AchievementRule[] = [
     text: `Attraper ${n === 1 ? 'le Dragon ou le Phénix' : `${n} passages du Dragon ou du Phénix`}.`,
     done: (s: TripotSave) => s.caught >= n,
   })),
+  ...[1e3, 1e6, 1e9, 1e12, 1e15, 1e18].map((n, i) => ({
+    id: `production-${n}`,
+    icon: '⚙️',
+    name: ['Ça tourne tout seul', 'La machine à jetons', 'Usine à sous', 'Le robinet ouvert', 'Les vannes du ciel', 'Le déluge'][i]!,
+    text: `Produire ${inWords(n)}${n >= 1e6 ? ' de' : ''} jetons par seconde.`,
+    done: (s: TripotSave) => productionOf(s) >= n,
+  })),
+  ...[1, 10, 50].map((n, i) => ({
+    id: `agrandi-${n}`,
+    icon: '🏛️',
+    name: ['On pousse les murs', 'Agent immobilier', 'Bâtisseur d’empire'][i]!,
+    text: n === 1 ? 'S’agrandir une première fois.' : `S’agrandir ${n} fois.`,
+    done: (s: TripotSave) => s.grown >= n,
+  })),
+  ...VENUES.slice(2).map((v, i) => ({
+    id: `etablissement-${i + 2}`,
+    icon: '🏠',
+    name: v.name,
+    text: `Ouvrir : ${v.name}.`,
+    done: (s: TripotSave) => s.reputation >= v.reputation,
+  })),
+  ...[3, 7, 30].map((n, i) => ({
+    id: `serie-${n}`,
+    icon: '📅',
+    name: ['Un habitué', 'Toute la semaine', 'Pilier de comptoir'][i]!,
+    text: `Ouvrir l’enveloppe du jour ${n} jours d’affilée.`,
+    done: (s: TripotSave) => s.bestStreak >= n,
+  })),
+  ...[30, 100].map((n, i) => ({
+    id: `visites-${n}`,
+    icon: '🗝️',
+    name: ['Tu as les clés', 'Tu fais partie des murs'][i]!,
+    text: `Passer au tripot ${n} jours différents.`,
+    done: (s: TripotSave) => s.visits >= n,
+  })),
+  { id: 'faveur-1', icon: '🤝', name: 'Un service rendu', text: 'Obtenir une faveur du milieu.', done: (s) => s.favors.length > 0 },
+  { id: 'faveurs-toutes', icon: '🤵', name: 'Tout le milieu te doit', text: 'Obtenir toutes les faveurs du milieu.', done: (s) => s.favors.length >= FAVORS.length },
 ];
 export const ACHIEVEMENTS: Achievement[] = ACHIEVEMENT_RULES.map(({ done: _d, ...a }) => a);
-
-/* ——— Réputation et établissements ——— */
-
-/** Jetons gagnés (depuis toujours) pour le premier point de réputation ; il en faut toujours plus pour les suivants. */
-export const REPUTATION_UNIT = 1e10;
-/** Réputation totale méritée par les jetons gagnés depuis toujours (racine cubique : 8 fois plus pour le double). */
-export const reputationFor = (earnedAll: number) => Math.floor(Math.cbrt(earnedAll / REPUTATION_UNIT));
-/** Jetons à avoir gagnés (depuis toujours) pour mériter cette réputation. */
-export const earnedForReputation = (reputation: number) => reputation ** 3 * REPUTATION_UNIT;
-/** Chaque point de réputation : +2 % de production, pour toujours. */
-const REPUTATION_BONUS = 0.02;
-
-/** Un établissement : on y accède avec assez de réputation, et chacun apporte un avantage qui reste. */
-export interface Venue {
-  name: string;
-  reputation: number;
-  perk: string;
-}
-export const VENUES: Venue[] = [
-  { name: 'Arrière-salle', reputation: 0, perk: '' },
-  { name: 'Cave enfumée', reputation: 1, perk: 'Ton absence compte jusqu’à 12 h au lieu de 8.' },
-  { name: 'Tripot de quartier', reputation: 10, perk: 'Pendant ton absence, le tripot tourne aux trois quarts.' },
-  { name: 'Cercle de jeu', reputation: 100, perk: 'Le Dragon et le Phénix passent deux fois plus souvent.' },
-  { name: 'Casino clandestin', reputation: 1_000, perk: 'Ton absence compte jusqu’à 24 h.' },
-  { name: 'Palace', reputation: 10_000, perk: 'Les combinaisons de la donne rapportent trois fois plus.' },
-];
-/** Après le Palace, chaque étoile demande quatre fois plus de réputation (Palace ★, ★★…). */
-const STAR_GROWTH = 4;
-
-/** Niveau d'établissement (0 pour l'arrière-salle, 5 pour le Palace, 6 et plus pour les étoiles). */
-export function venueLevel(reputation: number): number {
-  let level = VENUES.filter((v) => reputation >= v.reputation).length - 1;
-  if (level < VENUES.length - 1) return level;
-  for (let need = VENUES[VENUES.length - 1]!.reputation * STAR_GROWTH; reputation >= need; need *= STAR_GROWTH) level++;
-  return level;
-}
-export function venueName(level: number): string {
-  const last = VENUES.length - 1;
-  return level <= last ? VENUES[level]!.name : `Palace ${'★'.repeat(level - last)}`;
-}
-/** Réputation à avoir pour l'établissement de ce niveau. */
-export function venueReputation(level: number): number {
-  const last = VENUES.length - 1;
-  return level <= last ? VENUES[level]!.reputation : VENUES[last]!.reputation * STAR_GROWTH ** (level - last);
-}
-
-/**
- * Rente quotidienne : l'expérience que le Tripot verse chaque jour où l'on y passe, selon l'établissement
- * (rien dans l'arrière-salle, 10 dans la cave… et 60 au plus).
- */
-export const rentXp = (level: number) => Math.min(60, 10 * level);
 
 /* ——— La partie ——— */
 
@@ -325,6 +394,35 @@ export interface TripotSave {
   days: Record<string, number>;
   /** Dernier calcul de la production (millisecondes). */
   updatedAt: number;
+  /** Ce qui passera sur la table au prochain passage. */
+  nextEventKind: EventKind;
+  /** Cartes qui restent à rapporter dix fois plus (après le passage du 1 multicolore). */
+  hotCards: number;
+  /** Faveurs du milieu achetées (avec la réputation, pour toujours). */
+  favors: string[];
+  /** Dernier jour où l'enveloppe du jour a été ouverte, la série de jours d'affilée, la meilleure série, et les jours de visite. */
+  giftDay: string;
+  streak: number;
+  bestStreak: number;
+  visits: number;
+  /** Agrandissements, et ouverture du tripot (millisecondes). */
+  grown: number;
+  createdAt: number;
+}
+
+/** Complète une partie enregistrée avant l'ajout de nouveaux champs. */
+export function upgradeSave(save: TripotSave): TripotSave {
+  return Object.assign(save, {
+    nextEventKind: save.nextEventKind ?? 'dragon',
+    hotCards: save.hotCards ?? 0,
+    favors: save.favors ?? [],
+    giftDay: save.giftDay ?? '',
+    streak: save.streak ?? 0,
+    bestStreak: save.bestStreak ?? 0,
+    visits: save.visits ?? 0,
+    grown: save.grown ?? 0,
+    createdAt: save.createdAt ?? save.updatedAt,
+  });
 }
 
 export const newSave = (now: number, seed = Math.floor(Math.random() * 2 ** 32)): TripotSave => ({
@@ -344,6 +442,15 @@ export const newSave = (now: number, seed = Math.floor(Math.random() * 2 ** 32))
   frenzyUntil: 0,
   days: {},
   updatedAt: now,
+  nextEventKind: 'dragon',
+  hotCards: 0,
+  favors: [],
+  giftDay: '',
+  streak: 0,
+  bestStreak: 0,
+  visits: 0,
+  grown: 0,
+  createdAt: now,
 });
 
 const owned = (save: TripotSave, id: string) => save.buildings[id] ?? 0;
@@ -351,10 +458,25 @@ const upgradeFactor = (save: TripotSave, target: string) =>
   UPGRADES.filter((u) => u.target === target && save.upgrades.includes(u.id)).reduce((f, u) => f * u.factor, 1);
 const level = (save: TripotSave) => venueLevel(save.reputation);
 
-/** Multiplicateur de tout le tripot : réputation, succès et cartes spéciales. */
+/** Production ajoutée par chaque succès. */
+export const achievementBonus = (save: TripotSave) => (hasFavor(save, 'legende') ? 2 : 1) * ACHIEVEMENT_BONUS;
+
+/** Ce que rapportent les faveurs à tout le tripot. */
+const favorFactor = (save: TripotSave) =>
+  (hasFavor(save, 'parrain') ? 1.5 : 1) * (hasFavor(save, 'famille') ? 2 : 1) * (hasFavor(save, 'empire') ? 3 : 1);
+
+/** Multiplicateur de tout le tripot : réputation, succès, cartes spéciales et faveurs. */
 export function globalFactor(save: TripotSave): number {
-  return (1 + REPUTATION_BONUS * save.reputation) * (1 + ACHIEVEMENT_BONUS * save.achievements.length) * upgradeFactor(save, 'all');
+  return (
+    (1 + REPUTATION_BONUS * save.reputation) *
+    (1 + achievementBonus(save) * save.achievements.length) *
+    upgradeFactor(save, 'all') *
+    favorFactor(save)
+  );
 }
+
+/** Une activité au prix du joueur (les gros bras font baisser les prix). */
+export const pricedBuilding = (save: TripotSave, b: Building): Building => (hasFavor(save, 'gros-bras') ? { ...b, cost: b.cost * 0.9 } : b);
 
 /** Jetons produits par seconde par tout le tripot (hors frénésie). */
 export function productionOf(save: TripotSave): number {
@@ -365,19 +487,26 @@ export function productionOf(save: TripotSave): number {
 /** Pendant une frénésie (le Dragon attrapé), tout le tripot produit sept fois plus. */
 export const FRENZY_FACTOR = 7;
 export const FRENZY_MS = 60_000;
+const frenzyMs = (save: TripotSave) => (hasFavor(save, 'apprivoise') ? 2 : 1) * FRENZY_MS;
 const frenzy = (save: TripotSave, now: number) => (now < save.frenzyUntil ? FRENZY_FACTOR : 1);
 
-/** Jetons rapportés par une carte distribuée à la main. */
+/** Après le passage du 1 multicolore, les cartes (et les combinaisons qu'elles forment) rapportent dix fois plus. */
+export const HOT_FACTOR = 10;
+export const HOT_CARDS = 50;
+
+/** Jetons rapportés par une carte distribuée à la main (hors 1 multicolore). */
 export function dealValue(save: TripotSave, now = save.updatedAt): number {
   const share = UPGRADES.filter((u) => u.target === 'dealRate' && save.upgrades.includes(u.id)).reduce((sum, u) => sum + u.factor, 0);
-  return upgradeFactor(save, 'deal') * globalFactor(save) + share * productionOf(save) * frenzy(save, now);
+  const fingers = hasFavor(save, 'doigts-fee') ? 3 : 1;
+  return upgradeFactor(save, 'deal') * fingers * globalFactor(save) + share * productionOf(save) * frenzy(save, now);
 }
 
-/** Jetons rapportés par une combinaison de la donne. */
+/** Jetons rapportés par une combinaison de la donne (hors 1 multicolore). */
 export function handValue(save: TripotSave, type: HandType, now = save.updatedAt): number {
   const palace = level(save) >= 5 ? 3 : 1;
+  const marked = hasFavor(save, 'marquees') ? 3 : 1;
   const base = Math.max(productionOf(save) * frenzy(save, now), upgradeFactor(save, 'deal') * globalFactor(save));
-  return HAND_SECONDS[type] * base * upgradeFactor(save, 'hand') * palace;
+  return HAND_SECONDS[type] * base * upgradeFactor(save, 'hand') * palace * marked;
 }
 
 const handsWon = (save: TripotSave) => Object.values(save.hands).reduce((sum, n) => sum + (n ?? 0), 0);
@@ -396,9 +525,10 @@ export function upgradeAvailable(save: TripotSave, u: Upgrade): boolean {
 /* ——— Le temps qui passe ——— */
 
 /** Au-delà de ce délai sans nouvelles, le joueur est parti : sa production continue, mais réduite et plafonnée. */
-const ONLINE_GAP_S = 120;
-export const offlineFactor = (save: TripotSave) => (level(save) >= 2 ? 0.75 : 0.5);
-export const offlineCapS = (save: TripotSave) => (level(save) >= 4 ? 24 : level(save) >= 1 ? 12 : 8) * 3600;
+export const ONLINE_GAP_S = 120;
+export const offlineFactor = (save: TripotSave) => (level(save) >= 2 ? 0.75 : 0.5) + (hasFavor(save, 'ardoise') ? 0.15 : 0);
+export const offlineCapS = (save: TripotSave) =>
+  ((level(save) >= 4 ? 24 : level(save) >= 1 ? 12 : 8) + (hasFavor(save, 'indic') ? 4 : 0)) * 3600;
 
 /**
  * Fait tourner le tripot jusqu'à `now` : la production du temps écoulé (pleine pendant les deux premières minutes,
@@ -438,12 +568,14 @@ export function deal(save: TripotSave, count: number, elapsedS: number, now = sa
   const allowed = Math.max(0, Math.min(Math.floor(count), Math.ceil((elapsedS + 1) * MAX_DEALS_PER_S)));
   const hands: DealtHand[] = [];
   for (let i = 0; i < allowed; i++) {
-    earn(save, dealValue(save, now));
+    const hot = save.hotCards > 0 ? HOT_FACTOR : 1;
+    save.hotCards = Math.max(0, save.hotCards - 1);
+    earn(save, dealValue(save, now) * hot);
     save.deals++;
     if (save.deals % HAND_SIZE !== 0) continue;
     const index = save.deals / HAND_SIZE - 1;
     const type = bestHand(handOf(save.seed, index));
-    const gain = type ? handValue(save, type, now) : 0;
+    const gain = type ? handValue(save, type, now) * hot : 0;
     if (type) {
       save.hands[type] = (save.hands[type] ?? 0) + 1;
       earn(save, gain);
@@ -453,43 +585,84 @@ export function deal(save: TripotSave, count: number, elapsedS: number, now = sa
   return hands;
 }
 
-/* ——— Le Dragon et le Phénix ——— */
+/* ——— Le Dragon, le Phénix et le 1 multicolore ——— */
 
 /** Premier passage peu après l'ouverture, puis toutes les 4 à 9 minutes (deux fois plus souvent au Cercle de jeu). */
 const EVENT_FIRST_MS = 90_000;
 const EVENT_MIN_MS = 4 * 60_000;
 const EVENT_SPREAD_MS = 5 * 60_000;
-/** Le temps de cliquer dessus, plus une marge pour le réseau. */
+/** Le temps de cliquer dessus (deux fois plus avec les habitués), plus une marge pour le réseau. */
 export const EVENT_WINDOW_MS = 12_000;
+export const eventWindowMs = (save: TripotSave) => (hasFavor(save, 'habitues') ? 2 : 1) * EVENT_WINDOW_MS;
 const EVENT_SLACK_MS = 3_000;
 
-export type EventResult = { kind: 'frenzy'; until: number } | { kind: 'loot'; gain: number };
+/** Ce qui passe sur la table : le Dragon (frénésie), le Phénix (butin) ou, plus rare, le 1 multicolore (main chaude). */
+export type EventKind = 'dragon' | 'phenix' | 'multi';
+export type EventResult = { kind: 'frenzy'; until: number } | { kind: 'loot'; gain: number } | { kind: 'hot'; cards: number };
 
 function scheduleEvent(save: TripotSave, now: number, random: () => number) {
   const delay = EVENT_MIN_MS + random() * EVENT_SPREAD_MS;
   save.nextEventAt = now + (level(save) >= 3 ? delay / 2 : delay);
+  const draw = random();
+  save.nextEventKind = draw < 0.4 ? 'dragon' : draw < 0.8 ? 'phenix' : 'multi';
 }
 
 /** Un passage manqué est reporté au suivant. */
 export function skipMissedEvent(save: TripotSave, now: number, random = Math.random) {
-  if (now > save.nextEventAt + EVENT_WINDOW_MS + EVENT_SLACK_MS) scheduleEvent(save, now, random);
+  if (now > save.nextEventAt + eventWindowMs(save) + EVENT_SLACK_MS) scheduleEvent(save, now, random);
 }
 
 /**
  * Attraper le passage en cours : le Dragon lance une frénésie (production ×7 pendant une minute), le Phénix apporte
- * un butin (un quart d'heure de production, sans dépasser 15 % des jetons en poche, et au moins de quoi démarrer).
+ * un butin (un quart d'heure de production, sans dépasser 15 % des jetons en poche, et au moins de quoi démarrer), le
+ * 1 multicolore rend les 50 cartes suivantes dix fois plus rentables.
  */
 export function catchEvent(save: TripotSave, now: number, random = Math.random): EventResult | BuyError {
-  if (now < save.nextEventAt - EVENT_SLACK_MS || now > save.nextEventAt + EVENT_WINDOW_MS + EVENT_SLACK_MS) return 'notAvailable';
+  if (now < save.nextEventAt - EVENT_SLACK_MS || now > save.nextEventAt + eventWindowMs(save) + EVENT_SLACK_MS) return 'notAvailable';
+  const kind = save.nextEventKind;
   save.caught++;
   scheduleEvent(save, now, random);
-  if (random() < 0.5) {
-    save.frenzyUntil = now + FRENZY_MS;
+  if (kind === 'dragon') {
+    save.frenzyUntil = now + frenzyMs(save);
     return { kind: 'frenzy', until: save.frenzyUntil };
+  }
+  if (kind === 'multi') {
+    save.hotCards += HOT_CARDS;
+    return { kind: 'hot', cards: save.hotCards };
   }
   const gain = Math.max(Math.min(productionOf(save) * 900, save.chips * 0.15), 50 * dealValue(save, now));
   earn(save, gain);
   return { kind: 'loot', gain };
+}
+
+/* ——— L'enveloppe du jour ——— */
+
+/** Jour précédent d'un jour « 2026-11-04 ». */
+function dayBefore(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/** L'enveloppe grossit avec la série de jours d'affilée, jusqu'à sept. */
+export const GIFT_MAX_STREAK = 7;
+
+/**
+ * Au premier passage de la journée, une enveloppe : vingt minutes de production par jour de série (au moins de
+ * quoi faire quelques achats au début). Renvoie ce qu'elle contenait, ou null si elle est déjà ouverte.
+ */
+export function openGift(save: TripotSave, day: string, now = save.updatedAt): number | null {
+  if (save.giftDay === day) return null;
+  save.streak = save.giftDay === dayBefore(day) ? save.streak + 1 : 1;
+  save.bestStreak = Math.max(save.bestStreak, save.streak);
+  save.giftDay = day;
+  save.visits++;
+  const gain =
+    Math.min(save.streak, GIFT_MAX_STREAK) *
+    Math.max(productionOf(save) * 1200, dealValue(save, now) * 100) *
+    (hasFavor(save, 'enveloppe') ? 3 : 1);
+  earn(save, gain);
+  return gain;
 }
 
 /* ——— Achats ——— */
@@ -498,8 +671,9 @@ export type BuyError = 'unknownItem' | 'tooExpensive' | 'notAvailable';
 
 /** Achète `count` exemplaires d'une activité (ou autant que possible avec `max`). */
 export function buyBuilding(save: TripotSave, id: string, count: number | 'max' = 1): BuyError | null {
-  const b = BUILDINGS.find((x) => x.id === id);
-  if (!b) return 'unknownItem';
+  const found = BUILDINGS.find((x) => x.id === id);
+  if (!found) return 'unknownItem';
+  const b = pricedBuilding(save, found);
   const n = count === 'max' ? affordable(b, owned(save, id), save.chips) : Math.max(1, Math.min(100, Math.floor(count) || 1));
   const cost = n > 0 ? bulkCost(b, owned(save, id), n) : Infinity;
   if (save.chips < cost) return 'tooExpensive';
@@ -518,14 +692,32 @@ export function buyUpgrade(save: TripotSave, id: string): BuyError | null {
   return null;
 }
 
+/** Achète toutes les améliorations proposées qu'on peut s'offrir, de la moins chère à la plus chère. */
+export function buyAllUpgrades(save: TripotSave): BuyError | null {
+  const bought = UPGRADES.filter((u) => upgradeAvailable(save, u))
+    .sort((a, b) => a.cost - b.cost)
+    .filter((u) => buyUpgrade(save, u.id) === null);
+  return bought.length > 0 ? null : 'tooExpensive';
+}
+
+export function buyFavor(save: TripotSave, id: string): BuyError | null {
+  const f = FAVORS.find((x) => x.id === id);
+  if (!f) return 'unknownItem';
+  if (hasFavor(save, id)) return 'notAvailable';
+  if (favorPoints(save) < f.cost) return 'tooExpensive';
+  save.favors.push(id);
+  return null;
+}
+
 /**
  * S'agrandir : on repart de zéro (jetons, activités, améliorations) et l'on encaisse la réputation méritée depuis le
- * début. Les succès, les cartes distribuées et les mains gagnées restent.
+ * début. Les succès, les faveurs, les cartes distribuées et les mains gagnées restent.
  */
 export function prestige(save: TripotSave): BuyError | null {
   const reputation = reputationFor(save.earnedAll);
   if (reputation <= save.reputation) return 'notAvailable';
-  Object.assign(save, { chips: 0, earned: 0, buildings: {}, upgrades: [], reputation, frenzyUntil: 0 });
+  const buildings = hasFavor(save, 'mise') ? { croupier: 10 } : {};
+  Object.assign(save, { chips: 0, earned: 0, buildings, upgrades: [], reputation, frenzyUntil: 0, hotCards: 0, grown: save.grown + 1 });
   return null;
 }
 
@@ -545,6 +737,27 @@ export function markDay(save: TripotSave, day: string) {
 export const rentOf = (save: TripotSave) => Object.values(save.days).reduce((sum, l) => sum + rentXp(l), 0);
 
 /* ——— Ce que voit le joueur ——— */
+
+/** Une amélioration pas encore proposée, mais qu'on peut viser : on possède déjà ce qu'elle concerne. */
+function upgradeInSight(save: TripotSave, u: Upgrade): boolean {
+  if (BUILDINGS.some((b) => b.id === u.target)) return owned(save, u.target) > 0;
+  if (u.id === 'gang-of-seven') return BUILDINGS.every((b) => owned(save, b.id) > 0);
+  return true;
+}
+
+/** Ce qu'il faut pour qu'une amélioration soit proposée. */
+function upgradeHint(u: Upgrade): string {
+  const n = intFormat.format(u.needs);
+  if (u.target === 'deal' || u.target === 'dealRate') return `À ${n} cartes distribuées`;
+  if (u.target === 'hand') return `À ${n} mains gagnantes`;
+  if (u.id === 'gang-of-four') return 'Avec 4 de chacune des huit premières activités';
+  if (u.id === 'gang-of-seven') return 'Avec 7 de chacune des seize activités';
+  if (u.target === 'all') return `À ${inWords(u.needs)} de jetons gagnés depuis l’agrandissement`;
+  const b = BUILDINGS.find((x) => x.id === u.target);
+  const single = b ? b.name.charAt(0).toLowerCase() + b.name.slice(1) : '';
+  return `Avec ${n} ${u.needs === 1 ? single : b?.plural}`;
+}
+const intFormat = new Intl.NumberFormat('fr-FR');
 
 export interface TripotView {
   seed: number;
@@ -574,8 +787,24 @@ export interface TripotView {
   offlineHours: number;
   /** Rente quotidienne d'expérience (null tant que le Tripot n'est pas ouvert à tous). */
   rent: number | null;
-  /** Jetons gagnés pendant l'absence, annoncés au retour. */
+  /** Jetons gagnés pendant l'absence, annoncés au retour, et durée de l'absence (secondes). */
   awayGain: number;
+  awaySeconds: number;
+  /** L'enveloppe du jour, si elle vient d'être ouverte. */
+  gift: { gain: number; streak: number } | null;
+  streak: number;
+  /** Ce qui passera au prochain passage, et le temps qu'il reste sur la table (millisecondes). */
+  eventKind: EventKind;
+  eventWindow: number;
+  /** Cartes qui rapportent encore dix fois plus. */
+  hotCards: number;
+  /** Production ajoutée par chaque succès. */
+  achievementBonus: number;
+  favorPoints: number;
+  favors: (Favor & { owned: boolean })[];
+  /** Les prochaines améliorations, avec ce qu'il faut pour qu'elles soient proposées. */
+  nextUpgrades: { id: string; icon: string; name: string; hint: string }[];
+  stats: { grown: number; visits: number; bestStreak: number; caught: number; createdAt: number; handsWon: number };
   buildings: (Building & { owned: number; price: number })[];
   upgrades: (Omit<Upgrade, 'needs' | 'factor' | 'target'> & { available: boolean })[];
   achievements: (Achievement & { done: boolean })[];
@@ -588,7 +817,7 @@ export interface TripotView {
 export function viewOf(
   save: TripotSave,
   now: number,
-  extra: { awayGain?: number; rentOpen?: boolean; newAchievements?: string[]; dealt?: DealtHand[] } = {},
+  extra: { awayGain?: number; awaySeconds?: number; gift?: number | null; rentOpen?: boolean; newAchievements?: string[]; dealt?: DealtHand[] } = {},
 ): TripotView {
   const lvl = level(save);
   const reputationNow = reputationFor(save.earnedAll);
@@ -618,7 +847,24 @@ export function viewOf(
     offlineHours: offlineCapS(save) / 3600,
     rent: extra.rentOpen ? rentXp(lvl) : null,
     awayGain: extra.awayGain ?? 0,
-    buildings: BUILDINGS.map((b) => ({ ...b, rate: b.rate * upgradeFactor(save, b.id) * globalFactor(save), owned: owned(save, b.id), price: buildingCost(b, owned(save, b.id)) })),
+    awaySeconds: extra.awaySeconds ?? 0,
+    gift: extra.gift ? { gain: extra.gift, streak: save.streak } : null,
+    streak: save.streak,
+    eventKind: save.nextEventKind,
+    eventWindow: eventWindowMs(save),
+    hotCards: save.hotCards,
+    achievementBonus: achievementBonus(save),
+    favorPoints: favorPoints(save),
+    favors: FAVORS.map((f) => ({ ...f, owned: hasFavor(save, f.id) })),
+    nextUpgrades: UPGRADES.filter((u) => !save.upgrades.includes(u.id) && !upgradeAvailable(save, u) && upgradeInSight(save, u))
+      .sort((a, b) => a.cost - b.cost)
+      .slice(0, 3)
+      .map((u) => ({ id: u.id, icon: u.icon, name: u.name, hint: upgradeHint(u) })),
+    stats: { grown: save.grown, visits: save.visits, bestStreak: save.bestStreak, caught: save.caught, createdAt: save.createdAt, handsWon: handsWon(save) },
+    buildings: BUILDINGS.map((b) => {
+      const priced = pricedBuilding(save, b);
+      return { ...priced, rate: b.rate * upgradeFactor(save, b.id) * globalFactor(save), owned: owned(save, b.id), price: buildingCost(priced, owned(save, b.id)) };
+    }),
     // Les améliorations proposées, de la moins chère à la plus chère ; les achetées en dernier.
     upgrades: UPGRADES.filter((u) => upgradeAvailable(save, u) || save.upgrades.includes(u.id))
       .map(({ needs: _n, factor: _f, target: _t, ...u }) => ({ ...u, available: !save.upgrades.includes(u.id) }))

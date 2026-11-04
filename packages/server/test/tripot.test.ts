@@ -2,8 +2,11 @@ import type { Card } from '@gof/engine';
 import { describe, expect, it } from 'vitest';
 import {
   BUILDINGS,
+  FAVORS,
   FRENZY_FACTOR,
   HAND_SIZE,
+  HOT_CARDS,
+  HOT_FACTOR,
   MAX_DEALS_PER_S,
   REPUTATION_UNIT,
   UPGRADES,
@@ -12,7 +15,9 @@ import {
   bestHand,
   buildingCost,
   bulkCost,
+  buyAllUpgrades,
   buyBuilding,
+  buyFavor,
   buyUpgrade,
   catchEvent,
   checkAchievements,
@@ -21,11 +26,13 @@ import {
   handOf,
   markDay,
   newSave,
+  openGift,
   prestige,
   productionOf,
   rentOf,
   rentXp,
   reputationFor,
+  upgradeSave,
   venueLevel,
   venueName,
   viewOf,
@@ -120,15 +127,17 @@ describe('le Tripot', () => {
     expect(save.chips).toBe(600 + 120 * 10 + away);
   });
 
-  it('laisse attraper le Dragon ou le Phénix quand il passe, et pas en dehors', () => {
+  it('laisse attraper le Dragon, le Phénix ou le 1 multicolore quand il passe, et pas en dehors', () => {
     const save = newSave(0);
     save.buildings = { croupier: 10 };
     expect(catchEvent(save, 1000)).toBe('notAvailable');
     const at = save.nextEventAt;
-    // Le Dragon : frénésie d'une minute.
-    expect(catchEvent(save, at, () => 0.1)).toEqual({ kind: 'frenzy', until: at + 60_000 });
+    // Le Dragon : frénésie d'une minute. Le suivant est tiré d'avance (ici, le Phénix).
+    expect(save.nextEventKind).toBe('dragon');
+    expect(catchEvent(save, at, () => 0.5)).toEqual({ kind: 'frenzy', until: at + 60_000 });
     expect(save.caught).toBe(1);
     expect(save.nextEventAt).toBeGreaterThan(at);
+    expect(save.nextEventKind).toBe('phenix');
     save.updatedAt = at;
     save.chips = 0;
     advance(save, at + 10_000);
@@ -138,6 +147,76 @@ describe('le Tripot', () => {
     const loot = catchEvent(save, save.nextEventAt, () => 0.9);
     expect(loot).toMatchObject({ kind: 'loot' });
     expect(save.chips).toBeGreaterThan(before);
+    // Le 1 multicolore : les cinquante cartes suivantes rapportent dix fois plus, combinaisons comprises.
+    expect(save.nextEventKind).toBe('multi');
+    expect(catchEvent(save, save.nextEventAt)).toEqual({ kind: 'hot', cards: HOT_CARDS });
+    save.chips = 0;
+    const hands = deal(save, HAND_SIZE, 10);
+    const handGain = hands.reduce((sum, h) => sum + h.gain, 0);
+    expect(save.chips).toBeCloseTo(HAND_SIZE * dealValue(save) * HOT_FACTOR + handGain);
+    expect(save.hotCards).toBe(HOT_CARDS - HAND_SIZE);
+  });
+
+  it('ouvre une enveloppe par jour, plus garnie à chaque jour d’affilée', () => {
+    const save = newSave(0);
+    save.buildings = { croupier: 10 };
+    const first = openGift(save, '2026-11-01')!;
+    expect(first).toBe(10 * 1200);
+    expect(openGift(save, '2026-11-01')).toBeNull();
+    expect(openGift(save, '2026-11-02')).toBe(2 * first);
+    expect(save).toMatchObject({ streak: 2, bestStreak: 2, visits: 2 });
+    // Un jour manqué : la série repart de un.
+    expect(openGift(save, '2026-11-04')).toBe(first);
+    expect(save).toMatchObject({ streak: 1, bestStreak: 2, visits: 3 });
+    // D'un mois sur l'autre.
+    save.giftDay = '2026-10-31';
+    openGift(save, '2026-11-01');
+    expect(save.streak).toBe(2);
+  });
+
+  it('achète les faveurs avec la réputation, sans la perdre, et elles restent après un agrandissement', () => {
+    const save = newSave(0);
+    expect(buyFavor(save, 'mise')).toBe('tooExpensive');
+    save.reputation = 3;
+    expect(buyFavor(save, 'inconnue')).toBe('unknownItem');
+    expect(buyFavor(save, 'mise')).toBeNull();
+    expect(buyFavor(save, 'mise')).toBe('notAvailable');
+    expect(buyFavor(save, 'indic')).toBeNull();
+    expect(viewOf(save, 0)).toMatchObject({ favorPoints: 0, reputation: 3, offlineHours: 12 + 4 });
+    // La mise de départ : dix croupiers à chaque agrandissement.
+    save.earnedAll = 64 * REPUTATION_UNIT;
+    expect(prestige(save)).toBeNull();
+    expect(save).toMatchObject({ buildings: { croupier: 10 }, favors: ['mise', 'indic'], grown: 1, reputation: 4 });
+    // Les gros bras font baisser les prix, à l'écran comme à la caisse.
+    save.favors.push('gros-bras');
+    const price = viewOf(save, 0).buildings.find((b) => b.id === 'croupier')!.price;
+    expect(price).toBe(Math.ceil(croupier.cost * 0.9 * 1.15 ** 10));
+    save.chips = price;
+    expect(buyBuilding(save, 'croupier')).toBeNull();
+    expect(save.chips).toBe(0);
+    expect(FAVORS.every((f) => f.cost > 0)).toBe(true);
+  });
+
+  it('achète d’un coup toutes les améliorations à sa portée, et annonce les suivantes', () => {
+    const save = newSave(0);
+    save.buildings = { croupier: 1, donneur: 1 };
+    save.deals = 10;
+    expect(viewOf(save, 0).nextUpgrades.map((u) => u.id)).toContain('donneur-brelan');
+    expect(viewOf(save, 0).nextUpgrades.find((u) => u.id === 'donneur-brelan')?.hint).toBe('Avec 5 donneurs du dimanche');
+    save.chips = 200;
+    expect(buyAllUpgrades(save)).toBeNull();
+    // Les moins chères d'abord : donneur (120), doigts (80)… jusqu'à ne plus pouvoir.
+    expect(save.upgrades).toEqual(['doigts', 'donneur-paire']);
+    expect(buyAllUpgrades(save)).toBe('tooExpensive');
+  });
+
+  it('complète les parties enregistrées avant les nouveautés', () => {
+    const old = newSave(5) as Partial<ReturnType<typeof newSave>>;
+    delete old.favors;
+    delete old.nextEventKind;
+    delete old.createdAt;
+    const save = upgradeSave(old as ReturnType<typeof newSave>);
+    expect(save).toMatchObject({ favors: [], nextEventKind: 'dragon', hotCards: 0, streak: 0, createdAt: 5 });
   });
 
   it('fait grandir l’établissement : on repart de zéro avec la réputation méritée', () => {

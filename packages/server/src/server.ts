@@ -9,14 +9,18 @@ import {
   type BuyError,
   type DealtHand,
   type EventResult,
+  ONLINE_GAP_S,
   type TripotSave,
   advance,
+  buyAllUpgrades,
   buyBuilding,
+  buyFavor,
   buyUpgrade,
   catchEvent,
   checkAchievements,
   deal,
   markDay,
+  openGift,
   prestige,
   skipMissedEvent,
   viewOf,
@@ -702,6 +706,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const save = tripot.get(account!.id, now);
       const elapsed = (now - save.updatedAt) / 1000;
       const awayGain = advance(save, now);
+      const gift = openGift(save, dayOf(new Date(now)), now);
       const dealt: DealtHand[] = typeof deals === 'number' && deals > 0 ? deal(save, deals, elapsed, now) : [];
       const result = run?.(save, now) ?? null;
       skipMissedEvent(save, now);
@@ -709,13 +714,18 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       if (tripotOpen) markDay(save, dayOf(new Date(now)));
       tripot.save();
       if (typeof result === 'string') return ack({ ok: false, error: result });
-      ack({ ok: true, ...result, tripot: viewOf(save, now, { awayGain, rentOpen: tripotOpen, newAchievements, dealt }) });
+      ack({ ok: true, ...result, tripot: viewOf(save, now, { awayGain, awaySeconds: Math.max(0, elapsed - ONLINE_GAP_S), gift, rentOpen: tripotOpen, newAchievements, dealt }) });
     }
     on('tripot:get', (_payload, ack) => withTripot(ack, 0));
     on('tripot:sync', (payload, ack) => withTripot(ack, payload.deals));
     on('tripot:buy', (payload, ack) => {
       const count = payload.count === 'max' ? 'max' : typeof payload.count === 'number' ? payload.count : 1;
-      withTripot(ack, payload.deals, (save) => (payload.kind === 'upgrade' ? buyUpgrade(save, text(payload.id)) : buyBuilding(save, text(payload.id), count)));
+      withTripot(ack, payload.deals, (save) => {
+        if (payload.kind === 'upgrade') return buyUpgrade(save, text(payload.id));
+        if (payload.kind === 'allUpgrades') return buyAllUpgrades(save);
+        if (payload.kind === 'favor') return buyFavor(save, text(payload.id));
+        return buyBuilding(save, text(payload.id), count);
+      });
     });
     on('tripot:prestige', (_payload, ack) => withTripot(ack, 0, prestige));
     on('tripot:catch', (payload, ack) =>

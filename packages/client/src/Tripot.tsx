@@ -1,7 +1,7 @@
 import type { Card } from '@gof/engine';
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { HandType, TripotEvent, TripotView } from '../../server/src/protocol';
-import { EVENT_WINDOW_MS, HAND_SIZE, REPUTATION_UNIT, affordable, bestHand, bulkCost, earnedForReputation, handOf, reputationFor } from '../../server/src/tripot';
+import { HAND_SIZE, HOT_FACTOR, REPUTATION_UNIT, affordable, bestHand, bulkCost, earnedForReputation, handOf, reputationFor } from '../../server/src/tripot';
 import { cardImage } from './CardView';
 import { errorLabel } from './labels';
 import { socket } from './socket';
@@ -65,7 +65,13 @@ export const HAND_LABELS: Record<HandType, string> = {
 
 type Float = { id: number; x: number; y: number; text: string };
 type Amount = 1 | 10 | 'max';
-type Tab = 'salle' | 'ameliorations' | 'succes';
+type Tab = 'salle' | 'ameliorations' | 'faveurs' | 'succes';
+type Buy = { kind: 'building' | 'upgrade' | 'allUpgrades' | 'favor'; id?: string; count?: number | 'max' };
+
+/** Ce qui passe sur la table, avec sa carte : le Dragon, l'un des deux phénix, ou le 1 multicolore. */
+const EVENT_CARDS = { dragon: ['DR', 'Attraper le Dragon'], phenix: ['PV', 'Attraper le Phénix'], multi: ['1M', 'Attraper le 1 multicolore'] } as const;
+
+const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 /**
  * Le Tripot : on clique sur le paquet pour distribuer des cartes (cinq font une main, et une belle combinaison
@@ -82,7 +88,8 @@ export function TripotScreen() {
   const [tab, setTab] = useState<Tab>('salle');
   const [amount, setAmount] = useState<Amount>(1);
   const [error, setError] = useState('');
-  const [awayGain, setAwayGain] = useState(0);
+  const [away, setAway] = useState<{ gain: number; seconds: number } | null>(null);
+  const [gift, setGift] = useState<{ gain: number; streak: number } | null>(null);
   const [floats, setFloats] = useState<Float[]>([]);
   const [combo, setCombo] = useState<{ id: number; type: HandType; gain: number } | null>(null);
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
@@ -104,15 +111,16 @@ export function TripotScreen() {
       setView(tripot);
       setReceivedAt(Date.now());
       setClockOffset(tripot.now - Date.now());
+      if (tripot.gift) setGift(tripot.gift);
       const names = tripot.newAchievements.map((id) => tripot.achievements.find((a) => a.id === id)?.name).filter(Boolean);
-      if (names.length > 0) announce(`🏆 Succès : ${names.join(', ')} (+${names.length} % de production)`);
+      if (names.length > 0) announce(`🏆 Succès : ${names.join(', ')} (+${Math.round(names.length * tripot.achievementBonus * 100)} % de production)`);
     },
     [announce],
   );
 
   /** Envoie les cartes en attente (ou rien), éventuellement avec un achat, et reçoit la partie à jour. */
   const sync = useCallback(
-    async (buy?: { kind: 'building' | 'upgrade'; id: string; count?: number | 'max' }) => {
+    async (buy?: Buy) => {
       const batch = pending.current;
       pending.current = { deals: 0, gain: 0 };
       sending.current = batch;
@@ -141,7 +149,7 @@ export function TripotScreen() {
     void socket.emitWithAck('tripot:get').then((result) => {
       if (!result.ok) return setError(errorLabel(result.error));
       receive(result.tripot);
-      setAwayGain(result.tripot.awayGain);
+      if (result.tripot.awayGain > 0) setAway({ gain: result.tripot.awayGain, seconds: result.tripot.awaySeconds });
     });
     const syncTimer = setInterval(() => void sync(), SYNC_MS);
     // Le compteur avance en continu entre deux envois (dix fois par seconde suffit à l'œil).
@@ -159,6 +167,17 @@ export function TripotScreen() {
       flush();
     };
   }, [receive, sync]);
+
+  // Les jetons dans l'onglet du navigateur, comme dans tout bon jeu d'incrémentation.
+  const title = view ? `${chipsLabel(view.chips + view.rate * ((Date.now() - receivedAt) / 1000))} jetons · Le Tripot` : '';
+  useEffect(() => {
+    if (!title) return;
+    const before = document.title;
+    document.title = title;
+    return () => {
+      document.title = before;
+    };
+  }, [title]);
 
   if (!view) return <p className="muted">{error || 'Ouverture du tripot…'}</p>;
 
@@ -183,16 +202,20 @@ export function TripotScreen() {
   const shownCards = dealt === 0 ? 0 : dealt - handIndex * HAND_SIZE;
   const hand = handOf(view.seed, handIndex);
 
-  // Le Dragon (ou le Phénix) passe : on a quelques secondes pour cliquer dessus.
-  const eventOn = serverNow >= view.nextEventAt && serverNow <= view.nextEventAt + EVENT_WINDOW_MS && caughtEvent !== view.nextEventAt;
+  // Le Dragon (ou le Phénix, ou le 1 multicolore) passe : on a quelques secondes pour cliquer dessus.
+  const eventOn = serverNow >= view.nextEventAt && serverNow <= view.nextEventAt + view.eventWindow && caughtEvent !== view.nextEventAt;
+  const [eventCard, eventLabel] = EVENT_CARDS[view.eventKind];
+  // Après le 1 multicolore, les cartes qui restent à rapporter dix fois plus.
+  const hotLeft = Math.max(0, view.hotCards - unsent);
 
   function dealCard(e: MouseEvent<HTMLButtonElement>) {
     const index = view!.deals + pending.current.deals + sending.current.deals;
-    let gain = view!.dealValue;
+    const hot = view!.hotCards - pending.current.deals - sending.current.deals > 0 ? HOT_FACTOR : 1;
+    let gain = view!.dealValue * hot;
     if (index % HAND_SIZE === HAND_SIZE - 1) {
       const type = bestHand(handOf(view!.seed, Math.floor(index / HAND_SIZE)));
       if (type) {
-        const value = view!.handValues[type];
+        const value = view!.handValues[type] * hot;
         gain += value;
         setCombo({ id: nextId.current++, type, gain: value });
       } else setCombo(null);
@@ -203,7 +226,7 @@ export function TripotScreen() {
     // Le « +N » s'envole d'où l'on a cliqué (au centre du paquet au clavier).
     const x = e.clientX ? e.clientX - box.left : box.width / 2;
     const y = e.clientY ? e.clientY - box.top : box.height / 2;
-    setFloats((f) => [...f.slice(-14), { id, x, y, text: `+${chipsLabel(view!.dealValue)}` }]);
+    setFloats((f) => [...f.slice(-14), { id, x, y, text: `+${chipsLabel(view!.dealValue * hot)}` }]);
     setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 900);
   }
 
@@ -224,8 +247,10 @@ export function TripotScreen() {
     const event: TripotEvent = result.event;
     announce(
       event.kind === 'frenzy'
-        ? '🐉 Le Dragon s’emballe : tout le tripot produit sept fois plus pendant une minute !'
-        : `🦅 Le Phénix renaît dans ta caisse : +${chipsLabel(event.gain)} jetons !`,
+        ? `🐉 Le Dragon s’emballe : tout le tripot produit sept fois plus pendant ${durationLabel((event.until - result.tripot.now) / 1000)} !`
+        : event.kind === 'hot'
+          ? `🌈 Le 1 multicolore : tes ${event.cards} prochaines cartes rapportent dix fois plus, combinaisons comprises !`
+          : `🦅 Le Phénix renaît dans ta caisse : +${chipsLabel(event.gain)} jetons !`,
     );
   }
 
@@ -241,6 +266,10 @@ export function TripotScreen() {
   }
 
   const available = view.upgrades.filter((u) => u.available);
+  const ownedUpgrades = view.upgrades.filter((u) => !u.available);
+  const affordableUpgrades = available.filter((u) => chips >= u.cost);
+  const favorsOpen = view.reputation > 0 || view.favors.some((f) => f.owned);
+  const favorsAffordable = view.favors.filter((f) => !f.owned && f.cost <= view.favorPoints).length;
   const achievementsDone = view.achievements.filter((a) => a.done).length;
   // Les activités se dévoilent au fil des jetons gagnés, une seule activité encore cachée restant visible : la prochaine.
   const revealed = view.buildings.map((b) => b.owned > 0 || earned >= b.cost / 2);
@@ -272,15 +301,28 @@ export function TripotScreen() {
           </div>
         </div>
 
+        {hotLeft > 0 && (
+          <div className="tripot-frenzy tripot-hot" role="status">
+            🌈 Main de maître : encore {hotLeft} carte{hotLeft > 1 ? 's' : ''} à ×{HOT_FACTOR}
+          </div>
+        )}
         {frenzyLeft > 0 && (
           <div className="tripot-frenzy" role="status">
             🐉 Frénésie du Dragon : production ×7 encore {Math.ceil(frenzyLeft)} s
           </div>
         )}
-        {awayGain > 0 && (
-          <button type="button" className="tripot-away" onClick={() => setAwayGain(0)}>
-            🌙 Pendant ton absence, le tripot a rapporté <b>+{chipsLabel(awayGain)} jetons</b>. (Il tourne à{' '}
-            {view.offlineFactor === 0.5 ? 'moitié' : 'trois quarts'}, {view.offlineHours} h au plus : reviens vite !)
+        {gift && (
+          <button type="button" className="tripot-away tripot-gift" onClick={() => setGift(null)}>
+            ✉️ L’enveloppe du jour : <b>+{chipsLabel(gift.gain)} jetons</b>.{' '}
+            {gift.streak > 1 ? `${gift.streak} jours d’affilée` : 'Premier jour de série'}
+            {gift.streak < 7 ? ' : reviens demain, elle sera plus garnie.' : ', l’enveloppe est au maximum.'}
+          </button>
+        )}
+        {away && (
+          <button type="button" className="tripot-away" onClick={() => setAway(null)}>
+            🌙 Tu es parti {durationLabel(away.seconds)} : le tripot a rapporté <b>+{chipsLabel(away.gain)} jetons</b>. (Il tourne à{' '}
+            {Math.round(view.offlineFactor * 100)} % pendant ton absence, {view.offlineHours} h au plus
+            {away.seconds > view.offlineHours * 3600 ? ' : le reste a été perdu' : ''}.)
           </button>
         )}
 
@@ -310,8 +352,14 @@ export function TripotScreen() {
             ))}
           </button>
           {eventOn && (
-            <button type="button" className="tripot-event" onClick={() => void catchIt()} aria-label="Attraper le Dragon">
-              <img src="/cards/DR.webp" alt="" draggable={false} />
+            <button
+              type="button"
+              className={`tripot-event event-${view.eventKind}`}
+              style={{ animationDuration: `${view.eventWindow / 1000}s` }}
+              onClick={() => void catchIt()}
+              aria-label={eventLabel}
+            >
+              <img src={`/cards/${view.eventKind === 'phenix' && view.nextEventAt % 2 ? 'PJ' : eventCard}.webp`} alt="" draggable={false} />
             </button>
           )}
           {dealt < 10 && <span className="tripot-hint">Clique sur le paquet : cinq cartes font une main</span>}
@@ -346,6 +394,11 @@ export function TripotScreen() {
           <span>
             Jetons gagnés en tout <b>{chipsLabel(earnedAll)}</b>
           </span>
+          {view.streak > 0 && (
+            <span>
+              Série <b>{view.streak} j</b>
+            </span>
+          )}
           {view.rent !== null && (
             <span>
               Rente <b>+{view.rent} XP</b> par jour de passage
@@ -361,7 +414,7 @@ export function TripotScreen() {
             <strong>{gain > 0 ? `S’agrandir : +${intFormat.format(gain)} de réputation` : 'S’agrandir'}</strong>
             <small>
               {gain > 0
-                ? `Tu repars de zéro avec ${intFormat.format(view.reputation + gain)} de réputation (+2 % de production chacun).`
+                ? `Tu repars de zéro avec ${intFormat.format(view.reputation + gain)} de réputation (+2 % de production chacun) et ${intFormat.format(gain)} faveur${gain > 1 ? 's' : ''} à dépenser.`
                 : `${view.reputation > 0 ? 'Prochain' : 'Premier'} point de réputation à ${chipsLabel(nextPointAt)} jetons gagnés en tout.`}{' '}
               Prochain établissement : <b>{view.nextVenue?.name}</b> à {intFormat.format(view.nextVenue?.reputation ?? 0)} de réputation.
             </small>
@@ -389,11 +442,16 @@ export function TripotScreen() {
         </div>
         <div className="segmented tripot-tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'salle'} className={tab === 'salle' ? 'on' : ''} onClick={() => setTab('salle')}>
-            Établissement
+            Activités
           </button>
           <button role="tab" aria-selected={tab === 'ameliorations'} className={tab === 'ameliorations' ? 'on' : ''} onClick={() => setTab('ameliorations')}>
-            Améliorations {available.length > 0 && <span className="tripot-count">{available.length}</span>}
+            Améliorations {affordableUpgrades.length > 0 && <span className="tripot-count">{affordableUpgrades.length}</span>}
           </button>
+          {favorsOpen && (
+            <button role="tab" aria-selected={tab === 'faveurs'} className={tab === 'faveurs' ? 'on' : ''} onClick={() => setTab('faveurs')}>
+              Faveurs {favorsAffordable > 0 && <span className="tripot-count">{favorsAffordable}</span>}
+            </button>
+          )}
           <button role="tab" aria-selected={tab === 'succes'} className={tab === 'succes' ? 'on' : ''} onClick={() => setTab('succes')}>
             Succès
           </button>
@@ -460,28 +518,103 @@ export function TripotScreen() {
           </>
         )}
         {tab === 'ameliorations' && (
-          <ul className="tripot-items">
-            {view.upgrades.length === 0 && <li className="muted">Distribue et embauche : les améliorations arrivent vite.</li>}
-            {view.upgrades.map((u) => (
-              <li key={u.id}>
-                <button
-                  type="button"
-                  className={`tripot-item ${u.available ? (chips >= u.cost ? 'affordable' : '') : 'owned'}`}
-                  disabled={!u.available || chips < u.cost}
-                  onClick={() => void sync({ kind: 'upgrade', id: u.id })}
-                >
+          <>
+            {affordableUpgrades.length > 1 && (
+              <button type="button" className="primary tripot-buy-all" onClick={() => void sync({ kind: 'allUpgrades' })}>
+                Tout acheter ({affordableUpgrades.length})
+              </button>
+            )}
+            <ul className="tripot-items">
+              {available.length === 0 && view.nextUpgrades.length === 0 && <li className="muted">Distribue et embauche : les améliorations arrivent vite.</li>}
+              {available.map((u) => (
+                <li key={u.id}>
+                  <button
+                    type="button"
+                    className={`tripot-item ${chips >= u.cost ? 'affordable' : ''}`}
+                    disabled={chips < u.cost}
+                    onClick={() => void sync({ kind: 'upgrade', id: u.id })}
+                  >
+                    <span className="tripot-icon" aria-hidden>
+                      {u.icon}
+                    </span>
+                    <span className="tripot-item-text">
+                      <strong>{u.name}</strong>
+                      <small>{u.text}</small>
+                    </span>
+                    <span className="tripot-price">
+                      <small>{chipsLabel(u.cost)}</small>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {view.nextUpgrades.map((u) => (
+                <li key={u.id} className="tripot-item locked">
                   <span className="tripot-icon" aria-hidden>
                     {u.icon}
                   </span>
                   <span className="tripot-item-text">
                     <strong>{u.name}</strong>
-                    <small>{u.text}</small>
+                    <small>{u.hint}</small>
                   </span>
-                  <span className="tripot-price">{u.available ? <small>{chipsLabel(u.cost)}</small> : <span className="tripot-done">✓</span>}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                  <span className="tripot-price">🔒</span>
+                </li>
+              ))}
+            </ul>
+            {ownedUpgrades.length > 0 && (
+              <>
+                <p className="tripot-achievements-head">
+                  <b>{ownedUpgrades.length}</b> amélioration{ownedUpgrades.length > 1 ? 's' : ''} acquise{ownedUpgrades.length > 1 ? 's' : ''}
+                </p>
+                <ul className="tripot-owned-upgrades">
+                  {ownedUpgrades.map((u) => (
+                    <li key={u.id} title={`${u.name} : ${u.text}`}>
+                      {u.icon}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+        {tab === 'faveurs' && (
+          <>
+            <p className="tripot-achievements-head">
+              <b>
+                {intFormat.format(view.favorPoints)} faveur{view.favorPoints > 1 ? 's' : ''}
+              </b>{' '}
+              à dépenser. Chaque point de réputation gagné en t’agrandissant en donne une, sans rien perdre de son bonus. Ce que tu
+              obtiens reste pour toujours.
+            </p>
+            <ul className="tripot-items">
+              {view.favors.map((f) => (
+                <li key={f.id}>
+                  <button
+                    type="button"
+                    className={`tripot-item ${f.owned ? 'owned' : f.cost <= view.favorPoints ? 'affordable' : ''}`}
+                    disabled={f.owned || f.cost > view.favorPoints}
+                    onClick={() => void sync({ kind: 'favor', id: f.id })}
+                  >
+                    <span className="tripot-icon" aria-hidden>
+                      {f.icon}
+                    </span>
+                    <span className="tripot-item-text">
+                      <strong>{f.name}</strong>
+                      <small>{f.text}</small>
+                    </span>
+                    <span className="tripot-price">
+                      {f.owned ? (
+                        <span className="tripot-done">✓</span>
+                      ) : (
+                        <small>
+                          {intFormat.format(f.cost)} faveur{f.cost > 1 ? 's' : ''}
+                        </small>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
         {tab === 'succes' && (
           <>
@@ -489,8 +622,24 @@ export function TripotScreen() {
               <b>
                 {achievementsDone} / {view.achievements.length}
               </b>{' '}
-              succès · +{achievementsDone} % de production. Ils restent quand tu t’agrandis.
+              succès · +{Math.round(achievementsDone * view.achievementBonus * 100)} % de production. Ils restent quand tu t’agrandis.
             </p>
+            <dl className="tripot-statsheet">
+              <dt>Ouvert le</dt>
+              <dd>{dateFormat.format(view.stats.createdAt)}</dd>
+              <dt>Jours de visite</dt>
+              <dd>
+                {view.stats.visits} (meilleure série : {view.stats.bestStreak} j)
+              </dd>
+              <dt>Agrandissements</dt>
+              <dd>{view.stats.grown}</dd>
+              <dt>Mains gagnantes</dt>
+              <dd>{intFormat.format(view.stats.handsWon)}</dd>
+              <dt>Passages attrapés</dt>
+              <dd>{intFormat.format(view.stats.caught)}</dd>
+              <dt>Jetons ce tour-ci</dt>
+              <dd>{chipsLabel(earned)}</dd>
+            </dl>
             <ul className="tripot-achievements">
               {view.achievements.map((a) => (
                 <li key={a.id} className={a.done ? 'done' : ''} title={`${a.name} : ${a.text}`}>
@@ -518,9 +667,9 @@ export function TripotScreen() {
             <p>
               Tu vends tout (jetons, activités, améliorations) et tu gagnes <b>+{intFormat.format(gain)} de réputation</b>, soit{' '}
               {intFormat.format(view.reputation + gain)} en tout : <b>+{intFormat.format(2 * (view.reputation + gain))} % de production</b> pour
-              toujours.
+              toujours, et <b>{intFormat.format(gain)} faveur{gain > 1 ? 's' : ''} du milieu</b> à dépenser.
             </p>
-            <p className="muted">Tes succès, tes cartes distribuées et tes mains gagnées restent.</p>
+            <p className="muted">Tes succès, tes faveurs, tes cartes distribuées et tes mains gagnées restent.</p>
             {view.nextVenue && view.reputation + gain >= view.nextVenue.reputation && (
               <p>
                 🎉 Tu ouvres <b>{view.nextVenue.name}</b> : {view.nextVenue.perk}

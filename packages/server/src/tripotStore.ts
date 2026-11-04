@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { type TripotSave, newSave, rentOf } from './tripot';
+import { type TripotSave, newSave, rentOf, upgradeSave } from './tripot';
 
 /** Les parties du Tripot de tous les joueurs, gardées dans un fichier JSON (ou en mémoire sans fichier). */
 export class TripotStore {
@@ -19,7 +19,7 @@ export class TripotStore {
   /** La partie d'un joueur, créée à sa première visite (une partie d'avant la refonte repart de zéro). */
   get(account: string, now = Date.now()): TripotSave {
     const save = this.saves[account];
-    if (save?.v === 2) return save;
+    if (save?.v === 2) return upgradeSave(save);
     return (this.saves[account] = newSave(now));
   }
 
