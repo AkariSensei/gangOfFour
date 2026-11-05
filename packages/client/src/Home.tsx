@@ -1,9 +1,12 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { type BotLevel, GAMES, type LiveRoom, type Session } from '../../server/src/protocol';
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
+import { createPlayingDeck } from '@gof/engine';
+import { type BotLevel, GAMES, type GameId, type LiveRoom, type Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
 import { Avatar } from './Avatar';
 import { CommunityScreen } from './Community';
 import { Leaderboard, useStats } from './Leaderboard';
+import { PlayingCardView } from './PlayingCard';
+import { PresidentRules } from './PresidentRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonCard, SeasonScreen } from './Season';
@@ -19,7 +22,20 @@ const TUTORIAL_SEEN = 'gof-tutorial-seen';
  * Écrans de l'accueil, chacun avec son adresse (#saison…) : les trois onglets du site (les jeux, la saison, la
  * communauté), le profil, et les écrans d'un jeu (sa page, puis jouer, regarder, son classement).
  */
-const SCREENS = ['jeux', 'saison', 'communaute', 'profil', 'gof', 'jouer', 'regarder', 'classement'] as const;
+const SCREENS = [
+  'jeux',
+  'saison',
+  'communaute',
+  'profil',
+  'gof',
+  'jouer',
+  'regarder',
+  'classement',
+  'president',
+  'president-jouer',
+  'president-regarder',
+  'president-classement',
+] as const;
 type Screen = (typeof SCREENS)[number];
 
 const TABS: { id: Screen; label: string }[] = [
@@ -29,7 +45,28 @@ const TABS: { id: Screen; label: string }[] = [
 ];
 
 /** Où ramène le bouton retour de chaque écran (les onglets n'en ont pas). */
-const PARENT: Partial<Record<Screen, Screen>> = { gof: 'jeux', jouer: 'gof', regarder: 'gof', classement: 'gof', profil: 'jeux' };
+const PARENT: Partial<Record<Screen, Screen>> = {
+  gof: 'jeux',
+  jouer: 'gof',
+  regarder: 'gof',
+  classement: 'gof',
+  president: 'jeux',
+  'president-jouer': 'president',
+  'president-regarder': 'president',
+  'president-classement': 'president',
+  profil: 'jeux',
+};
+
+/** Les écrans de chaque jeu : sa page, puis jouer, regarder et son classement. */
+const GAME_SCREENS: Record<GameId, { hub: Screen; play: Screen; watch: Screen; ranking: Screen }> = {
+  gof: { hub: 'gof', play: 'jouer', watch: 'regarder', ranking: 'classement' },
+  president: { hub: 'president', play: 'president-jouer', watch: 'president-regarder', ranking: 'president-classement' },
+};
+const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', president: 'Président' };
+
+/** Quelques cartes classiques pour les illustrations du Président. */
+const PLAYING_DECK = createPlayingDeck();
+const playingCards = (...ids: string[]) => ids.map((id) => PLAYING_DECK.find((c) => c.id === id)!);
 const depth = (s: Screen): number => (PARENT[s] ? 1 + depth(PARENT[s]!) : 0);
 /** L'onglet d'un écran : lui-même, ou celui de son parent. */
 const tabOf = (s: Screen): Screen => (PARENT[s] ? tabOf(PARENT[s]!) : s);
@@ -64,7 +101,7 @@ export function Home({
   }
   const [error, setError] = useState(notice);
   const [admin, setAdmin] = useState(false);
-  const [rules, setRules] = useState(false);
+  const [rules, setRules] = useState<GameId | null>(null);
   const { account } = me;
   const signedIn = !!account?.name;
   const profile = useMyProfile(account?.name || undefined);
@@ -77,6 +114,7 @@ export function Home({
   // Navigation entre les écrans : l'adresse suit l'écran, pour que le bouton Retour du navigateur ramène en arrière.
   // Un lien d'invitation (?salon=1234) ouvre directement l'écran « Jouer », le code déjà rempli.
   const [screen, setScreen] = useState<Screen>(() => (invite ? 'jouer' : screenOf(location.hash)));
+  const liveOf = (game: GameId) => live.filter((r) => (r.game ?? 'gof') === game);
   const [leaving, setLeaving] = useState<{ screen: Screen; back: boolean } | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
   function show(next: Screen, back = depth(next) < depth(screen)) {
@@ -201,19 +239,25 @@ export function Home({
             <div className="game-cards">
               {GAMES.map((g) =>
                 g.status === 'live' ? (
-                  <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open('gof')}>
+                  <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open(GAME_SCREENS[g.id as GameId].hub)}>
                     <span className="game-card-top">
                       <span className="game-card-players">{g.players}</span>
-                      {live.length > 0 && (
+                      {liveOf(g.id as GameId).length > 0 && (
                         <span className="game-card-live">
-                          {live.length} partie{live.length > 1 ? 's' : ''} en cours
+                          {liveOf(g.id as GameId).length} partie{liveOf(g.id as GameId).length > 1 ? 's' : ''} en cours
                         </span>
                       )}
                     </span>
                     <span className="game-card-art" aria-hidden>
-                      <img src="/cards/PV.webp" alt="" />
-                      <img src="/cards/DR.webp" alt="" />
-                      <img src="/cards/1M.webp" alt="" />
+                      {g.id === 'president' ? (
+                        playingCards('KH', 'AS', '2D').map((c) => <PlayingCardView key={c.id} card={c} />)
+                      ) : (
+                        <>
+                          <img src="/cards/PV.webp" alt="" />
+                          <img src="/cards/DR.webp" alt="" />
+                          <img src="/cards/1M.webp" alt="" />
+                        </>
+                      )}
                     </span>
                     <strong>{g.name}</strong>
                     <small>{g.tagline}</small>
@@ -290,14 +334,48 @@ export function Home({
                 <MenuItem
                   icon="👀"
                   title="Regarder"
-                  subtitle={live.length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
-                  pill={live.length > 0 ? { text: `${live.length} en cours`, live: true } : undefined}
+                  subtitle={liveOf('gof').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
+                  pill={liveOf('gof').length > 0 ? { text: `${liveOf('gof').length} en cours`, live: true } : undefined}
                   onClick={() => open('regarder')}
                 />
                 <div className="menu-tiles">
                   <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('classement')} />
                   <MenuItem tile icon="🎓" title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
-                  <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules(true)} />
+                  <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules('gof')} />
+                </div>
+              </nav>
+              {error && <p className="error">{error}</p>}
+            </div>
+          </div>
+        );
+      case 'president':
+        return (
+          <div className="menu-screen game-hub president-hub">
+            <button type="button" className="back-button hub-back" onClick={back}>
+              ← Jeux
+            </button>
+            <div className="menu-title">
+              <div className="p-fan" aria-hidden>
+                {playingCards('3C', '7D', 'QS', 'AH', '2S').map((c, i) => (
+                  <PlayingCardView key={c.id} card={c} style={{ '--i': i - 2 } as CSSProperties} />
+                ))}
+              </div>
+              <h1 className="game-title">Président</h1>
+              <p className="tagline">Le premier sera président, le dernier… trou.</p>
+            </div>
+            <div className="menu-side">
+              <nav className="game-menu" aria-label="Président">
+                <MenuItem primary icon="👑" title="Jouer" subtitle="De 3 à 7 joueurs, collègues ou bots" onClick={() => open('president-jouer')} />
+                <MenuItem
+                  icon="👀"
+                  title="Regarder"
+                  subtitle={liveOf('president').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
+                  pill={liveOf('president').length > 0 ? { text: `${liveOf('president').length} en cours`, live: true } : undefined}
+                  onClick={() => open('president-regarder')}
+                />
+                <div className="menu-tiles two">
+                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('president-classement')} />
+                  <MenuItem tile icon="📜" title="Règles" subtitle="Celles du bureau" onClick={() => setRules('president')} />
                 </div>
               </nav>
               {error && <p className="error">{error}</p>}
@@ -305,25 +383,34 @@ export function Home({
           </div>
         );
       case 'jouer':
+      case 'president-jouer': {
+        const game: GameId = s === 'jouer' ? 'gof' : 'president';
         return (
-          <SubScreen title="Jouer" onBack={back} backLabel="Gang of Four">
-            <PlayScreen initialCode={invite} onEnter={onEnter} />
+          <SubScreen title="Jouer" onBack={back} backLabel={GAME_NAMES[game]}>
+            <PlayScreen game={game} initialCode={game === 'gof' ? invite : ''} onEnter={onEnter} />
           </SubScreen>
         );
+      }
       case 'regarder':
+      case 'president-regarder': {
+        const game: GameId = s === 'regarder' ? 'gof' : 'president';
         return (
-          <SubScreen title="Regarder" onBack={back} backLabel="Gang of Four" narrow>
-            <LiveRooms rooms={live} onWatch={onEnter} />
+          <SubScreen title="Regarder" onBack={back} backLabel={GAME_NAMES[game]} narrow>
+            <LiveRooms rooms={liveOf(game)} onWatch={onEnter} />
           </SubScreen>
         );
+      }
       case 'classement':
+      case 'president-classement': {
+        const game: GameId = s === 'classement' ? 'gof' : 'president';
         return (
-          <SubScreen title="Classement" onBack={back} backLabel="Gang of Four">
+          <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
             <div className="ranking-screen">
-              <Leaderboard stats={stats} />
+              <Leaderboard stats={stats} game={game} />
             </div>
           </SubScreen>
         );
+      }
       case 'profil':
         return account?.name ? (
           <SubScreen title="Mon profil" onBack={back} backLabel="Jeux">
@@ -391,7 +478,8 @@ export function Home({
           {render(screen)}
         </div>
       </div>
-      {rules && <Rules onClose={() => setRules(false)} />}
+      {rules === 'gof' && <Rules onClose={() => setRules(null)} />}
+      {rules === 'president' && <PresidentRules onClose={() => setRules(null)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
     </main>
   );
@@ -463,8 +551,11 @@ function SubScreen({
   );
 }
 
-/** Écran « Jouer » : créer un salon, rejoindre avec un code, ou lancer tout de suite une partie contre trois bots. */
-function PlayScreen({ initialCode, onEnter }: { initialCode: string; onEnter: (s: Session) => void }) {
+/** Bots de la partie rapide : trois à Gang of Four, quatre au Président. */
+const QUICK_BOTS: Record<GameId, number> = { gof: 3, president: 4 };
+
+/** Écran « Jouer » : créer un salon, rejoindre avec un code, ou lancer tout de suite une partie contre des bots. */
+function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode: string; onEnter: (s: Session) => void }) {
   const [code, setCode] = useState(initialCode);
   const [level, setLevel] = useState<BotLevel>('normal');
   const [busy, setBusy] = useState(false);
@@ -481,9 +572,9 @@ function PlayScreen({ initialCode, onEnter }: { initialCode: string; onEnter: (s
 
   /** Partie rapide : un salon, trois bots du niveau choisi, et la partie démarre aussitôt (sans passer par le salon). */
   async function quickGame() {
-    const created = await socket.emitWithAck('room:create');
+    const created = await socket.emitWithAck('room:create', { game });
     if (!created.ok) return created;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < QUICK_BOTS[game]; i++) {
       const added = await socket.emitWithAck('room:addBot', { level });
       if (!added.ok) return added;
     }
@@ -504,7 +595,7 @@ function PlayScreen({ initialCode, onEnter }: { initialCode: string; onEnter: (s
           </span>
           <strong>Créer un salon</strong>
           <p>Invite tes collègues avec un code, ou complète la table avec des bots.</p>
-          <button type="button" className="primary" disabled={busy} onClick={() => void run(() => socket.emitWithAck('room:create'))}>
+          <button type="button" className="primary" disabled={busy} onClick={() => void run(() => socket.emitWithAck('room:create', { game }))}>
             Créer
           </button>
         </section>
@@ -541,7 +632,7 @@ function PlayScreen({ initialCode, onEnter }: { initialCode: string; onEnter: (s
             🤖
           </span>
           <strong>Partie rapide</strong>
-          <p>Toi contre trois bots, au niveau de ton choix : la partie démarre tout de suite.</p>
+          <p>Toi contre {QUICK_BOTS[game] === 3 ? 'trois' : 'quatre'} bots, au niveau de ton choix : la partie démarre tout de suite.</p>
           <div className="segmented" role="radiogroup" aria-label="Niveau des bots">
             {(Object.entries(LEVEL_LABELS) as [BotLevel, string][]).map(([id, label]) => (
               <button key={id} type="button" role="radio" aria-checked={level === id} className={level === id ? 'on' : ''} onClick={() => setLevel(id)}>

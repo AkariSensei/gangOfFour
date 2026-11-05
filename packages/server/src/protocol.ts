@@ -1,4 +1,5 @@
-import type { ActionError, Card, PlayerView } from '@gof/engine';
+import type { ActionError, Card, PlayerView, PlayingCard, PresidentError, PresidentView } from '@gof/engine';
+import type { GameId } from './rules';
 import type { BotLevel } from './bot';
 import type { Progress } from './progression';
 import type { Season } from './seasons';
@@ -35,6 +36,8 @@ export interface Cosmetics {
 export interface RoomView {
   code: string;
   hostId: string;
+  /** Jeu du salon. */
+  game: GameId;
   players: ({
     id: string;
     name: string;
@@ -90,11 +93,31 @@ export interface IdeaView {
 }
 
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
-export type GameView = PlayerView & { hands?: Card[][] };
+export type GofView = PlayerView & { hands?: Card[][] };
+export type PresidentGameView = PresidentView & { hands?: PlayingCard[][] };
+export type GameView = GofView | PresidentGameView;
+export type { GameId };
+
+/** La vue est-elle celle d'une partie de Président ? */
+export const isPresidentView = (view: GameView): view is PresidentGameView => 'game' in view && view.game === 'president';
+
+/**
+ * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours : `leaderboard` et `seasonal` pour les
+ * parties en ligne, `botLeaderboard` et `botSeasonal` pour celles jouées seul contre des bots.
+ */
+export interface GameStats {
+  leaderboard: LeaderboardEntry[];
+  seasonal: LeaderboardEntry[];
+  botLeaderboard: LeaderboardEntry[];
+  botSeasonal: LeaderboardEntry[];
+  recent: GameRecord[];
+  streak: WinStreak | null;
+}
 
 /** Partie en cours, proposée sur l'accueil à ceux qui veulent la regarder. */
 export interface LiveRoom {
   code: string;
+  game: GameId;
   players: { name: string; score: number; bot: boolean }[];
   round: number;
   spectators: number;
@@ -208,7 +231,8 @@ export interface ClientToServerEvents {
   'admin:unrank': (payload: { id: string }, ack: Ack) => void;
   /** L'admin remet le classement à zéro : les parties jouées jusqu'ici sont archivées. */
   'admin:resetRanking': (ack: Ack) => void;
-  'room:create': (ack: Ack<Session>) => void;
+  /** Crée un salon pour ce jeu (Gang of Four sans jeu précisé). */
+  'room:create': (payload: { game?: GameId }, ack: Ack<Session>) => void;
   'room:join': (payload: { code: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string; onlyIfFree?: boolean }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
@@ -225,29 +249,19 @@ export interface ClientToServerEvents {
   'room:kick': (payload: { playerId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin met la partie en pause (pour une réunion, un café) ou la relance. */
   'room:pause': (payload: { paused: boolean }, ack: Ack) => void;
-  'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
+  /** `targetScore` : Gang of Four ; `rounds` : nombre de manches du Président. */
+  'game:start': (payload: { targetScore?: number; rounds?: number; turnSeconds?: number }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
   'game:autoPass': (payload: { enabled: boolean }, ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
+  /** Président : les cartes rendues pendant l'échange (2 pour le Président, 1 pour le Vice-président). */
+  'game:giveCards': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
-  /**
-   * Classements de Gang of Four, de la saison en cours (`seasonal`) et de toujours : `leaderboard` et `seasonal` pour
-   * les parties en ligne, `botLeaderboard` et `botSeasonal` pour celles jouées seul contre des bots.
-   */
-  'stats:get': (
-    ack: Ack<{
-      season: Season;
-      leaderboard: LeaderboardEntry[];
-      seasonal: LeaderboardEntry[];
-      botLeaderboard: LeaderboardEntry[];
-      botSeasonal: LeaderboardEntry[];
-      recent: GameRecord[];
-      streak: WinStreak | null;
-    }>,
-  ) => void;
+  /** La saison en cours, et les classements de chaque jeu jouable. */
+  'stats:get': (ack: Ack<{ season: Season; games: Record<GameId, GameStats> }>) => void;
   'stats:player': (payload: { name: string }, ack: Ack<{ profile: PlayerProfile | null }>) => void;
   /** Série de jours joués du joueur connecté. */
   'daily:get': (ack: Ack<{ daily: DailyView }>) => void;

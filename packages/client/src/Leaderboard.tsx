@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { GameRecord, LeaderboardEntry, Season, WinStreak } from '../../server/src/protocol';
+import type { GameId, GameStats, Season } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+/** La saison en cours et les classements de chaque jeu. */
 export interface Stats {
   season: Season;
-  leaderboard: LeaderboardEntry[];
-  seasonal: LeaderboardEntry[];
-  botLeaderboard: LeaderboardEntry[];
-  botSeasonal: LeaderboardEntry[];
-  recent: GameRecord[];
-  streak: WinStreak | null;
+  games: Record<GameId, GameStats>;
 }
 
 /** Jours qu'il reste dans la saison, aujourd'hui compris. */
@@ -44,16 +40,29 @@ export function useStats(): Stats | null {
 }
 
 /**
- * Classement de Gang of Four et dernières parties. `seasonOnly` (écran Saison) : seulement le classement de la saison,
+ * Classement d'un jeu et ses dernières parties. `seasonOnly` (écran Saison) : seulement le classement de la saison,
  * sans les dernières parties.
  */
-export function Leaderboard({ stats, title = 'Classement du bureau', seasonOnly }: { stats: Stats | null; title?: string; seasonOnly?: boolean }) {
+export function Leaderboard({
+  stats: all,
+  game = 'gof',
+  title = 'Classement du bureau',
+  seasonOnly,
+}: {
+  stats: Stats | null;
+  game?: GameId;
+  title?: string;
+  seasonOnly?: boolean;
+}) {
   const [shown, setShown] = useState<string | null>(null);
   const [tab, setTab] = useState<'season' | 'all'>('season');
   // Parties en ligne (au moins deux personnes) ou jouées seul contre des bots : deux classements séparés.
   const [mode, setMode] = useState<'online' | 'bots'>('online');
 
-  if (!stats) return null;
+  if (!all) return null;
+  const stats = all.games[game];
+  // La fiche d'un joueur ne parle que de Gang of Four pour l'instant : pas de fiche depuis les autres classements.
+  const withProfile = game === 'gof';
   const period = seasonOnly ? 'season' : tab;
   const ranking =
     mode === 'online' ? (period === 'season' ? stats.seasonal : stats.leaderboard) : period === 'season' ? stats.botSeasonal : stats.botLeaderboard;
@@ -91,7 +100,7 @@ export function Leaderboard({ stats, title = 'Classement du bureau', seasonOnly 
           ))}
         </div>
         {shown && <Profile name={shown} onClose={() => setShown(null)} />}
-        <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>
+        {withProfile && <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>}
         {ranking.length === 0 && (
           <p className="muted">
             Aucune partie {mode === 'online' ? 'en ligne' : 'contre les bots'} terminée {period === 'season' ? 'cette saison ' : ''}pour l'instant.
@@ -103,13 +112,17 @@ export function Leaderboard({ stats, title = 'Classement du bureau', seasonOnly 
               <span className="medal" aria-hidden>
                 {['🥇', '🥈', '🥉'][i] ?? i + 1}
               </span>
-              <button className="who" onClick={() => setShown(e.name)} title="Voir ses statistiques">
-                {e.name}
-              </button>
+              {withProfile ? (
+                <button className="who" onClick={() => setShown(e.name)} title="Voir ses statistiques">
+                  {e.name}
+                </button>
+              ) : (
+                <span className="who">{e.name}</span>
+              )}
               <span className="stat" title="Victoires / parties">
                 <strong>{e.wins}</strong> / {e.games}
               </span>
-              <span className="stat muted" title="Score moyen (le plus bas est le meilleur)">
+              <span className="stat muted" title={withProfile ? 'Score moyen (le plus bas est le meilleur)' : 'Points moyens par partie'}>
                 moy. {e.averageScore}
               </span>
             </li>
@@ -118,9 +131,13 @@ export function Leaderboard({ stats, title = 'Classement du bureau', seasonOnly 
         {stats.streak && mode === 'online' && (
           <p className="streak" title="Record du bureau : plus longue série de victoires d'affilée">
             🔥 Record :{' '}
-            <button className="who" onClick={() => setShown(stats.streak!.name)}>
-              {stats.streak.name}
-            </button>
+            {withProfile ? (
+              <button className="who" onClick={() => setShown(stats.streak!.name)}>
+                {stats.streak.name}
+              </button>
+            ) : (
+              <strong>{stats.streak.name}</strong>
+            )}
             , <strong>{stats.streak.wins}</strong> victoires d'affilée
           </p>
         )}

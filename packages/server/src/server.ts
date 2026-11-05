@@ -10,10 +10,11 @@ import { GameHistory } from './history';
 import { seasonOf } from './seasons';
 import { SavedRooms } from './saved-rooms';
 import { createStaticHandler } from './static';
-import { type ClientToServerEvents, REACTIONS, type ServerToClientEvents } from './protocol';
-import { chooseBotAction } from './bot';
+import type { GameState } from '@gof/engine';
+import { type ClientToServerEvents, type GameStats, type GameView, REACTIONS, type ServerToClientEvents } from './protocol';
 import { DEFAULT_LIMITS, type Limits, RateLimiter, clientIp } from './limits';
-import { type PlayerAction, type Room, RoomManager, type Result } from './rooms';
+import { type PlayerAction, type Room, RoomManager, type Result, rulesOfRoom } from './rooms';
+import { type GameId, isGameId } from './rules';
 
 /**
  * Délai avant de supprimer une partie dont tous les joueurs ont fermé leur onglet (le temps de recharger la page).
@@ -132,14 +133,14 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   /** Ajoute la partie à l'historique dès qu'elle est terminée, une seule fois. */
   function recordIfFinished(code: string) {
     const room = rooms.get(code);
-    if (room?.game?.phase !== 'gameOver' || room.recorded) return;
+    if (!room?.game || !rulesOfRoom(room).over(room.game) || room.recorded) return;
     room.recorded = true;
     // Le tutoriel ne compte pas : c'est une manche écrite à l'avance.
     if (room.tutorial) return;
     const game = room.game;
     withProgress(room, () =>
-      history.record(
-        game,
+      history.add(
+        rulesOfRoom(room).summary(game),
         new Date(),
         botSeats(room),
         room.seats.map((s) => s.account),
@@ -189,7 +190,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const bot = rooms.botToAct(code);
     if (botTimers.has(code) || !(bot || rooms.stuckToPass(code))) return;
     // L'échange suit juste la coupe : le bot attend la fin de l'animation pour que chacun voie la coupe puis l'échange.
-    const justCut = rooms.get(code)?.game?.phase === 'exchange';
+    const current = rooms.get(code);
+    const justCut = !current?.kind && (current?.game as GameState | null)?.phase === 'exchange';
     botTimers.set(
       code,
       setTimeout(() => {
@@ -219,17 +221,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const index = room.seats.indexOf(seat);
     // Tutoriel : le bot joue le coup prévu par le script.
     const scripted = rooms.tutorialMove(room);
-    const choice = room.tutorial
-      ? scripted && { type: scripted.cardIds ? ('play' as const) : ('pass' as const), cardIds: scripted.cardIds ?? [] }
-      : chooseBotAction(room.game, index, Math.random, seat.level);
-    if (!choice) return;
-    const { playerIndex: _index, ...action } = choice as typeof choice & { playerIndex?: number };
-    let result = rooms.act(code, seat.playerId, action as PlayerAction);
+    const rules = rulesOfRoom(room);
+    const action: PlayerAction | null | undefined = room.tutorial
+      ? scripted && (scripted.cardIds ? { type: 'play', cardIds: scripted.cardIds } : { type: 'pass' })
+      : rules.botAction(room.game, index, Math.random, seat.level);
+    if (!action) return;
+    let result = rooms.act(code, seat.playerId, action);
     // Coup refusé (cas non prévu par la stratégie) : le bot passe, ou ouvre avec sa plus petite carte.
-    if (!result.ok && room.game.phase === 'playing') {
-      const hand = room.game.players[index]!.hand;
-      result = rooms.act(code, seat.playerId, room.game.table ? { type: 'pass' } : { type: 'play', cardIds: [hand[0]!.id] });
-    }
+    const fallback = result.ok ? null : rules.fallback(room.game, index);
+    if (fallback) result = rooms.act(code, seat.playerId, fallback);
     if (!result.ok) errors.record('bot', new Error(`Bot bloqué dans le salon ${code} : ${result.error}`));
     recordIfFinished(code);
     void broadcast(code);
@@ -248,9 +248,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const seat = rooms.seatToAct(code);
     const current = turnTimers.get(code);
     // Le tour est identifié par la manche, la phase, le pli et le joueur : tant qu'il ne change pas, le temps court.
-    const turn = game && seat ? `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` : '';
-    // Pas de minuteur pendant l'échange : le gagnant prend le temps de choisir la carte qu'il rend.
-    const active = !!room?.turnSeconds && !!seat && !seat.bot && !seat.away && !rooms.isAbandoned(code) && game?.phase !== 'exchange';
+    const turn = room && game && seat ? `${rulesOfRoom(room).turnKey(game)}-${seat.playerId}` : '';
+    // Pas de minuteur pendant l'échange : le gagnant prend le temps de choisir les cartes qu'il rend.
+    const active = !!room?.turnSeconds && !!seat && !seat.bot && !seat.away && !rooms.isAbandoned(code) && !!game && !rulesOfRoom(room).untimed(game);
     if (!active) {
       clearTimeout(current?.timer);
       turnTimers.delete(code);
@@ -287,18 +287,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const seat = rooms.seatToAct(code);
     const game = room?.game;
     if (!room || !game || !seat || room.paused) return;
-    if (`${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}-${seat.playerId}` !== turn) return;
-    const index = room.seats.indexOf(seat);
-    let action: PlayerAction | null = null;
-    if (game.phase === 'playing' && game.table) {
-      action = { type: 'pass' };
-    } else {
-      const choice = chooseBotAction(game, index);
-      if (choice && choice.type !== 'nextRound') {
-        const { playerIndex: _index, ...rest } = choice;
-        action = rest as PlayerAction;
-      }
-    }
+    const rules = rulesOfRoom(room);
+    if (`${rules.turnKey(game)}-${seat.playerId}` !== turn) return;
+    const action = rules.timeout(game, room.seats.indexOf(seat));
     if (!action) return;
     const result = rooms.act(code, seat.playerId, action);
     if (!result.ok) {
@@ -326,7 +317,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     for (const socket of sockets) {
       socket.emit('room:state', roomView);
       const gameView = socket.data.spectator ? rooms.spectatorView(room) : rooms.gameView(room, socket.data.playerId!);
-      if (gameView) socket.emit('game:state', gameView);
+      if (gameView) socket.emit('game:state', gameView as GameView);
     }
   }
 
@@ -633,12 +624,13 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       ack({ ok: true });
     });
 
-    on('room:create', (_payload, ack) => {
+    on('room:create', (payload, ack) => {
       const seated = player();
       if (!seated.ok) return ack(seated);
       const { account, name } = seated;
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
-      return allowed.ok ? enter(rooms.create(name, account, account.id), ack) : ack(allowed);
+      const game = isGameId(payload.game) ? payload.game : 'gof';
+      return allowed.ok ? enter(rooms.create(name, account, account.id, game), ack) : ack(allowed);
     });
     on('tutorial:start', (_payload, ack) => {
       const seated = player();
@@ -756,7 +748,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
       handle(ack, (code, playerId) =>
-        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
+        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), rounds: Number(payload.rounds), turnSeconds: Number(payload.turnSeconds) }),
       ),
     );
     on('game:rematch', (_payload, ack) => handle(ack, (code, playerId) => rooms.rematch(code, playerId)));
@@ -766,22 +758,24 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:pass', (_payload, ack) => act({ type: 'pass' }, ack));
     on('game:autoPass', (payload, ack) => handle(ack, (code, playerId) => rooms.setAutoPass(code, playerId, payload.enabled === true)));
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
+    on('game:giveCards', (payload, ack) =>
+      act({ type: 'giveCards', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
+    );
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     // Deux classements : les parties en ligne (au moins deux personnes) et celles jouées seul contre des bots.
     // Le record de série ne compte que les parties en ligne.
     on('stats:get', (_payload, ack) => {
       const season = seasonOf(new Date());
-      ack({
-        ok: true,
-        season,
-        leaderboard: history.leaderboard(10, undefined, 'online'),
-        seasonal: history.leaderboard(10, season.id, 'online'),
-        botLeaderboard: history.leaderboard(10, undefined, 'bots'),
-        botSeasonal: history.leaderboard(10, season.id, 'bots'),
-        recent: history.recent(),
-        streak: history.bestStreak('online'),
+      const statsOf = (game: GameId): GameStats => ({
+        leaderboard: history.leaderboard(10, undefined, 'online', game),
+        seasonal: history.leaderboard(10, season.id, 'online', game),
+        botLeaderboard: history.leaderboard(10, undefined, 'bots', game),
+        botSeasonal: history.leaderboard(10, season.id, 'bots', game),
+        recent: history.recent(5, game),
+        streak: history.bestStreak('online', game),
       });
+      ack({ ok: true, season, games: { gof: statsOf('gof'), president: statsOf('president') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { dayOf, streakOf } from './daily';
-import { DEFAULT_GAME } from './games';
+import { DEFAULT_GAME, GAMES } from './games';
 import { seasonOf } from './seasons';
 import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
@@ -77,6 +77,24 @@ export interface WinStreak {
 
 const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 
+/** Une partie terminée telle que ses règles la résument : le jeu, les manches, et pour chaque siège ses points. */
+export interface GameSummary {
+  game: string;
+  rounds: number;
+  players: { name: string; score: number; winner: boolean; roundsWon?: number; gangs?: number; worstRound?: number }[];
+}
+
+export function gofSummary(game: GameState): GameSummary {
+  return {
+    game: DEFAULT_GAME,
+    rounds: game.round,
+    players: game.players.map((p, i) => ({ name: p.name, score: p.score, winner: game.winners.includes(i), ...(game.stats?.[i] ?? {}) })),
+  };
+}
+
+/** Jeu d'une partie enregistrée (celles d'avant les autres jeux sont des parties de Gang of Four). */
+const gameOf = (record: GameRecord) => record.game ?? DEFAULT_GAME;
+
 /** Partie jouée seul contre des bots : niveau du plus fort des bots de la table (undefined sinon, ou sans niveau connu). */
 function topBotLevel(record: GameRecord): BotLevel | undefined {
   if (record.players.filter((p) => !p.bot).length >= 2) return undefined;
@@ -111,6 +129,7 @@ export class GameHistory {
    * `bots` : indices des joueurs tenus par l'ordinateur, gardés dans l'historique mais pas dans le classement.
    * `accounts` : compte de chaque siège, pour que le classement suive la personne et pas le pseudo.
    */
+  /** Partie de Gang of Four terminée. */
   record(
     game: GameState,
     finishedAt = new Date(),
@@ -118,26 +137,30 @@ export class GameHistory {
     accounts: (string | undefined)[] = [],
     levels: (BotLevel | undefined)[] = [],
   ): GameRecord {
-    const record = this.toRecord(game, finishedAt, bots, accounts, levels);
+    return this.add(gofSummary(game), finishedAt, bots, accounts, levels);
+  }
+
+  /** Partie terminée de n'importe quel jeu, résumée par ses règles. */
+  add(
+    summary: GameSummary,
+    finishedAt = new Date(),
+    bots: number[] = [],
+    accounts: (string | undefined)[] = [],
+    levels: (BotLevel | undefined)[] = [],
+  ): GameRecord {
+    const record: GameRecord = {
+      game: summary.game,
+      finishedAt: finishedAt.toISOString(),
+      rounds: summary.rounds,
+      players: summary.players.map((p, i) => ({
+        ...p,
+        ...(bots.includes(i) ? { bot: true, ...(levels[i] ? { botLevel: levels[i] } : {}) } : {}),
+        ...(accounts[i] ? { account: accounts[i] } : {}),
+      })),
+    };
     this.records.push(record);
     this.save();
     return record;
-  }
-
-  private toRecord(game: GameState, finishedAt: Date, bots: number[], accounts: (string | undefined)[], levels: (BotLevel | undefined)[] = []): GameRecord {
-    return {
-      game: DEFAULT_GAME,
-      finishedAt: finishedAt.toISOString(),
-      rounds: game.round,
-      players: game.players.map((p, i) => ({
-        name: p.name,
-        score: p.score,
-        winner: game.winners.includes(i),
-        ...(bots.includes(i) ? { bot: true, ...(levels[i] ? { botLevel: levels[i] } : {}) } : {}),
-        ...(accounts[i] ? { account: accounts[i] } : {}),
-        ...(game.stats?.[i] ?? {}),
-      })),
-    };
   }
 
   /** Parties qui comptent : celles d'après la dernière remise à zéro. */
@@ -214,8 +237,9 @@ export class GameHistory {
     return this.accounts?.get(this.owner(player))?.name ?? player.name;
   }
 
-  recent(limit = 5): GameRecord[] {
+  recent(limit = 5, game = DEFAULT_GAME): GameRecord[] {
     return this.counted
+      .filter((r) => gameOf(r) === game)
       .slice(-limit)
       .reverse()
       .map((record) => ({
@@ -240,9 +264,11 @@ export class GameHistory {
 
   /** Classement complet, avec le compte (ou « pseudo:… ») de chaque ligne. */
   private ranking(season?: string, mode?: RankingMode, game = DEFAULT_GAME): (LeaderboardEntry & { owner: string })[] {
+    // Gang of Four : le score le plus bas est le meilleur ; ailleurs, le plus haut.
+    const scoreOrder = GAMES.find((g) => g.id === game)?.lowScoreWins ? 1 : -1;
     const byName = new Map<string, LeaderboardEntry & { total: number }>();
     for (const record of this.ofMode(mode)) {
-      if ((record.game ?? DEFAULT_GAME) !== game) continue;
+      if (gameOf(record) !== game) continue;
       if (season && seasonOf(new Date(record.finishedAt)).id !== season) continue;
       for (const p of record.players) {
         if (!this.ranked(p)) continue;
@@ -257,17 +283,18 @@ export class GameHistory {
     }
     return [...byName]
       .map(([owner, { total, ...e }]) => ({ ...e, owner, averageScore: Math.round(total / e.games) }))
-      .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || a.averageScore - b.averageScore);
+      .sort((a, b) => b.wins - a.wins || b.wins / b.games - a.wins / a.games || (a.averageScore - b.averageScore) * scoreOrder);
   }
 
   /**
    * Record du bureau : la plus longue série de parties gagnées d'affilée par un compte (une victoire partagée compte).
    * À égalité, le record reste à celui qui l'a atteint en premier. Null tant que personne n'a gagné deux fois de suite.
    */
-  bestStreak(mode?: RankingMode): WinStreak | null {
+  bestStreak(mode?: RankingMode, game = DEFAULT_GAME): WinStreak | null {
     const current = new Map<string, number>();
     let best: { player: GameRecord['players'][number]; wins: number } | null = null;
     for (const record of this.ofMode(mode)) {
+      if (gameOf(record) !== game) continue;
       for (const p of record.players) {
         if (!this.ranked(p) || !p.account) continue;
         const wins = p.winner ? (current.get(p.account) ?? 0) + 1 : 0;
@@ -279,8 +306,10 @@ export class GameHistory {
   }
 
   /** Parties d'un joueur (compte, ou « pseudo:… » d'avant les comptes), de la plus ancienne à la plus récente. */
-  private gamesOf(owner: string) {
+  /** `game` : seulement les parties de ce jeu (sans : tous les jeux). */
+  private gamesOf(owner: string, game?: string) {
     return this.counted.flatMap((record) => {
+      if (game && gameOf(record) !== game) return [];
       const me = record.players.find((p) => this.ranked(p) && this.owner(p) === owner);
       return me ? [{ record, me }] : [];
     });
@@ -297,7 +326,7 @@ export class GameHistory {
   }
 
   private xpOf(owner: string): number {
-    const games: GameForXp[] = this.gamesOf(owner).map(({ record, me }) => ({
+    const games: GameForXp[] = this.gamesOf(owner, DEFAULT_GAME).map(({ record, me }) => ({
       rank: 1 + record.players.filter((p) => p.score < me.score).length,
       players: record.players.length,
       roundsWon: me.roundsWon ?? 0,
@@ -323,7 +352,7 @@ export class GameHistory {
   /** Fiche d'un joueur humain (nom sans tenir compte des majuscules), ou null s'il n'a jamais joué. */
   profile(name: string): PlayerProfile | null {
     const owner = this.accounts?.byName(name)?.id ?? `pseudo:${key(name)}`;
-    const games = this.gamesOf(owner);
+    const games = this.gamesOf(owner, DEFAULT_GAME);
     if (games.length === 0) return null;
     const sum = (f: (g: (typeof games)[number]) => number) => games.reduce((total, g) => total + f(g), 0);
     const progress = progressOf(this.xpOf(owner));

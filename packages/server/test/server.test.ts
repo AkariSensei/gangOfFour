@@ -4,21 +4,22 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { type PlayerView, createDeck } from '@gof/engine';
+import { type GameState, type PlayerView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type ClientToServerEvents,
   type GameServer,
   type GameServerOptions,
-  type GameView,
+  type GofView,
+  type PresidentGameView,
   type RoomView,
   type ServerToClientEvents,
   createGameServer,
 } from '../src';
 import { playBotTurn } from '../scripts/bot';
 
-type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: GameView };
+type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { room?: RoomView; game?: GofView };
 
 let server: GameServer;
 const clients: Client[] = [];
@@ -59,7 +60,8 @@ function connectWith(auth?: { session: string }): Client {
   const { port } = server.http.address() as AddressInfo;
   const client: Client = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, auth });
   client.on('room:state', (room) => (client.room = room));
-  client.on('game:state', (game) => (client.game = game));
+  // Les tests de Gang of Four lisent la vue telle quelle ; ceux du Président la convertissent eux-mêmes.
+  client.on('game:state', (game) => (client.game = game as GofView));
   clients.push(client);
   return client;
 }
@@ -79,7 +81,7 @@ afterEach(async () => {
 
 async function lobby(count: number) {
   const host = connect('Alice');
-  const created = await host.emitWithAck('room:create');
+  const created = await host.emitWithAck('room:create', {});
   if (!created.ok) throw new Error(created.error);
   const players = [host];
   for (const name of ['Bruno', 'Chloé', 'David'].slice(0, count - 1)) {
@@ -178,7 +180,7 @@ describe('serveur de jeu', () => {
   it("refuse un second siège au même compte, sauf pour l'admin", async () => {
     await start({ adminEmail: 'Chef@Exemple.fr' });
     const host = connect('Alice');
-    const created = await host.emitWithAck('room:create');
+    const created = await host.emitWithAck('room:create', {});
     if (!created.ok) throw new Error(created.error);
     const session = (host.auth as { session: string }).session;
     const otherBrowser = connectWith({ session });
@@ -188,7 +190,7 @@ describe('serveur de jeu', () => {
     server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
     server.accounts.update('chef', { name: 'Maître' });
     const admin = { session: server.accounts.session('chef') };
-    const adminRoom = await connectWith(admin).emitWithAck('room:create');
+    const adminRoom = await connectWith(admin).emitWithAck('room:create', {});
     if (!adminRoom.ok) throw new Error(adminRoom.error);
     expect((await connectWith(admin).emitWithAck('room:join', { code: adminRoom.code })).ok).toBe(true);
     // Le second siège de l'admin n'est pas rattaché à son compte : il ne compte pas deux fois au classement.
@@ -198,7 +200,7 @@ describe('serveur de jeu', () => {
   it('demande un compte avec un pseudo pour jouer, mais pas pour regarder', async () => {
     await start();
     const guest = connect(null);
-    expect(await guest.emitWithAck('room:create')).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(await guest.emitWithAck('room:create', {})).toEqual({ ok: false, error: 'notSignedIn' });
     expect(await guest.emitWithAck('room:join', { code: 'ABCD' })).toEqual({ ok: false, error: 'notSignedIn' });
     expect(await guest.emitWithAck('stats:get')).toMatchObject({ ok: true });
     expect(await guest.emitWithAck('account:get')).toEqual({ ok: true, account: null, googleClientId: null });
@@ -213,7 +215,7 @@ describe('serveur de jeu', () => {
     const signed = await client.emitWithAck('account:google', { credential: 'ok-camille' });
     if (!signed.ok) throw new Error(signed.error);
     expect(signed.account).toMatchObject({ id: 'ok-camille', name: '', admin: false });
-    expect(await client.emitWithAck('room:create')).toEqual({ ok: false, error: 'noName' });
+    expect(await client.emitWithAck('room:create', {})).toEqual({ ok: false, error: 'noName' });
 
     connect('Alice');
     expect(await client.emitWithAck('account:update', { name: ' alice ' })).toEqual({ ok: false, error: 'nameTaken' });
@@ -221,7 +223,7 @@ describe('serveur de jeu', () => {
       ok: true,
       account: { name: 'Camille', avatar: '🦊' },
     });
-    expect((await client.emitWithAck('room:create')).ok).toBe(true);
+    expect((await client.emitWithAck('room:create', {})).ok).toBe(true);
     expect(server.rooms.all()[0]!.seats[0]).toMatchObject({ name: 'Camille', avatar: '🦊', account: 'ok-camille' });
 
     // La session remise suffit à se reconnecter depuis un autre onglet.
@@ -243,7 +245,7 @@ describe('serveur de jeu', () => {
     expect(await admin.emitWithAck('admin:update', { id, name: 'Maître' })).toEqual({ ok: false, error: 'nameTaken' });
     expect(await admin.emitWithAck('admin:update', { id, name: 'Poli' })).toEqual({ ok: true });
     expect(await admin.emitWithAck('admin:update', { id, blocked: true })).toEqual({ ok: true });
-    expect(await player.emitWithAck('room:create')).toEqual({ ok: false, error: 'notSignedIn' });
+    expect(await player.emitWithAck('room:create', {})).toEqual({ ok: false, error: 'notSignedIn' });
     expect(server.accounts.get(id)).toMatchObject({ name: 'Poli', blocked: true });
     expect(await player.emitWithAck('admin:resetRanking')).toEqual({ ok: false, error: 'notAdmin' });
     expect(await admin.emitWithAck('admin:unrank', { id: 'personne' })).toEqual({ ok: false, error: 'accountNotFound' });
@@ -364,10 +366,53 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('community:list')).toEqual({ ok: true, ideas: [] });
   });
 
+  it('fait jouer une partie entière de Président à sept, et la range dans le classement du Président', async () => {
+    // Le minuteur fait jouer l'humain à sa place : il ne lui reste qu'à rendre ses cartes et lancer les manches.
+    await start({ botDelayMs: 0, turnSecondMs: 1 });
+    const human = connect('Alice');
+    expect(await human.emitWithAck('room:create', { game: 'president' })).toMatchObject({ ok: true });
+    for (let i = 0; i < 6; i++) expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
+    expect(await human.emitWithAck('room:addBot', {})).toEqual({ ok: false, error: 'roomFull' });
+    await waitFor(() => human.room?.players.length === 7);
+    expect(human.room!.game).toBe('president');
+    expect((await human.emitWithAck('game:start', { rounds: 3, turnSeconds: 30 })).ok).toBe(true);
+
+    const view = () => human.game as unknown as PresidentGameView | undefined;
+    await waitFor(() => view()?.game === 'president');
+    expect(view()!.rounds).toBe(3);
+    expect(view()!.players).toHaveLength(7);
+    const deadline = Date.now() + 30000;
+    while (view()!.phase !== 'gameOver') {
+      if (Date.now() > deadline) throw new Error('partie bloquée');
+      const v = view()!;
+      if (v.phase === 'roundOver') await human.emitWithAck('game:nextRound');
+      if (v.phase === 'exchange' && v.currentPlayer === v.you) {
+        const gift = v.gifts.find((g) => !g.done)!;
+        expect(gift.received).toHaveLength(gift.count);
+        await human.emitWithAck('game:giveCards', { cardIds: v.hand.slice(0, gift.count).map((c) => c.id) });
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    // 7 joueurs : 6 + 5 + … + 0 = 21 points par manche.
+    expect(view()!.players.reduce((n, p) => n + p.score, 0)).toBe(63);
+
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.president.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.president.recent[0]!.game).toBe('president');
+    expect(stats.ok && stats.games.president.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
+    // Le Président ne compte ni dans le classement de Gang of Four, ni dans son niveau.
+    expect(stats.ok && stats.games.gof.recent).toEqual([]);
+    expect(server.history.progressOfAccount(server.accounts.byName('Alice')!.id).xp).toBe(0);
+  }, 60000);
+
   it('donne la saison en cours avec les classements', async () => {
     await start();
     const stats = await connect('Alice').emitWithAck('stats:get');
-    expect(stats).toMatchObject({ ok: true, season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) }, seasonal: [] });
+    expect(stats).toMatchObject({
+      ok: true,
+      season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) },
+      games: { gof: { seasonal: [] }, president: { seasonal: [] } },
+    });
   });
 
   it('supprime un salon abandonné après le délai', async () => {
@@ -422,14 +467,14 @@ describe('serveur de jeu', () => {
     await start({ limits: { roomsPerSocket: 2, roomsPerIp: 3 } });
     const spammer = connect();
     const results = [];
-    for (let i = 0; i < 3; i++) results.push(await spammer.emitWithAck('room:create'));
+    for (let i = 0; i < 3; i++) results.push(await spammer.emitWithAck('room:create', {}));
     expect(results.map((r) => r.ok)).toEqual([true, true, false]);
     expect(results[2]).toEqual({ ok: false, error: 'slowDown' });
 
     // Une autre connexion de la même adresse n'a plus droit qu'à un salon.
     const other = connect();
-    expect((await other.emitWithAck('room:create')).ok).toBe(true);
-    expect(await other.emitWithAck('room:create')).toEqual({ ok: false, error: 'slowDown' });
+    expect((await other.emitWithAck('room:create', {})).ok).toBe(true);
+    expect(await other.emitWithAck('room:create', {})).toEqual({ ok: false, error: 'slowDown' });
     // Rejoindre un salon reste possible.
     const code = (results[1] as { code: string }).code;
     expect((await connect().emitWithAck('room:join', { code })).ok).toBe(true);
@@ -468,7 +513,7 @@ describe('serveur de jeu', () => {
     await start();
     const { players } = await lobby(3);
     const outsider = connect('Zoé');
-    await outsider.emitWithAck('room:create');
+    await outsider.emitWithAck('room:create', {});
     const received: { name: string; text: string }[][] = [[], [], [], []];
     [...players, outsider].forEach((c, i) => c.on('chat:message', (m) => received[i]!.push({ name: m.name, text: m.text })));
 
@@ -603,9 +648,9 @@ describe('serveur de jeu', () => {
 
   it('refuse de nouveaux salons au-delà du maximum', async () => {
     await start({ limits: { maxRooms: 2 } });
-    expect((await connect().emitWithAck('room:create')).ok).toBe(true);
-    expect((await connect().emitWithAck('room:create')).ok).toBe(true);
-    expect(await connect().emitWithAck('room:create')).toEqual({ ok: false, error: 'tooManyRooms' });
+    expect((await connect().emitWithAck('room:create', {})).ok).toBe(true);
+    expect((await connect().emitWithAck('room:create', {})).ok).toBe(true);
+    expect(await connect().emitWithAck('room:create', {})).toEqual({ ok: false, error: 'tooManyRooms' });
   });
 
   it('refuse les connexions en trop depuis une même adresse', async () => {
@@ -644,8 +689,8 @@ describe('serveur de jeu', () => {
 
     // La partie terminée est ajoutée une seule fois à l'historique.
     const stats = await players[0]!.emitWithAck('stats:get');
-    expect(stats.ok && stats.recent).toHaveLength(1);
-    expect(stats.ok && stats.leaderboard).toHaveLength(count);
+    expect(stats.ok && stats.games.gof.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.gof.leaderboard).toHaveLength(count);
   }, 60000);
 
   it('fait jouer les bots tout seuls : une partie complète avec un humain et deux bots', async () => {
@@ -677,19 +722,19 @@ describe('serveur de jeu', () => {
     }
 
     const stats = await human.emitWithAck('stats:get');
-    expect(stats.ok && stats.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.gof.recent).toHaveLength(1);
     // Seule contre des bots : la partie compte dans le classement « contre les bots », pas dans celui en ligne.
-    expect(stats.ok && stats.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
-    expect(stats.ok && stats.leaderboard).toEqual([]);
+    expect(stats.ok && stats.games.gof.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
+    expect(stats.ok && stats.games.gof.leaderboard).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
 
     // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
-    const target = server.rooms.get(code)!.game!.config.targetScore;
+    const target = (server.rooms.get(code)!.game as GameState).config.targetScore;
     expect((await human.emitWithAck('game:rematch')).ok).toBe(true);
     await waitFor(() => human.game!.phase !== 'gameOver');
     expect(human.game!.round).toBe(1);
     expect(human.game!.players.every((p) => p.score === 0)).toBe(true);
-    expect(server.rooms.get(code)!.game!.config.targetScore).toBe(target);
+    expect((server.rooms.get(code)!.game as GameState).config.targetScore).toBe(target);
     expect(server.rooms.get(code)!.recorded).toBe(false);
   }, 60000);
 
@@ -779,7 +824,7 @@ describe('serveur de jeu', () => {
     await players[0]!.emitWithAck('game:start', {});
     await waitFor(() => players.every((p) => p.game));
     // Partie arrangée : Alice ouvre avec le dragon, le joueur suivant n'a que des petites cartes isolées.
-    const game = server.rooms.get(code)!.game!;
+    const game = server.rooms.get(code)!.game as GameState;
     const deck = createDeck();
     const cards = (...ids: string[]) => ids.map((id) => deck.find((c) => c.id === id)!);
     const next = (0 + game.direction + 3) % 3;
@@ -793,7 +838,7 @@ describe('serveur de jeu', () => {
     expect((await players[last]!.emitWithAck('game:autoPass', { enabled: true })).ok).toBe(true);
     await waitFor(() => players[0]!.room!.players[last]!.autoPass === true);
     expect((await players[0]!.emitWithAck('game:play', { cardIds: ['rD'] })).ok).toBe(true);
-    const now = () => server.rooms.get(code)!.game!;
+    const now = () => server.rooms.get(code)!.game as GameState;
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(now().currentPlayer).toBe(next);
     // Il l'active à son tour : les deux autres passent sans rien faire, et Alice reprend la main pour ouvrir.
@@ -894,7 +939,7 @@ describe('serveur de jeu', () => {
     expect(chosen).toMatchObject({ ok: true, account: { felt: 'vert', title: 'Débutant' } });
     // Un cadre débloqué (posé ici directement) se voit, avec le titre, sur sa place à la table.
     server.accounts.update(server.accounts.byName('Alice')!.id, { cosmetics: { felt: 'vert', frame: 'bronze', title: 'Débutant' } });
-    await alice.emitWithAck('room:create');
+    await alice.emitWithAck('room:create', {});
     await waitFor(() => !!alice.room);
     expect(alice.room!.players[0]).toMatchObject({ frame: 'bronze', title: 'Débutant' });
   });

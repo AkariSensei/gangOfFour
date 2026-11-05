@@ -1,6 +1,6 @@
 import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { type BotLevel, type ChatMessage, type GameView, type Look, REACTIONS, type RoomView } from '../../server/src/protocol';
+import { type BotLevel, type ChatMessage, type GofView, type Look, REACTIONS, type RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
@@ -28,7 +28,7 @@ type Reaction = { id: string; emoji: string };
 const REACTION_MS = 2600;
 
 /** Réactions reçues, par joueur : chacune s'efface d'elle-même au bout de quelques secondes. */
-function useReactions(): Record<string, Reaction> {
+export function useReactions(): Record<string, Reaction> {
   const [reactions, setReactions] = useState<Record<string, Reaction>>({});
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -56,7 +56,7 @@ function useReactions(): Record<string, Reaction> {
 }
 
 /** Bouton des réactions : ouvre la petite palette d'émojis, un clic en envoie un à toute la table. */
-function ReactionButton() {
+export function ReactionButton() {
   const [open, setOpen] = useState(false);
   return (
     <div className="reaction-menu">
@@ -396,7 +396,7 @@ function RoundOver({
  * Grosse annonce au centre quand c'est à soi d'agir. Elle reste affichée jusqu'à ce que le joueur l'ait vue
  * (clic n'importe où, ou touche Entrée / Échap).
  */
-function TurnBanner({ text }: { text: string | null }) {
+export function TurnBanner({ text }: { text: string | null }) {
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     if (!text || seen) return;
@@ -639,7 +639,7 @@ function orderHand(sorted: Card[], order: string[] | null): Card[] {
 const DRAG_THRESHOLD = 8;
 
 /** Secondes restantes avant `endsAt` (horloge locale), recalculées quatre fois par seconde. */
-function useCountdown(endsAt: number | null): number | null {
+export function useCountdown(endsAt: number | null): number | null {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (endsAt === null) return;
@@ -671,7 +671,7 @@ function CountUp({ to, delay = 0 }: { to: number; delay?: number }) {
 const SUMMARY_DELAY_MS = 2200;
 
 /** Vrai seulement `delay` ms après que `on` est devenu vrai ; repasse à faux dès que `on` retombe. */
-function useDelayed(on: boolean, delay: number): boolean {
+export function useDelayed(on: boolean, delay: number): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!on) {
@@ -685,7 +685,7 @@ function useDelayed(on: boolean, delay: number): boolean {
 }
 
 /** Partie en pause : la table est voilée pour tous ; l'hôte (ou l'admin) la relance. */
-function PauseOverlay({ onResume }: { onResume?: () => void }) {
+export function PauseOverlay({ onResume }: { onResume?: () => void }) {
   return (
     <div className="overlay pause-overlay" role="dialog" aria-label="Partie en pause">
       <div className="panel modal pop-in">
@@ -731,7 +731,7 @@ export function Table({
   felt,
   onLeave,
 }: {
-  game: GameView;
+  game: GofView;
   room: RoomView;
   messages: ChatMessage[];
   /** L'admin peut, comme l'hôte, couper le chat d'un joueur. */

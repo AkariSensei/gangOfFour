@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { GameState, PlayerView } from '@gof/engine';
 import { RoomManager } from '../src';
 
 function roomWith(count: number) {
@@ -70,10 +71,10 @@ describe('RoomManager', () => {
   it('applique le score de fin choisi par l\'hôte, ou 100 par défaut', () => {
     const a = roomWith(3);
     a.rooms.start(a.host.code, a.host.playerId, { targetScore: 50 });
-    expect(a.rooms.get(a.host.code)!.game!.config.targetScore).toBe(50);
+    expect((a.rooms.get(a.host.code)!.game as GameState).config.targetScore).toBe(50);
     const b = roomWith(3);
     b.rooms.start(b.host.code, b.host.playerId, { targetScore: 7 });
-    expect(b.rooms.get(b.host.code)!.game!.config.targetScore).toBe(100);
+    expect((b.rooms.get(b.host.code)!.game as GameState).config.targetScore).toBe(100);
   });
 
   it('relance une partie terminée avec les mêmes joueurs et réglages, seulement une fois finie', () => {
@@ -86,7 +87,7 @@ describe('RoomManager', () => {
     expect(rooms.rematch(host.code, 'inconnu')).toEqual({ ok: false, error: 'notInRoom' });
     expect(rooms.rematch(host.code, others[0]!.playerId)).toEqual({ ok: true });
     expect(room.game.phase).not.toBe('gameOver');
-    expect(room.game.config.targetScore).toBe(50);
+    expect((room.game as GameState).config.targetScore).toBe(50);
     expect(room.turnSeconds).toBe(30);
     expect(room.recorded).toBe(false);
     expect(room.game.players.map((p) => p.id)).toEqual(room.seats.map((s) => s.playerId));
@@ -133,7 +134,7 @@ describe('RoomManager', () => {
     const { rooms, host, others } = roomWith(4);
     rooms.start(host.code, host.playerId);
     const room = rooms.get(host.code)!;
-    const view = rooms.gameView(room, others[1]!.playerId)!;
+    const view = rooms.gameView(room, others[1]!.playerId) as PlayerView;
     expect(view.you).toBe(2);
     expect(view.hand).toEqual(room.game!.players[2]!.hand);
     expect(JSON.stringify(view)).not.toContain(JSON.stringify(room.game!.players[0]!.hand));
@@ -182,7 +183,7 @@ describe('RoomManager', () => {
     rooms.addBot(host.code, host.playerId);
     rooms.start(host.code, host.playerId, { seed: 3 });
     const room = rooms.get(host.code)!;
-    const game = room.game!;
+    const game = room.game as GameState;
     const actor = game.phase === 'cut' ? game.dealer : game.phase === 'exchange' ? game.exchange!.winnerIndex : game.currentPlayer;
     expect(rooms.botToAct(host.code)).toBe(actor === 0 ? null : room.seats[actor]);
     rooms.setConnected(host.code, host.playerId, false);

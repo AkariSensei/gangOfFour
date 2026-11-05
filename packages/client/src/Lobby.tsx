@@ -5,8 +5,12 @@ import { ChatPanel, KickButton, MuteButton } from './Chat';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket } from './socket';
 
-/** Scores de fin de partie proposés à l'hôte (le serveur accepte les mêmes). */
+/** Scores de fin de partie de Gang of Four proposés à l'hôte (le serveur accepte les mêmes). */
 const TARGET_SCORES = [50, 100, 200];
+/** Nombres de manches du Président proposés à l'hôte. */
+const ROUNDS = [3, 5, 10];
+/** Nombre de places du salon, selon le jeu. */
+const MAX_SEATS: Record<RoomView['game'], number> = { gof: 4, president: 7 };
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];
 /** Emplacement des quatre places autour de la table, dans l'ordre d'arrivée à partir de la sienne. */
@@ -34,16 +38,21 @@ export function Lobby({
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [targetScore, setTargetScore] = useState(100);
+  const [rounds, setRounds] = useState(5);
+  const president = room.game === 'president';
+  const maxSeats = MAX_SEATS[room.game] ?? 4;
   const [turnSeconds, setTurnSeconds] = useState(0);
   const isHost = room.hostId === session.playerId;
   // Places dans l'ordre d'arrivée, en commençant par la sienne (en bas) ; les places vides restent à la fin.
   const mine = Math.max(0, room.players.findIndex((p) => p.id === session.playerId));
   const seated = [...room.players.slice(mine), ...room.players.slice(0, mine)];
-  const seats = Array.from({ length: 4 }, (_, i) => seated[i]);
+  const seats = Array.from({ length: maxSeats }, (_, i) => seated[i]);
+  // Au-delà de quatre, les places ne tiennent plus autour du tapis : elles s'alignent en dessous.
+  const at = (i: number) => (maxSeats > 4 ? 'list' : SEATS[i]);
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
-    const result = await socket.emitWithAck('game:start', { targetScore, turnSeconds });
+    const result = await socket.emitWithAck('game:start', president ? { rounds, turnSeconds } : { targetScore, turnSeconds });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -83,20 +92,23 @@ export function Lobby({
   }
 
   return (
-    <main className={`lobby felt-${felt || 'vert'}`}>
+    <main className={`lobby game-${room.game} felt-${felt || 'vert'}`}>
       <div className="panel">
         {/* La table vue de dessus : sa propre place en bas, les autres autour, le code du salon sur le tapis. */}
-        <div className="lobby-table">
+        <div className={`lobby-table ${maxSeats > 4 ? 'many' : ''}`}>
           <div className="lobby-felt">
+            <p className="lobby-game">{president ? 'Président' : 'Gang of Four'}</p>
             <p className="muted">Code du salon</p>
             <div className="room-code">{room.code}</div>
             <button onClick={copy}>{copied ? 'Lien copié !' : "Copier le lien d'invitation"}</button>
-            <h2>Joueurs ({room.players.length}/4)</h2>
+            <h2>
+              Joueurs ({room.players.length}/{maxSeats})
+            </h2>
           </div>
           <ul className="lobby-seats">
             {seats.map((p, i) =>
               p ? (
-                <li key={p.id} className={`lobby-seat at-${SEATS[i]} ${p.connected ? '' : 'offline'}`}>
+                <li key={p.id} className={`lobby-seat at-${at(i)} ${p.connected ? '' : 'offline'}`}>
                   <Avatar name={p.name} look={p} bot={p.bot} />
                   <span className="lobby-seat-name">{p.name}</span>
                   {p.title && <span className="seat-title">{p.title}</span>}
@@ -120,7 +132,7 @@ export function Lobby({
                   </span>
                 </li>
               ) : (
-                <li key={`libre-${i}`} className={`lobby-seat empty at-${SEATS[i]}`}>
+                <li key={`libre-${i}`} className={`lobby-seat empty at-${at(i)}`}>
                   <span className="lobby-seat-name">Place libre</span>
                   {isHost ? (
                     <span className="bot-levels" role="group" aria-label="Ajouter un bot">
@@ -140,7 +152,19 @@ export function Lobby({
           </ul>
         </div>
 
-        {isHost && (
+        {isHost && president && (
+          <div className="target-score">
+            <span className="muted">Partie en</span>
+            <div className="segmented" role="radiogroup" aria-label="Nombre de manches">
+              {ROUNDS.map((count) => (
+                <button key={count} role="radio" aria-checked={rounds === count} className={rounds === count ? 'on' : ''} onClick={() => setRounds(count)}>
+                  {count} manches
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isHost && !president && (
           <div className="target-score">
             <span className="muted">Partie en</span>
             <div className="segmented" role="radiogroup" aria-label="Score de fin de partie">
