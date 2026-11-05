@@ -5,6 +5,7 @@ import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton } from './Chat';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
+import { RatingChange, useRatingChange } from './RatingChange';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert, useTurnNotifications } from './turnAlert';
@@ -167,7 +168,17 @@ function Machine({
 }
 
 /** Fin du duel : le gagnant et les soldes, la revanche ou le retour. */
-function DuelOver({ game, onRematch, onExit }: { game: SlotsView; onRematch: () => void; onExit: () => void }) {
+function DuelOver({
+  game,
+  rating,
+  onRematch,
+  onExit,
+}: {
+  game: SlotsView;
+  rating: ReturnType<typeof useRatingChange>;
+  onRematch: () => void;
+  onExit: () => void;
+}) {
   const won = game.winners.includes(game.you);
   const shared = game.winners.length > 1;
   return (
@@ -184,6 +195,7 @@ function DuelOver({ game, onRematch, onExit }: { game: SlotsView; onRematch: () 
             </span>
           ))}
         </div>
+        <RatingChange change={rating} />
         <p className="muted small">Duel joué en {game.round} tour{game.round > 1 ? 's' : ''}.</p>
         <div className="duel-actions">
           {game.you >= 0 && (
@@ -219,6 +231,8 @@ export function SlotsTable({
   const me = game.you;
   const spectator = me < 0;
   const roll = useRolling(game);
+  // Le serveur annonce les points dès la fin du duel, avant que l'écran de fin ne s'ouvre : on écoute dès la table.
+  const rating = useRatingChange(game.phase === 'gameOver');
   const reactions = useReactions();
   const notifications = useTurnNotifications();
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
@@ -324,7 +338,7 @@ export function SlotsTable({
           {error}
         </div>
       )}
-      {showEnd && <DuelOver game={game} onRematch={() => void send(socket.emitWithAck('game:rematch'))} onExit={() => void exit()} />}
+      {showEnd && <DuelOver game={game} rating={rating} onRematch={() => void send(socket.emitWithAck('game:rematch'))} onExit={() => void exit()} />}
       {room.paused && (
         <PauseOverlay onResume={canPause ? () => void send(socket.emitWithAck('room:pause', { paused: false })) : undefined} />
       )}

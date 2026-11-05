@@ -1,17 +1,13 @@
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { GameId, GameStats, LeaderboardEntry, Season } from '../../server/src/protocol';
+import type { GameId, GameStats, Season } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-/** Ce que montre la dernière colonne du classement, selon le jeu. */
-const AVERAGE_LABELS: Record<GameId, { title: string; text: (e: LeaderboardEntry) => string }> = {
-  gof: { title: 'Score moyen (le plus bas est le meilleur)', text: (e) => `moy. ${e.averageScore} pts` },
-  slots: { title: 'Solde moyen en fin de duel', text: (e) => `moy. ${e.averageScore} €` },
-  battleship: { title: 'Part des batailles gagnées', text: (e) => `${Math.round((100 * e.wins) / Math.max(1, e.games))} % gagnées` },
-};
+/** Points affichés à la française : « 1 024 ». */
+export const pointsFormat = new Intl.NumberFormat('fr-FR');
 
 /** L'unité d'une partie, pour les dernières parties : des manches, des tours ou des tirs. */
 const ROUND_UNITS: Record<GameId, string> = { gof: 'manche', slots: 'tour', battleship: 'tir' };
@@ -63,46 +59,30 @@ export function Leaderboard({
   stats: Stats | null;
   game?: GameId;
   title?: string;
+  /** Seulement le classement, sans les dernières parties. */
   seasonOnly?: boolean;
 }) {
   const [shown, setShown] = useState<string | null>(null);
-  const [tab, setTab] = useState<'season' | 'all'>('season');
 
   if (!all) return null;
   const stats = all.games[game];
   // La fiche d'un joueur ne parle que de Gang of Four pour l'instant : pas de fiche depuis les autres classements.
   const withProfile = game === 'gof';
-  const period = seasonOnly ? 'season' : tab;
-  // Seules les parties entre humains comptent : l'entraînement contre les bots n'est pas classé.
-  const ranking = period === 'season' ? stats.seasonal : stats.leaderboard;
+  // Les points de la saison : chacun part de 1000, seules les parties entre humains comptent.
+  const ranking = stats.ranking;
 
   return (
     <>
       <section className="panel leaderboard">
         <div className="leaderboard-head">
           <h2>{title}</h2>
-          {!seasonOnly && (
-            <div className="segmented" role="tablist" aria-label="Période du classement">
-              {(
-                [
-                  ['season', 'Saison'],
-                  ['all', 'Général'],
-                ] as const
-              ).map(([id, label]) => (
-                <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         {shown && <Profile name={shown} onClose={() => setShown(null)} />}
-        {withProfile && <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>}
-        {ranking.length === 0 && (
-          <p className="muted">
-            Aucune partie terminée {period === 'season' ? 'cette saison ' : ''}pour l'instant.
-          </p>
-        )}
+        <p className="muted small">
+          Chacun part de 1000 points à chaque saison. Gagner contre plus fort que soi rapporte plus, perdre contre plus faible
+          coûte plus.{withProfile && ' Clique sur un nom pour voir ses statistiques.'}
+        </p>
+        {ranking.length === 0 && <p className="muted">Aucune partie classée cette saison pour l'instant.</p>}
         <ol className="ranking">
           {ranking.map((e, i) => (
             <li key={e.name}>
@@ -116,11 +96,11 @@ export function Leaderboard({
               ) : (
                 <span className="who">{e.name}</span>
               )}
-              <span className="stat" title="Victoires / parties">
-                <strong>{e.wins}</strong> / {e.games}
+              <span className="stat muted" title="Victoires et parties de la saison">
+                {e.wins} V · {e.games} partie{e.games > 1 ? 's' : ''}
               </span>
-              <span className="stat muted" title={AVERAGE_LABELS[game].title}>
-                {AVERAGE_LABELS[game].text(e)}
+              <span className="stat rating" title="Points de la saison">
+                {pointsFormat.format(e.rating)}
               </span>
             </li>
           ))}

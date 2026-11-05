@@ -10,6 +10,7 @@ import { socket } from './socket';
 import { type ProgressGain, XpGain, useProgressGain } from './Progress';
 import { useTurnAlert, useTurnNotifications } from './turnAlert';
 import { useAutoPass } from './autoPass';
+import { RatingChange, useRatingChange } from './RatingChange';
 
 type Seat = 'right' | 'top' | 'left' | 'bottom';
 type SortMode = 'value' | 'color';
@@ -290,6 +291,7 @@ function RoundOver({
   seats,
   tutorial,
   gain,
+  rating,
   onExit,
 }: {
   game: PlayerView;
@@ -297,6 +299,8 @@ function RoundOver({
   tutorial?: boolean;
   /** Expérience que la partie vient de rapporter au joueur. */
   gain?: ProgressGain | null;
+  /** Points de classement que la partie vient de rapporter (ou de coûter). */
+  rating?: ReturnType<typeof useRatingChange>;
   onExit: () => void;
 }) {
   const r = game.lastRound!;
@@ -365,6 +369,7 @@ function RoundOver({
             ))}
           </tbody>
         </table>
+        {over && <RatingChange change={rating ?? null} />}
         {over && gain && <XpGain gain={gain} />}
         {over ? (
           <div className="end-actions">
@@ -747,6 +752,7 @@ export function Table({
   onLeave: () => void;
 }) {
   const [gain, clearGain] = useProgressGain();
+  const rating = useRatingChange(game.phase === 'gameOver');
   // Une nouvelle partie (revanche) repart sans l'expérience de la précédente.
   useEffect(() => {
     if (game.phase !== 'gameOver') clearGain();
@@ -1330,7 +1336,7 @@ export function Table({
       {gang && celebrating && <GangBurst label={gang.label} player={gang.player} />}
       {/* Dans le tutoriel, l'explication au-dessus de la main dit déjà quoi faire : pas de grande annonce par-dessus. */}
       <TurnBanner key={bannerText ? turnKey : 'none'} text={planned || celebrating || cutShown || room.tutorial ? null : bannerText} />
-      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} tutorial={!!room.tutorial} gain={gain} onExit={exit} />}
+      {showSummary && game.lastRound && <RoundOver game={game} seats={room.players} tutorial={!!room.tutorial} gain={gain} rating={rating} onExit={exit} />}
       {room.paused && <PauseOverlay onResume={canPause ? () => void pause(false) : undefined} />}
     </main>
   );

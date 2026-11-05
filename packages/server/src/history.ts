@@ -5,6 +5,7 @@ import { BOT_LEVELS, type BotLevel } from './bot';
 import { dayOf, streakOf } from './daily';
 import { DEFAULT_GAME, GAMES } from './games';
 import { seasonOf } from './seasons';
+import { type RatedGame, START_RATING, computeRatings, shown } from './rating';
 import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
 
 export interface GameRecord {
@@ -14,6 +15,8 @@ export interface GameRecord {
   rounds: number;
   /** Partie d'avant une remise à zéro du classement : gardée dans le fichier, mais plus comptée nulle part. */
   archived?: boolean;
+  /** Partie classée en points (entre humains, jouée depuis l'arrivée des points) ; les plus anciennes n'en ont pas. */
+  rated?: boolean;
   players: {
     name: string;
     score: number;
@@ -57,6 +60,14 @@ export interface PlayerProfile {
   /** Titre et cadre choisis par le joueur (absents : son titre de niveau, sans cadre). */
   title?: string;
   frame?: string;
+}
+
+/** Une ligne du classement en points d'un jeu. */
+export interface RatingEntry {
+  name: string;
+  rating: number;
+  games: number;
+  wins: number;
 }
 
 export interface LeaderboardEntry {
@@ -152,6 +163,8 @@ export class GameHistory {
       game: summary.game,
       finishedAt: finishedAt.toISOString(),
       rounds: summary.rounds,
+      // Seules les tables sans bot comptent pour les points.
+      ...(bots.length === 0 ? { rated: true } : {}),
       players: summary.players.map((p, i) => ({
         ...p,
         ...(bots.includes(i) ? { bot: true, ...(levels[i] ? { botLevel: levels[i] } : {}) } : {}),
@@ -161,6 +174,43 @@ export class GameHistory {
     this.records.push(record);
     this.save();
     return record;
+  }
+
+  /**
+   * Points de la saison dans un jeu : chacun part de 1000 à chaque saison, et seules les parties classées comptent.
+   * Les places viennent du vainqueur, puis du score (le plus bas est le meilleur à Gang of Four).
+   */
+  private ratingsOf(game: string, season: string) {
+    const lowScoreWins = !!GAMES.find((g) => g.id === game)?.lowScoreWins;
+    const better = (a: GameRecord['players'][number], b: GameRecord['players'][number]) =>
+      (a.winner && !b.winner) || (a.winner === b.winner && (lowScoreWins ? a.score < b.score : a.score > b.score));
+    const games: RatedGame[] = this.counted
+      .filter((r) => r.rated && gameOf(r) === game && seasonOf(new Date(r.finishedAt)).id === season)
+      .map((r) => {
+        const humans = r.players.filter((p) => this.ranked(p));
+        return {
+          players: humans.map((p) => ({
+            owner: this.owner(p),
+            name: this.displayName(p),
+            place: humans.filter((q) => better(q, p)).length,
+            winner: p.winner,
+          })),
+        };
+      });
+    return computeRatings(games);
+  }
+
+  /** Classement en points d'un jeu pour la saison (en cours par défaut), du plus fort au moins fort. */
+  ratingBoard(game = DEFAULT_GAME, season = seasonOf(new Date()).id, limit = 20): RatingEntry[] {
+    return [...this.ratingsOf(game, season).values()]
+      .sort((a, b) => b.rating - a.rating || b.games - a.games)
+      .slice(0, limit)
+      .map((r) => ({ name: r.name, rating: shown(r.rating), games: r.games, wins: r.wins }));
+  }
+
+  /** Points d'un compte dans un jeu cette saison (1000 tant qu'il n'a pas joué). */
+  ratingOfAccount(owner: string, game = DEFAULT_GAME, season = seasonOf(new Date()).id): number {
+    return shown(this.ratingsOf(game, season).get(owner)?.rating ?? START_RATING);
   }
 
   /** Parties qui comptent : celles d'après la dernière remise à zéro. */

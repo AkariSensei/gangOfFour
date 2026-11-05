@@ -145,6 +145,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     // ni une table où l'hôte avait encore pu asseoir des bots (salons d'avant l'entraînement).
     if (room.tutorial || room.training || room.seats.some((s) => s.bot)) return;
     const game = room.game;
+    const gameId = rulesOfRoom(room).id;
+    // Les points de chacun avant la partie, pour lui annoncer ce qu'elle lui a rapporté.
+    const accountsHere = [...new Set(room.seats.flatMap((s) => (s.account ? [s.account] : [])))];
+    const before = new Map(accountsHere.map((id) => [id, history.ratingOfAccount(id, gameId)]));
     withProgress(room, () =>
       history.add(
         rulesOfRoom(room).summary(game),
@@ -154,6 +158,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         botLevels(room),
       ),
     );
+    for (const id of accountsHere) {
+      const change = { game: gameId, before: before.get(id)!, after: history.ratingOfAccount(id, gameId) };
+      for (const s of io.sockets.sockets.values()) if (s.data.accountId === id && s.data.code === room.code && !s.data.spectator) s.emit('rating:changed', change);
+    }
     io.emit('stats:changed');
   }
 
@@ -791,8 +799,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('stats:get', (_payload, ack) => {
       const season = seasonOf(new Date());
       const statsOf = (game: GameId): GameStats => ({
-        leaderboard: history.leaderboard(10, undefined, 'online', game),
-        seasonal: history.leaderboard(10, season.id, 'online', game),
+        ranking: history.ratingBoard(game, season.id),
         recent: history.recent(5, game, 'online'),
         streak: history.bestStreak('online', game),
       });

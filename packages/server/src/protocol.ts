@@ -5,9 +5,9 @@ export type { OpenRoom };
 import type { BotLevel } from './bot';
 import type { Progress } from './progression';
 import type { Season } from './seasons';
-import type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak } from './history';
+import type { GameRecord, LeaderboardEntry, PlayerProfile, RatingEntry, WinStreak } from './history';
 
-export type { GameRecord, LeaderboardEntry, PlayerProfile, WinStreak };
+export type { GameRecord, LeaderboardEntry, PlayerProfile, RatingEntry, WinStreak };
 export type { BotLevel } from './bot';
 export type { Season } from './seasons';
 export type { GameInfo } from './games';
@@ -109,12 +109,11 @@ export type { SlotsError, BattleshipError };
 export const isBattleshipView = (view: GameView): view is BattleshipView => 'game' in view && view.game === 'battleship';
 
 /**
- * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours (`leaderboard`) : seulement les parties entre
- * humains (au moins deux personnes, aucun bot), les seules qui comptent.
+ * Classement d'un jeu : les points de la saison en cours (`ranking`, chacun part de 1000), ses dernières parties et le
+ * record de victoires d'affilée. Seules les parties entre humains comptent.
  */
 export interface GameStats {
-  leaderboard: LeaderboardEntry[];
-  seasonal: LeaderboardEntry[];
+  ranking: RatingEntry[];
   recent: GameRecord[];
   streak: WinStreak | null;
 }
@@ -320,6 +319,8 @@ export interface ServerToClientEvents {
   'stats:changed': () => void;
   /** Le mur de la communauté a changé : l'écran ouvert le recharge. */
   'community:changed': () => void;
+  /** Ce que la partie qui se termine a rapporté (ou coûté) au joueur en points de classement, dans ce jeu. */
+  'rating:changed': (change: { game: GameId; before: number; after: number }) => void;
   /** L'admin a fermé ou rouvert le site. */
   'site:changed': () => void;
   /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */

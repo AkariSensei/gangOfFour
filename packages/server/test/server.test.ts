@@ -409,6 +409,8 @@ describe('serveur de jeu', () => {
     expect((await alice.emitWithAck('game:start', {})).ok).toBe(true);
 
     const players = [alice, bruno];
+    const changes: { game: string; before: number; after: number }[] = [];
+    alice.on('rating:changed', (c) => changes.push(c));
     const view = (c: Client) => c.game as unknown as SlotsView | undefined;
     await waitFor(() => players.every((p) => view(p)?.game === 'slots'));
     expect(view(alice)).toMatchObject({ you: 0, round: 1, stake: 5, currentPlayer: 0 });
@@ -425,7 +427,12 @@ describe('serveur de jeu', () => {
 
     const stats = await alice.emitWithAck('stats:get');
     expect(stats.ok && stats.games.slots.recent).toHaveLength(1);
-    expect(stats.ok && stats.games.slots.leaderboard.map((e) => e.name).sort()).toEqual(['Alice', 'Bruno']);
+    // Les deux partaient de 1000 : le gagnant prend 24 points au perdant, et chacun l'apprend en fin de partie.
+    const ranking = stats.ok ? stats.games.slots.ranking : [];
+    expect(ranking.map((e) => e.rating)).toEqual([1024, 976]);
+    expect(ranking[0]!.name).toBe(end.winners[0] === 0 ? 'Alice' : 'Bruno');
+    await waitFor(() => changes.length === 1);
+    expect(changes[0]).toEqual({ game: 'slots', before: 1000, after: end.winners[0] === 0 ? 1024 : 976 });
     // Le duel ne compte ni dans le classement de Gang of Four, ni dans son niveau.
     expect(stats.ok && stats.games.gof.recent).toEqual([]);
     expect(server.history.progressOfAccount(server.accounts.byName('Alice')!.id).xp).toBe(0);
@@ -516,7 +523,7 @@ describe('serveur de jeu', () => {
     expect(stats).toMatchObject({
       ok: true,
       season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) },
-      games: { gof: { seasonal: [] }, slots: { seasonal: [] } },
+      games: { gof: { ranking: [] }, slots: { ranking: [] }, battleship: { ranking: [] } },
     });
   });
 
@@ -793,7 +800,7 @@ describe('serveur de jeu', () => {
     // La partie terminée est ajoutée une seule fois à l'historique.
     const stats = await players[0]!.emitWithAck('stats:get');
     expect(stats.ok && stats.games.gof.recent).toHaveLength(1);
-    expect(stats.ok && stats.games.gof.leaderboard).toHaveLength(count);
+    expect(stats.ok && stats.games.gof.ranking).toHaveLength(count);
   }, 60000);
 
   it('fait jouer les bots tout seuls : un entraînement complet avec un humain et deux bots, qui ne compte pas', async () => {
@@ -829,7 +836,7 @@ describe('serveur de jeu', () => {
     // L'entraînement n'est enregistré nulle part : ni classement, ni historique, ni expérience.
     const stats = await human.emitWithAck('stats:get');
     expect(stats.ok && stats.games.gof.recent).toEqual([]);
-    expect(stats.ok && stats.games.gof.leaderboard).toEqual([]);
+    expect(stats.ok && stats.games.gof.ranking).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
 
     // Revanche : nouvelle partie, mêmes joueurs, même score de fin.

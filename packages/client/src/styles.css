@@ -5032,3 +5032,39 @@ button .lucide {
 .ranking-screen .season-header {
   grid-column: 1 / -1;
 }
+
+/* Classement en points, et le gain de la partie dans l'écran de fin. */
+.ranking .stat.rating {
+  min-width: 56px;
+  text-align: right;
+  font-family: var(--font-title);
+  font-weight: 500;
+  font-size: 1.0625rem;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.ranking li:first-child .stat.rating {
+  color: var(--accent-light);
+}
+.rating-change {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.rating-change strong {
+  font-family: var(--font-title);
+  font-weight: 500;
+  font-size: 1.5rem;
+}
+.rating-change.up strong {
+  color: var(--accent-light);
+}
+.rating-change.down strong {
+  color: var(--muted);
+}
+.rating-change span {
+  color: var(--page-sub);
+}

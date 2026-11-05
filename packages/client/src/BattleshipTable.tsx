@@ -5,6 +5,7 @@ import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton } from './Chat';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
+import { RatingChange, useRatingChange } from './RatingChange';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 import { useTurnAlert, useTurnNotifications } from './turnAlert';
@@ -160,6 +161,7 @@ export function BattleshipTable({
   const other = spectator ? 1 : 1 - me;
   const reactions = useReactions();
   const notifications = useTurnNotifications();
+  const rating = useRatingChange(game.phase === 'gameOver');
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
   useTurnAlert(myTurn ? 'À toi de tirer' : null, notifications.state === 'on');
   const moderator = admin || (!spectator && room.hostId === game.players[me]?.id);
@@ -311,6 +313,7 @@ export function BattleshipTable({
                   ? 'Victoire, flotte adverse coulée'
                   : 'Ta flotte est coulée…'}
             </h2>
+            <RatingChange change={rating} />
             <p className="muted small">
               {game.players.map((p) => `${p.name} : ${p.shots.length} tirs, ${p.afloat} bateau${p.afloat > 1 ? 'x' : ''} à flot`).join(' · ')}
             </p>

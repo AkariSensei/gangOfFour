@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type GameState, createGame } from '@gof/engine';
@@ -269,4 +269,31 @@ describe('GameHistory', () => {
     expect(history.leaderboard()[0]).toMatchObject({ name: 'Alice', wins: 1, games: 1 });
   });
 
+
+  it('classe en points chaque jeu pour la saison : départ à 1000, parties sans bot et d’après l’arrivée des points', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'gof-')), 'parties.json');
+    // Une partie d'avant les points (sans la marque « rated ») ne compte pas.
+    const old = { game: 'gof', finishedAt: new Date().toISOString(), rounds: 3, players: [
+      { name: 'Alice', score: 10, winner: true },
+      { name: 'Bruno', score: 90, winner: false },
+    ] };
+    writeFileSync(file, JSON.stringify([old]));
+    const history = new GameHistory(file);
+    expect(history.ratingBoard('gof')).toEqual([]);
+
+    // Gang of Four : le score le plus bas gagne. Chloé bat Alice et Bruno, Alice finit devant Bruno.
+    history.record(finished({ Alice: 40, Bruno: 90, Chloé: 10 }));
+    expect(history.ratingBoard('gof').map((e) => [e.name, e.rating])).toEqual([
+      ['Chloé', 1024],
+      ['Alice', 1000],
+      ['Bruno', 976],
+    ]);
+    // Une table avec un bot ne compte pas pour les points.
+    history.record(finished({ Alice: 10, 'Robot Ada': 50, Bruno: 90 }), new Date(), [1]);
+    expect(history.ratingOfAccount('pseudo:alice')).toBe(1000);
+    // Saison suivante : tout le monde repart de 1000.
+    const next = seasonOfDay('2027-01-15').id;
+    expect(history.ratingBoard('gof', next)).toEqual([]);
+    expect(history.ratingBoard('slots')).toEqual([]);
+  });
 });
