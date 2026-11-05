@@ -1,3 +1,4 @@
+import { MessageCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '../../server/src/protocol';
 import { errorLabel } from './labels';
@@ -50,7 +51,7 @@ export function ChatPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={200}
-          placeholder={muted ? '🔇 Chat coupé' : 'Écrire un message…'}
+          placeholder={muted ? 'Chat coupé' : 'Écrire un message'}
           aria-label="Message"
           autoFocus={autoFocus}
           disabled={muted}
@@ -87,7 +88,8 @@ export function ChatButton({ messages, me, muted }: { messages: ChatMessage[]; m
   return (
     <div className="chat-anchor">
       <button className="icon" onClick={() => setOpen((o) => !o)} title="Chat du salon" aria-expanded={open}>
-        💬{unread > 0 && <span className="chat-badge">{unread}</span>}
+        <MessageCircle />
+      {unread > 0 && <span className="chat-badge">{unread}</span>}
       </button>
       {open && (
         <div className="chat-popover panel">
@@ -108,7 +110,7 @@ export function MuteButton({ name, muted, onClick }: { name: string; muted: bool
   const label = muted ? `Rendre le chat à ${name}` : `Couper le chat de ${name}`;
   return (
     <button className={`mute ${muted ? 'on' : ''}`} title={label} aria-label={label} aria-pressed={muted} onClick={onClick}>
-      {muted ? '🔇' : '🔈'}
+      {muted ? <VolumeX /> : <Volume2 />}
     </button>
   );
 }
@@ -122,7 +124,7 @@ export function KickButton({ name, onKick }: { name: string; onKick: () => void 
       aria-label={`Exclure ${name}`}
       onClick={() => confirm(`Exclure ${name} ? Un bot prendra sa place.`) && onKick()}
     >
-      ✕
+      <X />
     </button>
   );
 }

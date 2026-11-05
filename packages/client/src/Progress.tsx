@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, MAX_LEVEL, type PlayerProfile, type Progress } from '../../server/src/protocol';
 import { AccountForm } from './Account';
@@ -99,7 +100,11 @@ export function ProfileScreen({
                   >
                     <span className={`felt-preview felt-${f.id}`} />
                     <span>{f.name}</span>
-                    {!open && <small>🔒 Niveau {f.level}</small>}
+                    {!open && (
+              <small>
+                <Lock /> Niveau {f.level}
+              </small>
+            )}
                   </button>
                 );
               })}
@@ -128,7 +133,11 @@ export function ProfileScreen({
                   >
                     <Avatar name={account.name} look={{ ...account, frame: f.id }} />
                     <span>{f.name}</span>
-                    {!open && <small>🔒 Niveau {f.level}</small>}
+                    {!open && (
+              <small>
+                <Lock /> Niveau {f.level}
+              </small>
+            )}
                   </button>
                 );
               })}
@@ -151,7 +160,7 @@ export function ProfileScreen({
                     onClick={() => void choose({ title: t.title === progress.title ? '' : t.title })}
                     title={open ? undefined : `Débloqué au niveau ${t.level}`}
                   >
-                    {open ? t.title : `🔒 ${t.title} · niv. ${t.level}`}
+                    {open ? t.title : `${t.title} · niv. ${t.level}`}
                   </button>
                 );
               })}
@@ -205,14 +214,14 @@ export function XpGain({ gain }: { gain: ProgressGain }) {
         <strong className="xp-amount">+{gain.gained} XP</strong>
         <span>
           Niveau <b>{after.level}</b>
-          {levelUp && <span className="level-up-tag">Niveau supérieur !</span>}
+          {levelUp && <span className="level-up-tag">Niveau supérieur</span>}
         </span>
       </div>
       <span className="level-bar big">
         <span style={{ width: `${width}%` } as CSSProperties} />
       </span>
       <small className="muted">{barLabel(after)}</small>
-      {gain.rewards.length > 0 && <p className="xp-rewards">🎁 Débloqué : {gain.rewards.join(' · ')}</p>}
+      {gain.rewards.length > 0 && <p className="xp-rewards">Débloqué : {gain.rewards.join(' · ')}</p>}
     </div>
   );
 }

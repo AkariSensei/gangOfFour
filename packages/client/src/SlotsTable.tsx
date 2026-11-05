@@ -1,3 +1,4 @@
+import { Coins, Eye, Pause, Timer, Trophy } from 'lucide-react';
 import { SLOT_SYMBOLS, type SlotSpin, type SlotSymbol, type SlotsView, payoutOf } from '@gof/engine';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
@@ -33,7 +34,7 @@ export function SlotIcon({ symbol }: { symbol: SlotSymbol }) {
 /** Ce qu'a donné un tirage, en mots. */
 function spinLabel(spin: SlotSpin): string {
   const [a, b, c] = spin.reels;
-  if (a === b && b === c) return a === 'seven' ? 'JACKPOT 7-7-7 !' : `Trois × ${SLOT_NAMES[a]}`;
+  if (a === b && b === c) return a === 'seven' ? 'Jackpot 7-7-7' : `Trois × ${SLOT_NAMES[a]}`;
   if (spin.win > 0) return 'Deux symboles identiques';
   return 'Rien cette fois';
 }
@@ -131,7 +132,10 @@ function Machine({
       <header className="machine-head">
         <Avatar name={player.name} look={seat} bot={!!(seat?.bot || seat?.vacant)} />
         <span className="machine-who">
-          <strong>{mine ? 'Toi' : player.name}</strong>
+          <strong>
+            {active && <span className="turn-token" aria-hidden />}
+            {mine ? 'Toi' : player.name}
+          </strong>
           <small>{active ? (mine ? 'À toi de tirer' : 'Tire…') : seat?.connected === false ? 'Déconnecté' : 'En attente'}</small>
         </span>
         <span className={`machine-balance ${balance <= 0 ? 'broke' : ''}`}>{balance} €</span>
@@ -155,7 +159,7 @@ function Machine({
       </p>
       {onSpin && (
         <button type="button" className="primary big spin-button" disabled={!active || rolling} onClick={onSpin}>
-          🎰 Tirer · {Math.min(game.stake, player.balance)} €
+          Tirer · {Math.min(game.stake, player.balance)} €
         </button>
       )}
     </section>
@@ -170,9 +174,9 @@ function DuelOver({ game, onRematch, onExit }: { game: SlotsView; onRematch: () 
     <div className="overlay" role="dialog" aria-label="Fin du duel">
       <div className="panel modal pop-in duel-over">
         <div className="trophy" aria-hidden>
-          {won ? '🏆' : game.you < 0 ? '🎰' : '💸'}
+          {won ? <Trophy /> : <Coins />}
         </div>
-        <h2>{shared ? 'Égalité !' : game.you < 0 ? `${game.players[game.winners[0]!]!.name} gagne` : won ? 'Tu gagnes le duel !' : 'Perdu…'}</h2>
+        <h2>{shared ? 'Égalité' : game.you < 0 ? `${game.players[game.winners[0]!]!.name} gagne` : won ? 'Tu gagnes le duel' : 'Perdu'}</h2>
         <div className="duel-balances">
           {game.players.map((p, i) => (
             <span key={p.id} className={game.winners.includes(i) ? 'winner' : ''}>
@@ -218,7 +222,7 @@ export function SlotsTable({
   const reactions = useReactions();
   const notifications = useTurnNotifications();
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
-  useTurnAlert(myTurn ? 'À toi de tirer !' : null, notifications.state === 'on');
+  useTurnAlert(myTurn ? 'À toi de tirer' : null, notifications.state === 'on');
   const moderator = admin || (!spectator && room.hostId === game.players[me]?.id);
   const hostGone = room.players.find((p) => p.id === room.hostId)?.connected === false;
   const canPause = moderator || (!spectator && hostGone);
@@ -268,15 +272,19 @@ export function SlotsTable({
           <span className="direction">
             Tour {game.round} · mise {game.stake} €{game.nextStake !== game.stake && ` (puis ${game.nextStake} €)`}
           </span>
-          {countdown !== null && game.phase === 'playing' && <span className="direction">⏱ {Math.min(countdown, room.turnSeconds)} s</span>}
-          {room.spectators > 0 && <span className="direction">👀 {room.spectators}</span>}
+          {countdown !== null && game.phase === 'playing' && <span className="direction">
+              <Timer /> {Math.min(countdown, room.turnSeconds)} s
+            </span>}
+          {room.spectators > 0 && <span className="direction">
+              <Eye /> {room.spectators}
+            </span>}
         </div>
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
           {!spectator && <ReactionButton />}
           {canPause && !room.paused && game.phase !== 'gameOver' && (
             <button className="icon" onClick={() => void send(socket.emitWithAck('room:pause', { paused: true }))} title="Mettre le duel en pause">
-              ⏸
+              <Pause />
             </button>
           )}
           <button className="link" onClick={leave}>

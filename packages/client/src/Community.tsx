@@ -1,3 +1,4 @@
+import { ChevronUp } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { IdeaView } from '../../server/src/protocol';
 import { errorLabel } from './labels';
@@ -72,7 +73,7 @@ export function CommunityScreen({ admin }: { admin: boolean }) {
       </div>
       {error && <p className="error">{error}</p>}
       {ideas === null && <p className="muted">Chargement…</p>}
-      {ideas && shown.length === 0 && <p className="muted">Rien pour l’instant : lance la première idée !</p>}
+      {ideas && shown.length === 0 && <p className="muted">Rien pour l’instant : lance la première idée</p>}
       <ul className="ideas">
         {shown.map((idea) => (
           <li key={idea.id} className={`idea status-${idea.status}`}>
@@ -83,7 +84,7 @@ export function CommunityScreen({ admin }: { admin: boolean }) {
               aria-label={idea.voted ? `Retirer mon vote (${idea.votes})` : `Voter pour (${idea.votes})`}
               onClick={() => void run(socket.emitWithAck('community:vote', { id: idea.id, on: !idea.voted }))}
             >
-              <span aria-hidden>▲</span>
+              <ChevronUp aria-hidden />
               <strong>{idea.votes}</strong>
             </button>
             <div className="idea-body">

@@ -1,3 +1,4 @@
+import { Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { GoogleButton } from './Account';
 import { errorLabel } from './labels';
@@ -51,9 +52,6 @@ export function MaintenanceScreen({ account: me }: { account: ReturnType<typeof 
           {SITE_NAME} se refait une beauté et prépare de nouveaux jeux. Reviens un peu plus tard : les parties reprendront très
           vite.
         </p>
-        <span className="maintenance-cards" aria-hidden>
-          🃏 🎰 👑
-        </span>
         {signedIn ? (
           <p className="muted small">Tu es connecté : tu pourras jouer dès la réouverture.</p>
         ) : (
@@ -73,7 +71,7 @@ export function MaintenanceBanner() {
   const [error, setError] = useState('');
   return (
     <div className="maintenance-banner" role="status">
-      🔧 Site en maintenance : fermé à tous sauf toi.
+      <Wrench /> Site en maintenance : fermé à tous sauf toi
       <button type="button" className="link small" onClick={async () => setError(await setMaintenance(false))}>
         Rouvrir le site
       </button>

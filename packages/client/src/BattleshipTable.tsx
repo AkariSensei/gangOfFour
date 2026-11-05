@@ -1,3 +1,4 @@
+import { Anchor, Eye, Pause, RotateCw, Shuffle, Timer, Trophy, Waves } from 'lucide-react';
 import { type BattleshipView, FLEET, GRID, type Ship, randomFleet, shipAt, validFleet } from '@gof/engine';
 import { useEffect, useMemo, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
@@ -116,7 +117,7 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
       {hint && <p className="hint bad">{hint}</p>}
       <div className="naval-placement-actions">
         <button type="button" disabled={selected === null} onClick={() => selected !== null && tryChange(selected, ships[selected]!.cells[0]!, !isVertical(ships[selected]!))}>
-          ↻ Pivoter
+          <RotateCw /> Pivoter
         </button>
         <button
           type="button"
@@ -126,17 +127,17 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
             setHint('');
           }}
         >
-          🎲 Mélanger
+          <Shuffle /> Mélanger
         </button>
         <button type="button" className="primary big" onClick={() => onReady(ships)}>
-          Prêt !
+          Prêt
         </button>
       </div>
     </section>
   );
 }
 
-const RESULT_LABELS = { miss: 'À l’eau', hit: 'Touché !', sunk: 'Touché-coulé !' } as const;
+const RESULT_LABELS = { miss: 'À l’eau', hit: 'Touché', sunk: 'Touché-coulé' } as const;
 
 /** La table de la bataille navale : le placement, puis la grille de l'adversaire (où l'on tire) et la sienne. */
 export function BattleshipTable({
@@ -160,7 +161,7 @@ export function BattleshipTable({
   const reactions = useReactions();
   const notifications = useTurnNotifications();
   const myTurn = game.phase === 'playing' && game.currentPlayer === me;
-  useTurnAlert(myTurn ? 'À toi de tirer !' : null, notifications.state === 'on');
+  useTurnAlert(myTurn ? 'À toi de tirer' : null, notifications.state === 'on');
   const moderator = admin || (!spectator && room.hostId === game.players[me]?.id);
   const hostGone = room.players.find((p) => p.id === room.hostId)?.connected === false;
   const canPause = moderator || (!spectator && hostGone);
@@ -205,7 +206,7 @@ export function BattleshipTable({
   let status: string;
   if (game.phase === 'placing') {
     const waiting = game.players.filter((p) => !p.ready).map((p) => (p.id === game.players[me]?.id ? 'toi' : p.name));
-    status = spectator || game.players[me]?.ready ? `En attente : ${waiting.join(' et ')} place${waiting.length > 1 ? 'nt' : ''} sa flotte…` : 'Place ta flotte, puis clique sur « Prêt ! »';
+    status = spectator || game.players[me]?.ready ? `En attente : ${waiting.join(' et ')} place${waiting.length > 1 ? 'nt' : ''} sa flotte…` : 'Place ta flotte, puis clique sur « Prêt »';
   } else if (game.phase === 'gameOver') {
     status = 'Bataille terminée';
   } else {
@@ -223,15 +224,19 @@ export function BattleshipTable({
               Entraînement
             </span>
           )}
-          {countdown !== null && game.phase === 'playing' && <span className="direction">⏱ {Math.min(countdown, room.turnSeconds)} s</span>}
-          {room.spectators > 0 && <span className="direction">👀 {room.spectators}</span>}
+          {countdown !== null && game.phase === 'playing' && <span className="direction">
+              <Timer /> {Math.min(countdown, room.turnSeconds)} s
+            </span>}
+          {room.spectators > 0 && <span className="direction">
+              <Eye /> {room.spectators}
+            </span>}
         </div>
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
           {!spectator && <ReactionButton />}
           {canPause && !room.paused && game.phase !== 'gameOver' && (
             <button className="icon" onClick={() => void send(socket.emitWithAck('room:pause', { paused: true }))} title="Mettre la bataille en pause">
-              ⏸
+              <Pause />
             </button>
           )}
           <button className="link" onClick={leave}>
@@ -265,6 +270,7 @@ export function BattleshipTable({
                     </span>
                   )}
                   <Avatar name={game.players[p]!.name} look={room.players[p]} bot={!!room.players[p]?.bot} />
+                  {game.phase === 'playing' && game.currentPlayer === p && <span className="turn-token" title="À son tour" />}
                   <strong>{enemy ? (spectator ? game.players[p]!.name : `Chez ${game.players[p]!.name}`) : spectator ? game.players[p]!.name : 'Ta flotte'}</strong>
                   <span className="naval-afloat">
                     {game.players[p]!.ready ? `${game.players[p]!.afloat} / ${FLEET.length} à flot` : 'place sa flotte…'}
@@ -296,13 +302,13 @@ export function BattleshipTable({
         <div className="overlay" role="dialog" aria-label="Fin de la bataille">
           <div className="panel modal pop-in duel-over">
             <div className="trophy" aria-hidden>
-              {game.winners.includes(me) ? '🏆' : spectator ? '⚓' : '🌊'}
+              {game.winners.includes(me) ? <Trophy /> : spectator ? <Anchor /> : <Waves />}
             </div>
             <h2>
               {spectator
                 ? `${game.players[game.winners[0]!]!.name} gagne`
                 : game.winners.includes(me)
-                  ? 'Victoire : flotte adverse coulée !'
+                  ? 'Victoire, flotte adverse coulée'
                   : 'Ta flotte est coulée…'}
             </h2>
             <p className="muted small">

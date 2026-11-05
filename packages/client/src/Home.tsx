@@ -1,3 +1,4 @@
+import { ArrowLeft, BookOpen, Eye, Flame, GraduationCap, LogOut, Play, Plus, Settings, Trophy } from 'lucide-react';
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { type BotLevel, GAMES, type GameId, type LiveRoom, type OpenRoom, type Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
@@ -311,6 +312,7 @@ export function Home({
                 ),
               )}
             </div>
+            <WaitingRooms onEnter={onEnter} />
             <SeasonCard stats={stats} onClick={() => open('saison')} />
             {error && <p className="error">{error}</p>}
           </div>
@@ -331,7 +333,7 @@ export function Home({
         return (
           <div className="menu-screen game-hub">
             <button type="button" className="back-button hub-back" onClick={back}>
-              ← Jeux
+              <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
               {/* Les cartes maîtresses du jeu en éventail derrière le dos de carte. */}
@@ -345,12 +347,12 @@ export function Home({
               <h1 className="game-title">
                 Gang <span>of</span> Four
               </h1>
-              <p className="tagline">Débarrasse-toi de tes cartes avant les autres.</p>
+              <p className="tagline">Débarrasse-toi de tes cartes avant les autres</p>
             </div>
             <div className="menu-side">
               {firstTime && (
                 <div className="first-time">
-                  <strong>🎓 Première partie ?</strong>
+                  <strong>Première partie ?</strong>
                   <p>
                     Un tutoriel de deux minutes t'apprend les règles en jouant : une manche guidée contre trois bots, que tu gagnes à coup
                     sûr.
@@ -366,18 +368,18 @@ export function Home({
                 </div>
               )}
               <nav className="game-menu" aria-label="Gang of Four">
-                <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon ou rejoindre ceux qui attendent" onClick={() => open('jouer')} />
+                <MenuItem primary icon={<Play />} title="Jouer" subtitle="Créer un salon ou rejoindre ceux qui attendent" onClick={() => open('jouer')} />
                 <MenuItem
-                  icon="👀"
+                  icon={<Eye />}
                   title="Regarder"
                   subtitle={liveOf('gof').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
                   pill={liveOf('gof').length > 0 ? { text: `${liveOf('gof').length} en cours`, live: true } : undefined}
                   onClick={() => open('regarder')}
                 />
                 <div className="menu-tiles">
-                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('classement')} />
-                  <MenuItem tile icon="🎓" title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
-                  <MenuItem tile icon="📜" title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules('gof')} />
+                  <MenuItem tile icon={<Trophy />} title="Classement" subtitle="Saison et général" onClick={() => open('classement')} />
+                  <MenuItem tile icon={<GraduationCap />} title="Tutoriel" subtitle="2 minutes" onClick={() => void startTutorial()} />
+                  <MenuItem tile icon={<BookOpen />} title="Règles" subtitle="Combinaisons, scores" onClick={() => setRules('gof')} />
                 </div>
               </nav>
               {error && <p className="error">{error}</p>}
@@ -388,7 +390,7 @@ export function Home({
         return (
           <div className="menu-screen game-hub slots-hub">
             <button type="button" className="back-button hub-back" onClick={back}>
-              ← Jeux
+              <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
               <div className="slots-hub-machine" aria-hidden>
@@ -397,21 +399,21 @@ export function Home({
               <h1 className="game-title">
                 Duel Jackpot <span className="beta-badge big">Bêta</span>
               </h1>
-              <p className="tagline">100 € chacun, une machine chacun : le premier à 300 € gagne.</p>
+              <p className="tagline">100 € chacun, une machine chacun : le premier à 300 € gagne</p>
             </div>
             <div className="menu-side">
               <nav className="game-menu" aria-label="Duel Jackpot">
-                <MenuItem primary icon="🎰" title="Jouer" subtitle="Un duel à deux : crée un salon ou rejoins-en un" onClick={() => open('slots-jouer')} />
+                <MenuItem primary icon={<Play />} title="Jouer" subtitle="Un duel à deux : crée un salon ou rejoins-en un" onClick={() => open('slots-jouer')} />
                 <MenuItem
-                  icon="👀"
+                  icon={<Eye />}
                   title="Regarder"
                   subtitle={liveOf('slots').length === 0 ? 'Aucun duel en cours' : 'Duels en cours des collègues'}
                   pill={liveOf('slots').length > 0 ? { text: `${liveOf('slots').length} en cours`, live: true } : undefined}
                   onClick={() => open('slots-regarder')}
                 />
                 <div className="menu-tiles two">
-                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('slots-classement')} />
-                  <MenuItem tile icon="📜" title="Règles" subtitle="Mises et gains" onClick={() => setRules('slots')} />
+                  <MenuItem tile icon={<Trophy />} title="Classement" subtitle="Saison et général" onClick={() => open('slots-classement')} />
+                  <MenuItem tile icon={<BookOpen />} title="Règles" subtitle="Mises et gains" onClick={() => setRules('slots')} />
                 </div>
               </nav>
               {error && <p className="error">{error}</p>}
@@ -422,7 +424,7 @@ export function Home({
         return (
           <div className="menu-screen game-hub naval-hub">
             <button type="button" className="back-button hub-back" onClick={back}>
-              ← Jeux
+              <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
               <div className="naval-hub-art" aria-hidden>
@@ -431,21 +433,21 @@ export function Home({
               <h1 className="game-title">
                 Bataille navale <span className="beta-badge big">Bêta</span>
               </h1>
-              <p className="tagline">Place ta flotte en secret, et coule celle de l’autre.</p>
+              <p className="tagline">Place ta flotte en secret, et coule celle de l’autre</p>
             </div>
             <div className="menu-side">
               <nav className="game-menu" aria-label="Bataille navale">
-                <MenuItem primary icon="⚓" title="Jouer" subtitle="Une bataille à deux : crée un salon ou rejoins-en un" onClick={() => open('naval-jouer')} />
+                <MenuItem primary icon={<Play />} title="Jouer" subtitle="Une bataille à deux : crée un salon ou rejoins-en un" onClick={() => open('naval-jouer')} />
                 <MenuItem
-                  icon="👀"
+                  icon={<Eye />}
                   title="Regarder"
                   subtitle={liveOf('battleship').length === 0 ? 'Aucune bataille en cours' : 'Batailles en cours des collègues'}
                   pill={liveOf('battleship').length > 0 ? { text: `${liveOf('battleship').length} en cours`, live: true } : undefined}
                   onClick={() => open('naval-regarder')}
                 />
                 <div className="menu-tiles two">
-                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('naval-classement')} />
-                  <MenuItem tile icon="📜" title="Règles" subtitle="Flotte et tirs" onClick={() => setRules('battleship')} />
+                  <MenuItem tile icon={<Trophy />} title="Classement" subtitle="Saison et général" onClick={() => open('naval-classement')} />
+                  <MenuItem tile icon={<BookOpen />} title="Règles" subtitle="Flotte et tirs" onClick={() => setRules('battleship')} />
                 </div>
               </nav>
               {error && <p className="error">{error}</p>}
@@ -526,17 +528,20 @@ export function Home({
                 <strong>{account.name}</strong>
                 <small>
                   {account.title || progress.title}
-                  {daily && daily.streak > 0 && <span title={`Série de ${daily.streak} jours de jeu d'affilée`}> · 🔥 {daily.streak}</span>}
+                  {daily && daily.streak > 0 && <span className="streak-inline" title={`Série de ${daily.streak} jours de jeu d'affilée`}>
+                      <Flame />
+                      {daily.streak}
+                    </span>}
                 </small>
               </span>
             </button>
             {account.admin && (
               <button type="button" className="round-button" onClick={() => setAdmin(true)} title="Gérer les comptes">
-                ⚙️
+                <Settings />
               </button>
             )}
             <button type="button" className="round-button" onClick={() => void me.signOut()} title="Se déconnecter">
-              🚪
+              <LogOut />
             </button>
           </div>
         </header>
@@ -569,7 +574,7 @@ function MenuItem({
   tile,
   pill,
 }: {
-  icon: string;
+  icon: ReactNode;
   title: string;
   subtitle: string;
   onClick: () => void;
@@ -615,7 +620,7 @@ function SubScreen({
       <div className="sub-head">
         {onBack && (
           <button type="button" className="back-button" onClick={onBack}>
-            ← {backLabel}
+            <ArrowLeft /> {backLabel}
           </button>
         )}
         <h2>{title}</h2>
@@ -629,14 +634,15 @@ function SubScreen({
 const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1 };
 const BOT_COUNT: Record<number, string> = { 1: 'un bot', 3: 'trois bots' };
 
-/** Salons de ce jeu qui attendent des joueurs, rechargés toutes les 5 secondes. */
-function useOpenRooms(game: GameId): OpenRoom[] | null {
+/** Salons de ces jeux qui attendent des joueurs, rechargés toutes les 5 secondes. */
+function useOpenRooms(games: GameId[]): OpenRoom[] | null {
   const [rooms, setRooms] = useState<OpenRoom[] | null>(null);
+  const key = games.join();
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const result = await socket.emitWithAck('rooms:open', { game });
-      if (active && result.ok) setRooms(result.rooms);
+      const results = await Promise.all(games.map((game) => socket.emitWithAck('rooms:open', { game })));
+      if (active) setRooms(results.flatMap((r) => (r.ok ? r.rooms : [])));
     };
     void load();
     const t = setInterval(load, 5_000);
@@ -644,8 +650,50 @@ function useOpenRooms(game: GameId): OpenRoom[] | null {
       active = false;
       clearInterval(t);
     };
-  }, [game]);
+  }, [key]);
   return rooms;
+}
+
+/** Les salons qui attendent un joueur, tous jeux confondus : on rejoint d'un clic. */
+function WaitingRooms({ onEnter }: { onEnter: (s: Session) => void }) {
+  const rooms = useOpenRooms(GAMES.filter((g) => g.status === 'live').map((g) => g.id as GameId));
+  const [error, setError] = useState('');
+  async function join(code: string) {
+    setError('');
+    const result = await socket.emitWithAck('room:join', { code });
+    if (result.ok) onEnter(result);
+    else setError(errorLabel(result.error));
+  }
+  return (
+    <section className="waiting-rooms">
+      <h2 className="catalog-subtitle">Salons qui attendent un joueur</h2>
+      {rooms === null ? (
+        <p className="muted">Chargement…</p>
+      ) : rooms.length === 0 ? (
+        <p className="muted waiting-empty">Aucun pour l’instant. Crée le tien depuis la page d’un jeu, il apparaîtra ici pour les collègues.</p>
+      ) : (
+        <ul className="open-rooms">
+          {rooms.map((r) => (
+            <li key={r.code}>
+              <span className="open-room-text">
+                <strong>
+                  {GAME_NAMES[r.game]} · salon de {r.host}
+                </strong>
+                <small>
+                  {r.players} / {r.maxPlayers} joueurs
+                  {r.players < r.minPlayers && ` · encore ${r.minPlayers - r.players} pour lancer`}
+                </small>
+              </span>
+              <button type="button" className="primary" onClick={() => void join(r.code)}>
+                Rejoindre
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
 }
 
 /**
@@ -656,7 +704,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
   const [level, setLevel] = useState<BotLevel>('normal');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const open = useOpenRooms(game);
+  const open = useOpenRooms([game]);
   const info = GAMES.find((g) => g.id === game);
 
   async function run(action: () => Promise<{ ok: true } & Session | { ok: false; error: string }>) {
@@ -701,7 +749,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
       <div className="play-grid">
         <section className="panel play-create">
           <span className="choice-icon" aria-hidden>
-            🪑
+            <Plus />
           </span>
           <h3>Créer un salon</h3>
           <p>Il apparaît dans les salons actifs pour les collègues. Tu peux aussi leur envoyer le lien.</p>
@@ -714,7 +762,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
           {open === null ? (
             <p className="muted">Chargement…</p>
           ) : open.length === 0 ? (
-            <p className="muted">Aucun salon n’attend de joueur pour l’instant : crée le tien !</p>
+            <p className="muted">Aucun salon n’attend de joueur pour l’instant : crée le tien</p>
           ) : (
             <ul className="open-rooms">
               {open.map((r) => (
@@ -737,7 +785,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
       </div>
       <section className="panel play-training">
         <div className="play-training-text">
-          <h3>🤖 Entraînement contre les bots</h3>
+          <h3>Entraînement contre les bots</h3>
           <p>
             Toi contre {BOT_COUNT[TRAINING_BOTS[game]]} pour t’exercer.{' '}
             <strong>Ne compte pas dans les classements et ne rapporte rien.</strong>
@@ -797,16 +845,16 @@ function LiveRooms({ rooms, onWatch }: { rooms: LiveRoom[]; onWatch: (s: Session
   return (
     <section className="panel live-rooms">
       {rooms.length === 0 ? (
-        <p className="muted">Aucune partie en cours pour l'instant. Reviens plus tard, ou lance-en une !</p>
+        <p className="muted">Aucune partie en cours pour l'instant. Reviens plus tard, ou lance-en une.</p>
       ) : (
         <ul>
           {rooms.map((r) => (
             <li key={r.code}>
               <div className="live-info">
-                <span className="live-players">{r.players.map((p) => `${p.bot ? '🤖 ' : ''}${p.name} ${p.score}`).join(' · ')}</span>
+                <span className="live-players">{r.players.map((p) => `${p.name}${p.bot ? ' (bot)' : ''} ${p.score}`).join(' · ')}</span>
                 <span className="muted">
                   Manche {r.round}
-                  {r.spectators > 0 && ` · 👀 ${r.spectators}`}
+                  {r.spectators > 0 && ` · ${r.spectators} spectateur${r.spectators > 1 ? 's' : ''}`}
                 </span>
               </div>
               <div className="live-actions">

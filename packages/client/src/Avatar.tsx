@@ -1,3 +1,4 @@
+import { Bot } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Cosmetics, Look } from '../../server/src/protocol';
 
@@ -11,7 +12,7 @@ export function initials(name: string): string {
 }
 
 /**
- * Rond du joueur : son avatar sur sa couleur s'il en a choisi, sinon ses initiales (ou 🤖 pour un bot), entouré du
+ * Rond du joueur : son avatar sur sa couleur s'il en a choisi, sinon ses initiales (ou un robot pour un bot), entouré du
  * cadre qu'il a débloqué et choisi (bronze, argent…).
  */
 export function Avatar({ name, look, bot = false }: { name: string; look?: Look & Cosmetics; bot?: boolean }) {
@@ -19,7 +20,7 @@ export function Avatar({ name, look, bot = false }: { name: string; look?: Look 
   const frame = !bot && look?.frame ? `frame frame-${look.frame}` : '';
   return (
     <span className={`avatar ${look?.color ? 'colored' : ''} ${look?.avatar ? 'emoji' : ''} ${frame}`} style={style} aria-hidden>
-      {bot ? '🤖' : (look?.avatar ?? initials(name))}
+      {bot ? <Bot /> : (look?.avatar ?? initials(name))}
     </span>
   );
 }

@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { SLOT_SYMBOLS, SLOTS_GOAL, SLOTS_START, THREE_OF_A_KIND, TWO_OF_A_KIND } from '@gof/engine';
 import { useEffect } from 'react';
 import { SLOT_NAMES, SlotIcon } from './SlotsTable';
@@ -14,7 +15,7 @@ export function SlotsRules({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={onClose}>
       <div className="panel modal rules pop-in" role="dialog" aria-label="Règles du Duel Jackpot" onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Fermer">
-          ✕
+          <X />
         </button>
         <h2>Règles du Duel Jackpot</h2>
         <section>

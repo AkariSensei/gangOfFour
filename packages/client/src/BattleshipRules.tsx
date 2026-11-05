@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { FLEET } from '@gof/engine';
 import { useEffect } from 'react';
 
@@ -13,7 +14,7 @@ export function BattleshipRules({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={onClose}>
       <div className="panel modal rules pop-in" role="dialog" aria-label="Règles de la bataille navale" onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Fermer">
-          ✕
+          <X />
         </button>
         <h2>Règles de la bataille navale</h2>
         <section>

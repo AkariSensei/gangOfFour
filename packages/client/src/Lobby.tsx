@@ -1,3 +1,4 @@
+import { VolumeX, X } from 'lucide-react';
 import { useState } from 'react';
 import type { BotLevel, ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
@@ -106,7 +107,7 @@ export function Lobby({
             </p>
             <p className="muted">Code du salon</p>
             <div className="room-code">{room.code}</div>
-            <button onClick={copy}>{copied ? 'Lien copié !' : "Copier le lien d'invitation"}</button>
+            <button onClick={copy}>{copied ? 'Lien copié' : "Copier le lien d'invitation"}</button>
             <h2>
               Joueurs ({room.players.length}/{maxSeats})
             </h2>
@@ -128,11 +129,15 @@ export function Lobby({
                         <KickButton name={p.name} onKick={() => kick(p.id)} />
                       </>
                     ) : (
-                      p.muted && <span className="tag">🔇</span>
+                      p.muted && (
+                        <span className="tag" title="Chat coupé">
+                          <VolumeX />
+                        </span>
+                      )
                     )}
                     {p.bot && isHost && (
                       <button className="remove-bot" aria-label={`Retirer ${p.name}`} onClick={() => removeBot(p.id)}>
-                        ✕
+                        <X />
                       </button>
                     )}
                   </span>
@@ -142,7 +147,7 @@ export function Lobby({
                   <span className="lobby-seat-name">Place libre</span>
                   {isHost && room.training ? (
                     <span className="bot-levels" role="group" aria-label="Ajouter un bot">
-                      <small>🤖 Ajouter un bot</small>
+                      <small>Ajouter un bot</small>
                       {BOT_LEVELS.map(([level, label]) => (
                         <button key={level} className={`link small level-${level}`} onClick={() => addBot(level)}>
                           {label}

@@ -1,3 +1,4 @@
+import { KeyRound, Mail, Wrench, X } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { AVATARS, type AccountView, type AdminAccount, COLORS, type InviteView, type Look } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
@@ -161,7 +162,7 @@ export function InviteForm({
             Choisis un nouveau mot de passe pour <b>{invite.login}</b>.
           </>
         ) : (
-          'Bienvenue ! Choisis ton identifiant et ton mot de passe : ils te serviront à te connecter.'
+          'Bienvenue. Choisis ton identifiant et ton mot de passe : ils te serviront à te connecter.'
         )}
       </p>
       {!invite.reset && (
@@ -239,7 +240,7 @@ function Invites({ invites, onChange }: { invites: InviteView[]; onChange: () =>
         une fois, pendant une semaine.
       </p>
       <button type="button" onClick={() => void create()}>
-        ✉️ Créer un lien d’invitation
+        <Mail /> Créer un lien d’invitation
       </button>
       {error && <p className="error">{error}</p>}
       {invites.length > 0 && (
@@ -251,7 +252,7 @@ function Invites({ invites, onChange }: { invites: InviteView[]; onChange: () =>
                 {i.account ? `Nouveau mot de passe pour ${i.account}` : 'Nouveau compte'} · jusqu’au {inviteDate.format(new Date(i.expiresAt))}
               </span>
               <button type="button" onClick={() => void copy(i.code)}>
-                {copied === i.code ? 'Copié ✓' : 'Copier'}
+                {copied === i.code ? 'Copié' : 'Copier'}
               </button>
               <button type="button" className="danger" onClick={() => void revoke(i.code)}>
                 Révoquer
@@ -401,12 +402,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={onClose}>
       <div className="panel modal profile admin pop-in" role="dialog" aria-label="Comptes" onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Fermer">
-          ✕
+          <X />
         </button>
         <h2>Comptes</h2>
         <p className="admin-maintenance">
           <button type="button" className="danger" onClick={async () => setError(await setMaintenance(true))}>
-            🔧 Fermer le site pour maintenance
+            <Wrench /> Fermer le site pour maintenance
           </button>
           <span className="muted small">Les joueurs verront un message ; toi seul pourras encore jouer.</span>
         </p>
@@ -425,12 +426,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   placeholder="(pas de pseudo)"
                   aria-label={`Pseudo de ${a.email || a.login}`}
                 />
-                <span className="muted small">{a.login ? `🔑 ${a.login}` : a.email}</span>
+                <span className="muted small">{a.login ? `Identifiant ${a.login}` : a.email}</span>
               </div>
               {names[a.id] !== a.name && <button onClick={() => update(a.id, { name: names[a.id] })}>Renommer</button>}
               {a.login && (
                 <button className="icon" onClick={() => void resetLink(a)} title="Lien pour choisir un nouveau mot de passe" aria-label={`Nouveau mot de passe pour ${a.login}`}>
-                  🔑
+                  <KeyRound />
                 </button>
               )}
               {a.ranked && (

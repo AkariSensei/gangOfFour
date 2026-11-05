@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useEffect } from 'react';
 
 /** Quelques cartes en illustration, données par le nom de leur image : « 5V 5J 5R ». */
@@ -33,7 +34,7 @@ export function Rules({ onClose }: { onClose: () => void }) {
     <div className="overlay" onClick={onClose}>
       <div className="panel modal rules pop-in" role="dialog" aria-label="Règles du jeu" onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Fermer">
-          ✕
+          <X />
         </button>
         <h2>Règles du jeu</h2>
 
@@ -115,7 +116,7 @@ export function Rules({ onClose }: { onClose: () => void }) {
           <h3>Dans l'application</h3>
           <ul className="rules-list">
             <li>Les cartes qui ne peuvent rien battre sont grisées.</li>
-            <li>⏭ passe pour toi quand toute ta main est grisée.</li>
+            <li>La passe automatique joue pour toi quand toute ta main est grisée.</li>
             <li>À 3 joueurs, 16 cartes restent de côté et ne sont pas jouées.</li>
           </ul>
         </section>

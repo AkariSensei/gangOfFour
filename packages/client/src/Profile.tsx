@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../server/src/protocol';
 import { LevelBadge, LevelBar } from './Progress';
@@ -26,7 +27,7 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
     <div className="overlay" onClick={onClose}>
       <div className="panel modal profile pop-in" role="dialog" aria-label={`Statistiques de ${name}`} onClick={(e) => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Fermer">
-          ✕
+          <X />
         </button>
         <h2>{profile?.name ?? name}</h2>
         {profile && (
@@ -72,7 +73,7 @@ export function Profile({ name, onClose }: { name: string; onClose: () => void }
                   <li key={g.finishedAt} className="profile-game">
                     <span className="muted">{dateFormat.format(new Date(g.finishedAt))}</span>
                     <span>
-                      {g.winner ? '🏆 Victoire' : `${g.rank}e sur ${g.players}`} · {plural(g.score, 'pt')}
+                      {g.winner ? 'Victoire' : `${g.rank}e sur ${g.players}`} · {plural(g.score, 'pt')}
                     </span>
                   </li>
                 ))}

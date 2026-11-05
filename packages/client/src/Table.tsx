@@ -1,3 +1,4 @@
+import { Bell, BellOff, Crown, Eye, Pause, Repeat, SkipForward, Smile, Timer, VolumeX } from 'lucide-react';
 import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, analyzeCombination, canBeat, playableCards } from '@gof/engine';
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { type BotLevel, type ChatMessage, type GofView, type Look, REACTIONS, type RoomView } from '../../server/src/protocol';
@@ -61,7 +62,7 @@ export function ReactionButton() {
   return (
     <div className="reaction-menu">
       <button className="icon" onClick={() => setOpen((o) => !o)} title="Réagir" aria-expanded={open}>
-        😀
+        <Smile />
       </button>
       {open && (
         <div className="reaction-picker" role="menu">
@@ -136,11 +137,16 @@ function Opponent({
       <Avatar name={p.name} look={look} bot={bot} />
       <div className="opponent-info">
         <div className="opponent-name">
+          {(active || giving) && <span className="turn-token" aria-hidden />}
           {p.name}
           {game.dealer === index && <span className="tag">donneur</span>}
           {level && <span className={`tag level-${level}`}>{LEVEL_LABELS[level].toLowerCase()}</span>}
-          {away ? <span className="tag">🤖 bot</span> : !connected && <span className="tag">hors ligne</span>}
-          {onMute ? <MuteButton name={p.name} muted={muted} onClick={onMute} /> : muted && <span className="tag">🔇</span>}
+          {away ? <span className="tag">bot</span> : !connected && <span className="tag">hors ligne</span>}
+          {onMute ? <MuteButton name={p.name} muted={muted} onClick={onMute} /> : muted && (
+              <span className="tag" title="Chat coupé">
+                <VolumeX />
+              </span>
+            )}
           {onKick && <KickButton name={p.name} onKick={onKick} />}
         </div>
         <div className="opponent-meta">
@@ -210,7 +216,7 @@ function Podium({ game, seats }: { game: PlayerView; seats: RoomView['players'] 
           <div key={p.id} className={`podium-step rank-${rank} ${p.i === game.you ? 'me' : ''}`}>
             {rank === 1 && (
               <span className="podium-crown" aria-hidden>
-                👑
+                <Crown />
               </span>
             )}
             <Avatar name={p.name} look={seats[p.i]} bot={!!(seats[p.i]?.bot || seats[p.i]?.vacant)} />
@@ -269,11 +275,11 @@ function HandsPeek({ game, hands }: { game: PlayerView; hands: Card[][] }) {
 function TutorialOutcome() {
   return (
     <div className="challenge-outcome won">
-      <h2>🎓 Tutoriel terminé, bravo !</h2>
+      <h2>Tutoriel terminé, bravo</h2>
       <p>
         Tu as vidé ta main le premier : tu gagnes la manche. Les autres prennent des points selon les cartes qui leur restent, et la
         partie s'arrête quand quelqu'un atteint le score fixé : le moins de points l'emporte. Entre deux manches, celui qui a perdu
-        donne sa meilleure carte au gagnant, qui lui en rend une de son choix. À toi de jouer pour de vrai !
+        donne sa meilleure carte au gagnant, qui lui en rend une de son choix. À toi de jouer pour de vrai.
       </p>
     </div>
   );
@@ -307,7 +313,7 @@ function RoundOver({
           <TutorialOutcome />
         ) : over ? (
           <>
-            <h2>{winnerNames} gagne la partie !</h2>
+            <h2>{winnerNames} gagne la partie</h2>
             <Podium game={game} seats={seats} />
           </>
         ) : (
@@ -374,7 +380,7 @@ function RoundOver({
         ) : (
           <>
             <p className="exchange-notice">
-              🔁 <strong>{game.players[r.loserIndex]!.name}</strong> donnera sa meilleure carte à{' '}
+              <Repeat /> <strong>{game.players[r.loserIndex]!.name}</strong> donnera sa meilleure carte à{' '}
               <strong>{game.players[r.winnerIndex]!.name}</strong>, qui lui en rendra une de son choix.
             </p>
             {game.you < 0 ? (
@@ -690,7 +696,7 @@ export function PauseOverlay({ onResume }: { onResume?: () => void }) {
     <div className="overlay pause-overlay" role="dialog" aria-label="Partie en pause">
       <div className="panel modal pop-in">
         <div className="trophy" aria-hidden>
-          ⏸
+          <Pause />
         </div>
         <h2>Pause</h2>
         {onResume ? (
@@ -778,7 +784,7 @@ export function Table({
   const reactions = useReactions();
   const myReaction = reactions[game.players[me]?.id ?? ''];
   useTurnAlert(
-    mustCut ? 'À toi de couper le paquet' : mustGive ? 'À toi de rendre une carte' : myTurn && !passingAlone ? 'À toi de jouer !' : null,
+    mustCut ? 'À toi de couper le paquet' : mustGive ? 'À toi de rendre une carte' : myTurn && !passingAlone ? 'À toi de jouer' : null,
     notifications.state === 'on',
   );
   // Minuteur : le serveur envoie le temps restant ; on en déduit l'heure de fin sur l'horloge locale.
@@ -799,12 +805,12 @@ export function Table({
     ? passingAlone
       ? null
       : game.table
-      ? 'À toi de jouer !'
-      : 'À toi d’ouvrir !'
+      ? 'À toi de jouer'
+      : 'À toi d’ouvrir'
     : mustGive
       ? 'Choisis une carte à rendre'
       : mustCut
-        ? 'À toi de couper !'
+        ? 'À toi de couper'
         : null;
   const turnKey = `${game.round}-${game.phase}-${game.trick.length}-${game.currentPlayer}`;
 
@@ -1026,7 +1032,7 @@ export function Table({
 
   function leave() {
     const question = 'Quitter la partie ? Les autres joueurs ne pourront plus la terminer sans toi.';
-    if (spectator || room.tutorial || game.phase === 'gameOver' || confirm(question)) void exit();
+    if (spectator || room.tutorial || room.training || game.phase === 'gameOver' || confirm(question)) void exit();
   }
 
   // Tutoriel : les cartes à poser sont mises en avant, les autres en retrait.
@@ -1051,7 +1057,7 @@ export function Table({
   } else if (myTurn && passingAlone) {
     status = 'Rien ne passe : tu passes automatiquement…';
   } else if (myTurn) {
-    status = game.mustPlayMultiOne ? 'À toi ! Ouvre la partie avec le 1 multicolore.' : 'À toi de jouer !';
+    status = game.mustPlayMultiOne ? 'À toi : ouvre la partie avec le 1 multicolore' : 'À toi de jouer';
   } else {
     status = `${current.name} réfléchit…`;
   }
@@ -1086,7 +1092,7 @@ export function Table({
           </span>
           {room.turnSeconds > 0 && (
             <span className="direction" title="Temps pour jouer : après, tu passes automatiquement">
-              ⏱ {room.turnSeconds} s par tour
+              <Timer /> {room.turnSeconds} s par tour
             </span>
           )}
           {game.dealer === me && (
@@ -1096,7 +1102,7 @@ export function Table({
           )}
           {room.spectators > 0 && (
             <span className="direction" title="Personnes qui regardent la partie">
-              👀 {room.spectators}
+              <Eye /> {room.spectators}
             </span>
           )}
         </div>
@@ -1106,7 +1112,7 @@ export function Table({
           {!spectator && !room.tutorial && <ReactionButton />}
           {canPause && !room.paused && game.phase !== 'gameOver' && (
             <button className="icon" onClick={() => void pause(true)} title="Mettre la partie en pause">
-              ⏸
+              <Pause />
             </button>
           )}
           {!spectator && notifications.state !== 'unsupported' && (
@@ -1123,7 +1129,7 @@ export function Table({
               }
               aria-pressed={notifications.state === 'on'}
             >
-              {notifications.state === 'on' ? '🔔' : '🔕'}
+              {notifications.state === 'on' ? <Bell /> : <BellOff />}
             </button>
           )}
           {!spectator && (
@@ -1133,7 +1139,7 @@ export function Table({
               title={autoPass ? 'Passe auto : tu passes tout seul quand rien ne passe (cliquer pour couper)' : 'Passe auto coupée (cliquer pour activer)'}
               aria-pressed={autoPass}
             >
-              ⏭
+              <SkipForward />
             </button>
           )}
           <button className="link" onClick={leave}>
@@ -1168,7 +1174,9 @@ export function Table({
       {spectator ? (
         <section className="my-area spectating">
           <div className="my-bar">
-            <div className="status">👀 Tu regardes la partie · {status}</div>
+            <div className="status">
+              <Eye /> Tu regardes la partie · {status}
+            </div>
           </div>
           {game.hands && <HandsPeek game={game} hands={game.hands} />}
         </section>
@@ -1192,7 +1200,7 @@ export function Table({
               {room.tutorial.coach ? (
                 <>
                   <span className="coach-step">
-                    🎓 Étape {room.tutorial.step} / {room.tutorial.total}
+                    Étape {room.tutorial.step} / {room.tutorial.total}
                   </span>
                   <p>{room.tutorial.coach}</p>
                 </>
@@ -1210,7 +1218,7 @@ export function Table({
                   className={`countdown ${myAction && secondsLeft <= 10 ? 'urgent' : ''}`}
                   title={myAction ? 'À zéro, tu passes automatiquement' : 'Temps restant pour ce joueur'}
                 >
-                  ⏱ {secondsLeft} s
+                  <Timer /> {secondsLeft} s
                 </span>
               )}
               {myMove?.combination === null && game.phase === 'playing' && !myTurn && <span className="bubble inline">Tu as passé</span>}

@@ -1,3 +1,4 @@
+import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { GameId, GameStats, Season } from '../../server/src/protocol';
 import { Profile } from './Profile';
@@ -96,7 +97,7 @@ export function Leaderboard({
           {ranking.map((e, i) => (
             <li key={e.name}>
               <span className="medal" aria-hidden>
-                {['🥇', '🥈', '🥉'][i] ?? i + 1}
+                {i + 1}
               </span>
               {withProfile ? (
                 <button className="who" onClick={() => setShown(e.name)} title="Voir ses statistiques">
@@ -116,7 +117,7 @@ export function Leaderboard({
         </ol>
         {stats.streak && (
           <p className="streak" title="Record du bureau : plus longue série de victoires d'affilée">
-            🔥 Record :{' '}
+            <Flame /> Record :{' '}
             {withProfile ? (
               <button className="who" onClick={() => setShown(stats.streak!.name)}>
                 {stats.streak.name}
@@ -136,7 +137,7 @@ export function Leaderboard({
               <li key={r.finishedAt}>
                 <span className="muted">{dateFormat.format(new Date(r.finishedAt))}</span>
                 <span>
-                  🏆{' '}
+                  <Trophy />{' '}
                   {r.players
                     .filter((p) => p.winner)
                     .map((p) => p.name)

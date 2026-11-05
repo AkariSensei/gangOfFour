@@ -3,4 +3,4 @@
  * (avec le titre de index.html).
  */
 export const SITE_NAME = 'Atout';
-export const SITE_TAGLINE = 'Une partie entre deux réunions, contre les collègues ou les bots. Un classement commun, saison après saison.';
+export const SITE_TAGLINE = 'Des jeux à deux ou à plusieurs, entre collègues, avec un classement commun à chaque saison';
