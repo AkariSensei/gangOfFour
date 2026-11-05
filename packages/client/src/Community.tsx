@@ -1,6 +1,7 @@
 import { ChevronUp } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { IdeaView } from '../../server/src/protocol';
+import { wallText } from '../../server/src/wallText';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -151,19 +152,20 @@ function NewIdea({ onPost }: { onPost: (kind: IdeaView['kind'], title: string, t
       </div>
       <input
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => setTitle(wallText(e.target.value))}
         maxLength={80}
         placeholder={kind === 'idea' ? 'Ton idée en une phrase' : 'Le problème en une phrase'}
         aria-label="Titre"
       />
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => setText(wallText(e.target.value, true))}
         maxLength={1000}
         rows={3}
         placeholder={kind === 'idea' ? 'Les détails, si tu veux' : 'Ce que tu faisais, sur quel appareil, ce qui s’est passé…'}
         aria-label="Détails"
       />
+      <p className="muted small new-idea-note">Lettres, chiffres et ponctuation simple : les symboles et les dessins en caractères ne passent pas</p>
       <button type="submit" className="primary" disabled={busy || !title.trim()}>
         Publier
       </button>
@@ -211,7 +213,7 @@ function IdeaDetails({
         </ul>
       )}
       <form className="idea-reply" onSubmit={submit}>
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Ajouter un commentaire" aria-label="Commentaire" />
+        <input value={text} onChange={(e) => setText(wallText(e.target.value))} maxLength={500} placeholder="Ajouter un commentaire" aria-label="Commentaire" />
         <button type="submit" disabled={!text.trim()}>
           Envoyer
         </button>

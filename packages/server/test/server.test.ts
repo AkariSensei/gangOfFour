@@ -348,11 +348,22 @@ describe('serveur de jeu', () => {
     const visitor = connect(null);
     expect(await visitor.emitWithAck('community:post', { kind: 'idea', title: 'Coucou', text: '' })).toEqual({ ok: false, error: 'notSignedIn' });
     expect(await alice.emitWithAck('community:post', { kind: 'idea', title: '   ', text: '' })).toEqual({ ok: false, error: 'emptyMessage' });
+    // Pas de dessin en caractères : seuls les lettres, les chiffres et la ponctuation d'une phrase restent.
+    expect(await alice.emitWithAck('community:post', { kind: 'idea', title: '/\\_/\\ ===> |#|', text: '' })).toEqual({ ok: false, error: 'emptyMessage' });
     const changed = new Promise<void>((resolve) => bruno.once('community:changed', resolve));
     const posted = await alice.emitWithAck('community:post', { kind: 'idea', title: 'Ajouter le Président', text: 'Pour jouer à plus de quatre.' });
     if (!posted.ok) throw new Error(posted.error);
     await changed;
-    await alice.emitWithAck('community:post', { kind: 'bug', title: 'Le chat masque mes cartes', text: '' });
+    const art = await alice.emitWithAck('community:post', {
+      kind: 'bug',
+      title: 'Le chat masque mes cartes !!!!!! /\\_/\\ ===>   ok',
+      text: 'Ligne 1\n\n\n\n| ### |\nLigne 2   ¯\\_(o)_/¯',
+    });
+    if (!art.ok) throw new Error(art.error);
+    const wall = await alice.emitWithAck('community:list');
+    const cleaned = wall.ok ? wall.ideas.find((i) => i.id === art.id)! : null;
+    expect(cleaned!.title).toBe('Le chat masque mes cartes !!! ok');
+    expect(cleaned!.text).toBe('Ligne 1\n\nLigne 2 (o)');
 
     // Bruno vote pour la première idée : elle passe devant, avec deux voix (l'autrice vote d'office).
     expect(await bruno.emitWithAck('community:vote', { id: posted.id, on: true })).toEqual({ ok: true });
@@ -361,7 +372,7 @@ describe('serveur de jeu', () => {
     if (!list.ok) throw new Error(list.error);
     expect(list.ideas.map((i) => [i.title, i.votes, i.voted, i.mine])).toEqual([
       ['Ajouter le Président', 2, true, false],
-      ['Le chat masque mes cartes', 1, false, false],
+      ['Le chat masque mes cartes !!! ok', 1, false, false],
     ]);
     expect(list.ideas[0]).toMatchObject({ kind: 'idea', author: 'Alice', status: 'new', comments: [{ author: 'Bruno', text: 'Oui !' }] });
     // Un vote retiré ne compte plus ; sans compte, on lit le mur sans pouvoir voter.
@@ -374,7 +385,7 @@ describe('serveur de jeu', () => {
     expect(await admin.emitWithAck('community:status', { id: posted.id, status: 'done' })).toEqual({ ok: true });
     const after = await alice.emitWithAck('community:list');
     expect(after.ok && after.ideas.map((i) => [i.title, i.status, i.mine])).toEqual([
-      ['Le chat masque mes cartes', 'new', true],
+      ['Le chat masque mes cartes !!! ok', 'new', true],
       ['Ajouter le Président', 'done', true],
     ]);
 

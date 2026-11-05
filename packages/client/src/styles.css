@@ -5087,3 +5087,6 @@ button .lucide {
   height: 28px;
   color: var(--apricot);
 }
+.new-idea-note {
+  margin: 0;
+}

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { IdeaView, RoomError } from './protocol';
+import { wallText } from './wallText';
 
 /**
  * Le mur de la communauté : chacun y poste une idée ou un bug, les autres votent et commentent, l'admin indique où en
@@ -30,11 +31,10 @@ export const COMMENT_MAX = 500;
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError };
 
-/** Texte propre : sans caractères de contrôle (les retours à la ligne restent), coupé à la longueur permise. */
+/** Texte propre : seulement des lettres, des chiffres et la ponctuation d'une phrase (voir wallText), coupé à la longueur permise. */
 function clean(value: unknown, max: number, multiline = false): string {
   if (typeof value !== 'string') return '';
-  const kept = multiline ? value.replace(/[^\P{C}\n]/gu, '') : value.replace(/\p{C}/gu, '');
-  return kept.trim().slice(0, max);
+  return wallText(value, multiline).trim().slice(0, max);
 }
 
 export class CommunityStore {
@@ -120,7 +120,7 @@ export class CommunityStore {
   comment(author: string, id: unknown, text: unknown, now = new Date()): Result {
     const idea = this.get(id);
     if (!idea) return { ok: false, error: 'ideaNotFound' };
-    const body = clean(text, COMMENT_MAX, true);
+    const body = clean(text, COMMENT_MAX);
     if (!body) return { ok: false, error: 'emptyMessage' };
     idea.comments.push({ id: randomUUID(), author, text: body, at: now.toISOString() });
     this.save();
