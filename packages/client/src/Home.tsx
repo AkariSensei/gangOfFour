@@ -197,23 +197,6 @@ export function Home({
       case 'jeux':
         return (
           <div className="catalog">
-            <div className="catalog-hero">
-              <div className="catalog-hero-text">
-                <h1 className="site-title">
-                  Les jeux de cartes du bureau, <span>en ligne.</span>
-                </h1>
-                <p className="tagline">{SITE_TAGLINE}</p>
-                <div className="catalog-hero-actions">
-                  <button type="button" className="primary big" onClick={() => open('gof')}>
-                    Jouer à Gang of Four
-                  </button>
-                  <button type="button" className="ghost big" onClick={() => open('saison')}>
-                    Voir la saison
-                  </button>
-                </div>
-              </div>
-              <SeasonCard stats={stats} onClick={() => open('saison')} />
-            </div>
             <h2 className="catalog-title">Jeux</h2>
             <div className="game-cards">
               {GAMES.map((g) =>
@@ -248,6 +231,7 @@ export function Home({
                 ),
               )}
             </div>
+            <SeasonCard stats={stats} onClick={() => open('saison')} />
             {error && <p className="error">{error}</p>}
           </div>
         );

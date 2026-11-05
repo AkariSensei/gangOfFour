@@ -3845,58 +3845,17 @@ button.danger {
   display: grid;
   gap: 1.25rem;
 }
-.catalog-hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  align-items: stretch;
-}
-.catalog-hero-text {
-  flex: 999 1 520px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1.1rem;
-  padding: 0.5rem 0;
-}
-.catalog-hero .site-title {
-  margin: 0;
-  font-family: var(--font-title);
-  font-weight: 800;
-  font-size: clamp(2.4rem, 5.6vw, 4rem);
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-  color: var(--page-title);
-}
-.catalog-hero .site-title span {
-  color: var(--accent);
-}
-.catalog-hero .tagline {
-  display: block;
-  margin: 0;
-  text-align: left;
-  max-width: 34rem;
-  font-size: 1.15rem;
-  line-height: 1.5;
-  color: var(--page-sub);
-}
-.catalog-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
 .catalog-title {
-  margin: 0.75rem 0 0;
+  margin: 0;
   font-family: var(--font-title);
   font-weight: 800;
   font-size: 1.85rem;
 }
 
-/* La saison en cours, à côté de l'accroche : son nom, le compte à rebours et le podium. */
+/* La saison en cours, sous les jeux : son nom, le compte à rebours et le podium. */
 .season-card {
-  flex: 1 1 320px;
   min-width: 0;
+  margin-top: 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
@@ -3937,6 +3896,7 @@ button.danger {
   padding: 0;
   list-style: none;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.55rem;
 }
 .season-podium li {
