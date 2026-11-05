@@ -339,7 +339,13 @@ export function BattleshipTable({
   } else if (game.phase === 'gameOver') {
     status = 'Bataille terminée';
   } else {
-    status = myTurn ? 'À toi de tirer : choisis une case chez l’adversaire' : `${game.players[game.currentPlayer]!.name} vise…`;
+    // Qui touche rejoue : on le dit, pour qu'il ne s'étonne pas de garder la main.
+    const replay = !!last && last.result !== 'miss' && last.playerIndex === game.currentPlayer;
+    status = myTurn
+      ? replay
+        ? 'Touché, tu rejoues : choisis une autre case'
+        : 'À toi de tirer : choisis une case chez l’adversaire'
+      : `${game.players[game.currentPlayer]!.name} ${replay ? 'a touché et rejoue' : 'vise'}…`;
   }
 
   return (

@@ -68,7 +68,7 @@ describe('bataille navale', () => {
     expect(battleshipToAct(state)).toBe(0);
   });
 
-  it('annonce à l’eau, touché, puis touché-coulé, et passe la main à chaque tir', () => {
+  it('annonce à l’eau, touché, puis touché-coulé : qui touche rejoue, qui tombe à l’eau passe la main', () => {
     let state = placed();
     state = apply(state, { type: 'shoot', playerIndex: 0, cell: 9 });
     expect(state.lastShot).toMatchObject({ playerIndex: 0, cell: 9, result: 'miss' });
@@ -77,10 +77,12 @@ describe('bataille navale', () => {
     state = apply(state, { type: 'shoot', playerIndex: 1, cell: 99 });
     state = apply(state, { type: 'shoot', playerIndex: 0, cell: 80 });
     expect(state.lastShot?.result).toBe('hit');
-    state = apply(state, { type: 'shoot', playerIndex: 1, cell: 98 });
+    // Touché : Alice rejoue.
+    expect(state.currentPlayer).toBe(0);
     expect(applyBattleshipAction(state, { type: 'shoot', playerIndex: 0, cell: 80 })).toEqual({ ok: false, error: 'alreadyShot' });
     state = apply(state, { type: 'shoot', playerIndex: 0, cell: 81 });
     expect(state.lastShot).toMatchObject({ result: 'sunk', ship: 4 });
+    expect(state.currentPlayer).toBe(0);
     // Le torpilleur coulé se voit chez l'adversaire ; le reste de la flotte reste caché.
     const view = battleshipView(state, 0);
     expect(view.revealed[1]).toEqual([{ cells: [80, 81], kind: 4 }]);
@@ -91,12 +93,10 @@ describe('bataille navale', () => {
 
   it('donne la victoire à qui coule toute la flotte adverse', () => {
     let state = placed();
-    const targets = rows().flatMap((s) => s.cells);
-    const misses = [9, 19, 29, 39, 49, 59, 69, 79, 89, 99, 8, 18, 28, 38, 48, 58, 68];
-    for (const [i, cell] of targets.entries()) {
+    // Alice ne fait que toucher : elle garde la main jusqu'au dernier bateau.
+    for (const cell of rows().flatMap((s) => s.cells)) {
+      expect(state.currentPlayer).toBe(0);
       state = apply(state, { type: 'shoot', playerIndex: 0, cell });
-      if (state.phase === 'gameOver') break;
-      state = apply(state, { type: 'shoot', playerIndex: 1, cell: misses[i]! });
     }
     expect(state.phase).toBe('gameOver');
     expect(state.winners).toEqual([0]);

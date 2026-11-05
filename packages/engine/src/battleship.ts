@@ -2,7 +2,8 @@ import { createRng } from './random';
 
 /**
  * Bataille navale à deux, sur une grille de 10 × 10. Chacun place sa flotte en secret (cinq bateaux, qui peuvent se
- * toucher mais pas se chevaucher), puis on tire chacun son tour. Le premier qui coule toute la flotte adverse gagne.
+ * toucher mais pas se chevaucher), puis on tire chacun son tour : qui touche rejoue, qui tombe à l'eau passe la main.
+ * Le premier qui coule toute la flotte adverse gagne.
  * Une case est un nombre de 0 à 99 : ligne × 10 + colonne.
  */
 
@@ -201,7 +202,8 @@ export function applyBattleshipAction(previous: BattleshipState, action: Battles
   if (cellsAfloat(other.ships!, player.shots) === 0) {
     state.phase = 'gameOver';
     state.winners = [action.playerIndex];
-  } else {
+  } else if (result === 'miss') {
+    // À l'eau : la main passe. Touché (ou coulé) : on rejoue.
     state.currentPlayer = 1 - action.playerIndex;
   }
   return { ok: true, state };

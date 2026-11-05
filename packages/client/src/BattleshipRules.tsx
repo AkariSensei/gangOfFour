@@ -34,7 +34,7 @@ export function BattleshipRules({ onClose }: { onClose: () => void }) {
           <ul className="rules-list">
             <li>On tire chacun son tour sur une case de la grille adverse, en commençant par l’hôte.</li>
             <li>« À l’eau », « Touché » ou « Touché-coulé » : un bateau coulé apparaît chez l’adversaire.</li>
-            <li>Un seul tir par tour, même après un touché.</li>
+            <li>Qui touche rejoue ; qui tombe à l’eau passe la main.</li>
             <li>Le premier qui coule toute la flotte adverse gagne.</li>
           </ul>
         </section>
