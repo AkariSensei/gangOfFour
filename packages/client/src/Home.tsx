@@ -6,7 +6,7 @@ import { CommunityScreen } from './Community';
 import { Leaderboard, useStats } from './Leaderboard';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
-import { SeasonBadge, SeasonScreen } from './Season';
+import { SeasonCard, SeasonScreen } from './Season';
 import { SITE_NAME, SITE_TAGLINE } from './site';
 import { useDaily, useMyProfile } from './useProfile';
 import { LEVEL_LABELS, errorLabel } from './labels';
@@ -198,16 +198,35 @@ export function Home({
         return (
           <div className="catalog">
             <div className="catalog-hero">
-              <h1 className="site-title">{SITE_NAME}</h1>
-              <p className="tagline">{SITE_TAGLINE}</p>
+              <div className="catalog-hero-text">
+                <h1 className="site-title">
+                  Les jeux de cartes du bureau, <span>en ligne.</span>
+                </h1>
+                <p className="tagline">{SITE_TAGLINE}</p>
+                <div className="catalog-hero-actions">
+                  <button type="button" className="primary big" onClick={() => open('gof')}>
+                    Jouer à Gang of Four
+                  </button>
+                  <button type="button" className="ghost big" onClick={() => open('saison')}>
+                    Voir la saison
+                  </button>
+                </div>
+              </div>
+              <SeasonCard stats={stats} onClick={() => open('saison')} />
             </div>
-            <SeasonBadge stats={stats} onClick={() => open('saison')} />
             <h2 className="catalog-title">Jeux</h2>
             <div className="game-cards">
               {GAMES.map((g) =>
                 g.status === 'live' ? (
                   <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open('gof')}>
-                    {live.length > 0 && <span className="menu-pill live">{live.length} en cours</span>}
+                    <span className="game-card-top">
+                      <span className="game-card-players">{g.players}</span>
+                      {live.length > 0 && (
+                        <span className="game-card-live">
+                          {live.length} partie{live.length > 1 ? 's' : ''} en cours
+                        </span>
+                      )}
+                    </span>
                     <span className="game-card-art" aria-hidden>
                       <img src="/cards/PV.webp" alt="" />
                       <img src="/cards/DR.webp" alt="" />
@@ -215,14 +234,16 @@ export function Home({
                     </span>
                     <strong>{g.name}</strong>
                     <small>{g.tagline}</small>
-                    <span className="game-card-players">{g.players}</span>
                   </button>
                 ) : (
-                  <div key={g.id} className={`game-card soon game-${g.id}`}>
-                    <span className="game-card-status">{g.status === 'soon' ? 'Bientôt' : 'Plus tard'}</span>
+                  <div key={g.id} className={`game-card upcoming status-${g.status} game-${g.id}`}>
+                    <span className="game-card-top">
+                      <span className="game-card-status">{g.status === 'soon' ? 'Bientôt' : 'Plus tard'}</span>
+                    </span>
                     <strong>{g.name}</strong>
-                    <small>{g.tagline}</small>
-                    <span className="game-card-players">{g.players}</span>
+                    <small>
+                      {g.tagline} · {g.players}
+                    </small>
                   </div>
                 ),
               )}
@@ -334,6 +355,9 @@ export function Home({
       {signedIn && account && (
         <header className="menu-topbar">
           <button type="button" className="site-brand" onClick={() => (screen === 'jeux' ? undefined : open('jeux'))}>
+            <span className="site-mark" aria-hidden>
+              {SITE_NAME.charAt(0)}
+            </span>
             {SITE_NAME}
           </button>
           <nav className="site-tabs" aria-label="Menu principal">

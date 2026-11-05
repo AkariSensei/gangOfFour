@@ -1,42 +1,49 @@
 :root {
-  --bg: #0b1812;
+  /* DA « Arcade » : violet nuit, orange vif, touches de rose, de cyan et de jaune. */
+  --bg: #120e1f;
   --felt: #1f6143;
   --felt-dark: #123b29;
   --wood: #5a3519;
   --wood-light: #8a5a2e;
-  --panel: #16231c;
-  --text: #ebe6da;
-  --muted: #9aa79f;
-  /* Encre fixe, pour le texte posé sur l'or ou le blanc. */
-  --ink: #1f2421;
-  --gold: #e8b931;
-  --gold-dark: #b98b12;
-  --danger: #d1453b;
-  --ok: #4fb477;
-  --radius: 14px;
-  --font-title: 'Cinzel', Georgia, serif;
+  --panel: #1d1830;
+  --text: #f4efff;
+  --muted: #a89bc9;
+  /* Encre fixe, pour le texte posé sur l'orange ou le blanc. */
+  --ink: #120e1f;
+  --accent: #ff7a1a;
+  --accent-dark: #b44e07;
+  --accent-light: #ff9a4d;
+  --pink: #ff3d7f;
+  --cyan: #2fd5e8;
+  --yellow: #ffc93c;
+  --danger: #ff4d5e;
+  --ok: #3ddc97;
+  --radius: 18px;
+  --font-title: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
   /* Largeur d'une carte de la main, qui s'adapte à l'écran. */
   --card-w: clamp(48px, 5.4vw, 96px);
   --pile-w: clamp(46px, 4.6vw, 84px);
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  /* Page sur le même tapis sombre que la table, panneaux vert nuit. */
   color-scheme: dark;
-  --page-bg: var(--table-bg);
+  --page-bg:
+    radial-gradient(ellipse at 85% -10%, rgba(255, 122, 26, 0.14), transparent 45%),
+    radial-gradient(ellipse at 0% 0%, rgba(255, 61, 127, 0.08), transparent 40%),
+    var(--bg);
   --page-color: var(--bg);
   --page-title: #fff;
-  --page-sub: #cfe3d7;
-  --surface: #213229;
-  --surface-2: #1d2d24;
-  --line: #2c3f35;
-  --line-strong: #3a5045;
-  --highlight: #3b3418;
+  --page-sub: #c9bfe6;
+  --surface: #2a2242;
+  --surface-2: #231d38;
+  --line: #2b2446;
+  --line-strong: #3a3158;
+  --highlight: #3a2416;
   --soft: rgba(255, 255, 255, 0.06);
   --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   --table-bg:
-    radial-gradient(ellipse at 50% -10%, rgba(232, 185, 49, 0.12), transparent 55%),
-    radial-gradient(ellipse at top, #1d4a35, var(--bg) 70%);
+    radial-gradient(ellipse at 50% -10%, rgba(255, 122, 26, 0.12), transparent 55%),
+    radial-gradient(ellipse at top, #2a2147, var(--bg) 70%);
 }
 
 * {
@@ -85,22 +92,31 @@ button.primary:disabled {
   box-shadow: none;
 }
 button.primary {
-  background: linear-gradient(180deg, #f3cb4d, var(--gold));
-  border-color: var(--gold-dark);
+  background: var(--accent);
+  border-color: var(--accent);
   color: var(--ink);
-  box-shadow: 0 2px 0 var(--gold-dark);
+  font-weight: 800;
+  box-shadow: 0 4px 0 var(--accent-dark);
 }
 button.primary:not(:disabled):hover {
-  background: linear-gradient(180deg, #f6d466, #eebe35);
+  background: var(--accent-light);
+}
+button.primary:not(:disabled):active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--accent-dark);
 }
 button.big {
-  padding: 0.8rem 1.4rem;
+  padding: 0.85rem 1.5rem;
   font-size: 1.05rem;
+  border-radius: 16px;
 }
 button.ghost {
   background: transparent;
   color: inherit;
-  border-color: rgba(255, 255, 255, 0.25);
+  border: 2px solid var(--line-strong);
+}
+button.ghost:not(:disabled):hover {
+  border-color: var(--accent);
 }
 /* Action secondaire : petit bouton discret plutôt qu'un lien souligné. */
 button.link {
@@ -130,7 +146,7 @@ button.icon.off {
   filter: grayscale(1);
 }
 :focus-visible {
-  outline: 3px solid var(--gold);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -161,7 +177,8 @@ input {
 
 .panel {
   background: var(--panel);
-  border-radius: var(--radius);
+  border: 2px solid var(--line);
+  border-radius: 24px;
   padding: 1.5rem;
   box-shadow: var(--panel-shadow);
 }
@@ -184,7 +201,7 @@ input {
   vertical-align: middle;
 }
 .tag.you {
-  background: var(--gold);
+  background: var(--accent);
   color: var(--ink);
 }
 
@@ -262,10 +279,10 @@ input {
   flex: none;
   width: clamp(18px, 5vw, 56px);
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold));
+  background: linear-gradient(90deg, transparent, var(--accent));
 }
 .menu-title .tagline::after {
-  background: linear-gradient(90deg, var(--gold), transparent);
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 @media (max-width: 480px) {
   .menu-title .tagline::before,
@@ -273,19 +290,19 @@ input {
     display: none;
   }
 }
-/* Panneaux de l'accueil et du salon : cuir sombre bordé de laiton, comme les places autour de la table. */
+/* Panneaux de l'accueil et du salon. */
 .home-menu .panel,
 .lobby .panel {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 30%),
-    linear-gradient(180deg, #21170e, #160f09);
-  border: 1px solid rgba(232, 185, 49, 0.26);
+  background: var(--panel);
+  border: 2px solid var(--line);
   box-shadow:
     inset 0 1px 0 rgba(255, 220, 170, 0.1),
     var(--panel-shadow);
 }
 .home-menu .panel h2 {
-  color: #f3d27a;
+  font-family: var(--font-title);
+  font-weight: 800;
+  color: var(--text);
 }
 .recent-games {
   margin-top: 1.25rem;
@@ -392,12 +409,12 @@ input {
   text-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 .lobby-felt .muted {
-  color: #cfe3d7;
+  color: #c9bfe6;
 }
 .lobby-felt h2 {
   margin: 0.2rem 0 0;
   font-size: 0.95rem;
-  color: #e6f1ea;
+  color: #ede8f8;
 }
 .lobby-seats {
   display: contents;
@@ -416,7 +433,7 @@ input {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 40%),
     linear-gradient(180deg, #2b1d10, #1a110a);
-  border: 1px solid rgba(232, 185, 49, 0.38);
+  border: 1px solid rgba(255, 122, 26, 0.38);
   box-shadow:
     inset 0 1px 0 rgba(255, 230, 190, 0.12),
     0 8px 18px rgba(0, 0, 0, 0.45);
@@ -465,7 +482,7 @@ input {
 /* Place libre : plaque en pointillés, avec le bouton pour y asseoir un bot (hôte). */
 .lobby-seat.empty {
   background: rgba(10, 6, 3, 0.55);
-  border: 1px dashed rgba(232, 185, 49, 0.4);
+  border: 1px dashed rgba(255, 122, 26, 0.4);
   box-shadow: none;
   padding-block: 0.8rem;
   animation: none;
@@ -499,8 +516,8 @@ input {
 }
 .bot-levels .level-normal,
 .tag.level-normal {
-  border-color: rgba(232, 185, 49, 0.6);
-  color: #f3d27a;
+  border-color: rgba(255, 122, 26, 0.6);
+  color: #ffb27a;
 }
 .bot-levels .level-hard,
 .tag.level-hard {
@@ -799,7 +816,7 @@ button.mute.on {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  color: #d9eadf;
+  color: #d7d0ea;
   flex-wrap: wrap;
 }
 .header-left,
@@ -832,7 +849,7 @@ button.mute.on {
   padding: 0.2rem 0.65rem;
 }
 .score-pill.me {
-  border-color: var(--gold);
+  border-color: var(--accent);
 }
 /* Le score dans un jeton ivoire à bord crénelé */
 .score-pill strong {
@@ -856,7 +873,7 @@ button.mute.on {
 }
 .score-pill.leader strong::after {
   content: ' ★';
-  color: var(--gold);
+  color: var(--accent);
 }
 
 /*
@@ -903,7 +920,7 @@ button.mute.on {
 .felt::after {
   inset: calc(var(--rail) + clamp(10px, 2.4vh, 22px));
   border-radius: calc(var(--felt-r) - var(--rail) - clamp(10px, 2.4vh, 22px));
-  border: 1px solid rgba(232, 185, 49, 0.22);
+  border: 1px solid rgba(255, 122, 26, 0.22);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
@@ -934,7 +951,7 @@ button.mute.on {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 40%),
     linear-gradient(180deg, #2b1d10, #1a110a);
-  border: 1px solid rgba(232, 185, 49, 0.35);
+  border: 1px solid rgba(255, 122, 26, 0.35);
   box-shadow:
     inset 0 1px 0 rgba(255, 230, 190, 0.12),
     0 8px 18px rgba(0, 0, 0, 0.45);
@@ -942,15 +959,15 @@ button.mute.on {
   z-index: 2;
 }
 .opponent.active {
-  box-shadow: 0 0 0 3px var(--gold), 0 0 24px rgba(232, 185, 49, 0.55);
+  box-shadow: 0 0 0 3px var(--accent), 0 0 24px rgba(255, 122, 26, 0.55);
   animation: glow 1.6s ease-in-out infinite;
 }
 .opponent.active .avatar {
-  box-shadow: 0 0 0 3px var(--gold);
+  box-shadow: 0 0 0 3px var(--accent);
 }
 @keyframes glow {
   50% {
-    box-shadow: 0 0 0 3px var(--gold), 0 0 6px rgba(232, 185, 49, 0.2);
+    box-shadow: 0 0 0 3px var(--accent), 0 0 6px rgba(255, 122, 26, 0.2);
   }
 }
 .opponent.offline {
@@ -977,7 +994,7 @@ button.mute.on {
 }
 .opponent-meta {
   font-size: 0.8rem;
-  color: #cfe3d7;
+  color: #c9bfe6;
   white-space: nowrap;
 }
 .opponent-meta .count {
@@ -1089,7 +1106,7 @@ button.mute.on {
 }
 .history-name {
   font-size: 0.72rem;
-  color: #cfe3d7;
+  color: #c9bfe6;
 }
 .pile-label {
   font-weight: 600;
@@ -1103,7 +1120,7 @@ button.mute.on {
   letter-spacing: 0.04em;
 }
 .pile-empty {
-  color: #d9eadf;
+  color: #d7d0ea;
   font-style: italic;
 }
 .exchange-recap {
@@ -1117,7 +1134,7 @@ button.mute.on {
   background: rgba(0, 0, 0, 0.3);
   font-size: 0.8rem;
   font-weight: 600;
-  color: #e6f1ea;
+  color: #ede8f8;
   pointer-events: none;
   z-index: 1;
 }
@@ -1262,7 +1279,7 @@ button.mute.on {
 }
 .turn-timer-fill {
   height: 100%;
-  background: var(--gold);
+  background: var(--accent);
   transition: width 0.25s linear, background-color 0.3s ease;
 }
 .turn-timer-fill.urgent {
@@ -1282,8 +1299,8 @@ button.mute.on {
   animation: blink 1s ease-in-out infinite;
 }
 .my-area.active {
-  border-color: var(--gold);
-  box-shadow: 0 0 30px rgba(232, 185, 49, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 0 30px rgba(255, 122, 26, 0.25);
 }
 .my-bar {
   display: flex;
@@ -1321,7 +1338,7 @@ button.mute.on {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--gold);
+  background: var(--accent);
   margin-right: 0.5rem;
   animation: blink 1s ease-in-out infinite;
 }
@@ -1362,7 +1379,7 @@ button.mute.on {
 }
 .hand .card.selected {
   --sel: calc(var(--card-w) * -0.28);
-  box-shadow: 0 0 0 3px var(--gold), 0 8px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px var(--accent), 0 8px 18px rgba(0, 0, 0, 0.5);
 }
 
 .controls {
@@ -1374,7 +1391,7 @@ button.mute.on {
 }
 .hint {
   margin-right: auto;
-  color: #d9eadf;
+  color: #d7d0ea;
   font-weight: 600;
 }
 .hint.ok::before {
@@ -1417,9 +1434,9 @@ button.mute.on {
   font-family: var(--font-title);
   font-weight: 700;
   font-size: clamp(1.5rem, 4.5vw, 2.6rem);
-  color: #2a1d02;
-  background: linear-gradient(180deg, #f6d567, var(--gold));
-  border: 3px solid var(--gold-dark);
+  color: #2a1204;
+  background: linear-gradient(180deg, #ffa45c, var(--accent));
+  border: 3px solid var(--accent-dark);
   border-radius: 20px;
   padding: 0.5em 1.1em 0.6em;
   max-width: min(640px, 100%);
@@ -1427,7 +1444,7 @@ button.mute.on {
   justify-items: center;
   gap: 0.5rem;
   text-align: center;
-  box-shadow: 0 0 0 9999px rgba(5, 12, 8, 0.3), 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 9999px rgba(8, 5, 16, 0.3), 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: banner-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
 }
 @keyframes banner-pop {
@@ -1439,14 +1456,14 @@ button.mute.on {
   }
 }
 .turn-banner-ok {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Figtree', system-ui, sans-serif;
   font-size: 1rem;
   font-weight: 700;
   padding: 0.5rem 1.6rem;
   border-radius: 999px;
-  border: 2px solid var(--gold-dark);
-  background: #2a1d02;
-  color: #f6d567;
+  border: 2px solid var(--accent-dark);
+  background: #2a1204;
+  color: #ffa45c;
   cursor: pointer;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1459,7 +1476,7 @@ button.mute.on {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: rgba(5, 12, 8, 0.6);
+  background: rgba(8, 5, 16, 0.6);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -1533,8 +1550,8 @@ button.mute.on {
   height: 68px;
   font-size: 1.4rem;
   box-shadow:
-    0 0 0 3px var(--gold),
-    0 0 26px rgba(232, 185, 49, 0.6);
+    0 0 0 3px var(--accent),
+    0 0 26px rgba(255, 122, 26, 0.6);
 }
 .podium-crown {
   font-size: 1.7rem;
@@ -1556,7 +1573,7 @@ button.mute.on {
   font-weight: 700;
 }
 .podium-step.me .podium-name {
-  color: var(--gold);
+  color: var(--accent);
 }
 .podium-score {
   font-family: var(--font-title);
@@ -1589,7 +1606,7 @@ button.mute.on {
   color: #3a2700;
   background:
     linear-gradient(180deg, rgba(255, 240, 190, 0.35), transparent 45%),
-    linear-gradient(135deg, #f3cb4d, var(--gold-dark));
+    linear-gradient(135deg, #ff9a4d, var(--accent-dark));
   text-shadow: 0 1px 0 rgba(255, 240, 190, 0.6);
 }
 .podium-step.rank-2 .podium-block {
@@ -1642,8 +1659,8 @@ button.mute.on {
   }
 }
 .segmented button.on {
-  background: var(--gold);
-  color: #2a1d02;
+  background: var(--accent);
+  color: #2a1204;
   font-weight: 700;
 }
 
@@ -1695,7 +1712,7 @@ button.mute.on {
   padding: 0.5rem 0.8rem;
   border-radius: 10px;
   background: var(--surface-2);
-  color: #cfe3d7;
+  color: #c9bfe6;
   animation: row-in 0.35s ease-out 0.9s backwards;
 }
 /* Score total rapporté au score de fin de partie. */
@@ -1711,7 +1728,7 @@ button.mute.on {
 .score-bar span {
   display: block;
   height: 100%;
-  background: var(--gold);
+  background: var(--accent);
   transition: width 0.8s ease-out;
 }
 .score-bar span.danger {
@@ -2259,7 +2276,7 @@ button.mute.on {
 }
 .chat-list li.mine {
   justify-self: end;
-  background: rgba(232, 185, 49, 0.25);
+  background: rgba(255, 122, 26, 0.25);
 }
 .chat-list .chat-empty {
   background: none;
@@ -2384,7 +2401,7 @@ button.mute.on {
 }
 .look-grid button.on,
 .look-colors .swatch.on {
-  box-shadow: 0 0 0 3px var(--gold);
+  box-shadow: 0 0 0 3px var(--accent);
 }
 .look-colors {
   display: flex;
@@ -2567,7 +2584,7 @@ button.danger {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--gold);
+  color: var(--accent);
   margin: 0;
 }
 .rules p {
@@ -2667,11 +2684,11 @@ button.danger {
   margin-bottom: 0.35rem;
 }
 .challenge-outcome.won h2 {
-  color: var(--gold);
+  color: var(--accent);
 }
 .challenge-outcome p {
   margin: 0;
-  color: #cfe3d7;
+  color: #c9bfe6;
 }
 
 /* Tutoriel : l'explication au-dessus de la main, et les cartes à poser qui brillent */
@@ -2679,8 +2696,8 @@ button.danger {
   margin: 0 0 0.6rem;
   padding: 0.65rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid rgba(232, 185, 49, 0.55);
-  background: linear-gradient(135deg, rgba(232, 185, 49, 0.16), rgba(232, 185, 49, 0.05));
+  border: 1px solid rgba(255, 122, 26, 0.55);
+  background: linear-gradient(135deg, rgba(255, 122, 26, 0.16), rgba(255, 122, 26, 0.05));
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
 }
 .coach p {
@@ -2692,7 +2709,7 @@ button.danger {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--accent);
 }
 .coach.waiting {
   border-style: dashed;
@@ -2709,19 +2726,19 @@ button.danger {
 @keyframes coach-glow {
   from {
     box-shadow:
-      0 0 0 2px var(--gold),
-      0 0 8px rgba(232, 185, 49, 0.45);
+      0 0 0 2px var(--accent),
+      0 0 8px rgba(255, 122, 26, 0.45);
   }
   to {
     box-shadow:
-      0 0 0 2px var(--gold),
-      0 0 20px rgba(232, 185, 49, 0.9);
+      0 0 0 2px var(--accent),
+      0 0 20px rgba(255, 122, 26, 0.9);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .hand .card.coached:not(.selected) {
     animation: none;
-    box-shadow: 0 0 0 2px var(--gold);
+    box-shadow: 0 0 0 2px var(--accent);
   }
 }
 
@@ -2730,13 +2747,13 @@ button.danger {
   margin-bottom: 1rem;
   padding: 0.8rem 1rem;
   border-radius: 12px;
-  border: 1px solid rgba(232, 185, 49, 0.55);
-  background: linear-gradient(135deg, rgba(232, 185, 49, 0.16), rgba(232, 185, 49, 0.05));
+  border: 1px solid rgba(255, 122, 26, 0.55);
+  background: linear-gradient(135deg, rgba(255, 122, 26, 0.16), rgba(255, 122, 26, 0.05));
   text-align: left;
 }
 .first-time p {
   margin: 0.3rem 0 0.6rem;
-  color: #cfe3d7;
+  color: #c9bfe6;
   font-size: 0.92rem;
 }
 .first-time-actions {
@@ -2767,9 +2784,9 @@ button.danger {
   color: inherit;
 }
 .chip.on {
-  border-color: var(--gold);
-  background: rgba(232, 185, 49, 0.15);
-  color: var(--gold);
+  border-color: var(--accent);
+  background: rgba(255, 122, 26, 0.15);
+  color: var(--accent);
 }
 .peek-hand {
   display: flex;
@@ -2871,14 +2888,6 @@ button.danger {
   grid-template-rows: auto 1fr;
   overflow-x: hidden;
 }
-/* Vignette : les bords s'assombrissent, comme un tapis éclairé par une lampe. */
-.home-menu::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5));
-}
 .menu-topbar {
   position: relative;
   z-index: 2;
@@ -2896,22 +2905,22 @@ button.danger {
   border-radius: 999px;
   text-align: left;
   color: var(--text);
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(232, 185, 49, 0.35);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  background: var(--panel);
+  border: 2px solid var(--line-strong);
+  box-shadow: none;
   transition:
     border-color 0.2s,
     transform 0.2s;
 }
 .player-card:hover {
-  border-color: var(--gold);
+  border-color: var(--accent);
   transform: translateY(-1px);
 }
 .player-card .avatar {
   width: 2.75rem;
   height: 2.75rem;
   box-shadow:
-    0 0 0 2px var(--gold),
+    0 0 0 2px var(--accent),
     0 0 0 4px rgba(0, 0, 0, 0.4);
 }
 .player-card strong {
@@ -2919,7 +2928,7 @@ button.danger {
   font-size: 0.95rem;
 }
 .player-card small {
-  color: var(--gold);
+  color: var(--accent);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -2941,7 +2950,7 @@ button.danger {
   border: 1px solid var(--line-strong);
 }
 .round-button:hover {
-  border-color: var(--gold);
+  border-color: var(--accent);
 }
 
 /* Les écrans se superposent pendant la transition : celui qui part glisse et s'efface, l'autre arrive. */
@@ -3024,7 +3033,7 @@ button.danger {
 .menu-title .home-logo {
   box-shadow:
     0 22px 50px rgba(0, 0, 0, 0.65),
-    0 0 60px rgba(232, 185, 49, 0.18);
+    0 0 60px rgba(255, 122, 26, 0.18);
 }
 .game-title {
   font-family: var(--font-title);
@@ -3036,10 +3045,10 @@ button.danger {
   margin: 0;
   text-shadow:
     0 4px 0 rgba(0, 0, 0, 0.35),
-    0 0 40px rgba(232, 185, 49, 0.25);
+    0 0 40px rgba(255, 122, 26, 0.25);
 }
 .game-title span {
-  color: var(--gold);
+  color: var(--accent);
 }
 .menu-side {
   display: grid;
@@ -3068,10 +3077,10 @@ button.danger {
   color: var(--text);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
-    #172a20;
+    #231d38;
   border: 1px solid var(--line-strong);
   box-shadow:
-    0 5px 0 #0a1510,
+    0 5px 0 #0b0814,
     0 14px 28px rgba(0, 0, 0, 0.35);
   transition:
     transform 0.15s ease,
@@ -3080,13 +3089,13 @@ button.danger {
 }
 .menu-item:hover {
   transform: translateY(-2px);
-  border-color: var(--gold);
+  border-color: var(--accent);
 }
 /* Le bouton s'enfonce au clic, comme une touche. */
 .menu-item:active {
   transform: translateY(3px);
   box-shadow:
-    0 2px 0 #0a1510,
+    0 2px 0 #0b0814,
     0 6px 14px rgba(0, 0, 0, 0.3);
 }
 .menu-icon {
@@ -3112,16 +3121,16 @@ button.danger {
 .menu-item.primary {
   padding: 1.2rem 1.25rem;
   color: var(--ink);
-  background: linear-gradient(180deg, #f6d36b, var(--gold) 45%, #d29f1c);
-  border-color: #f8dc85;
+  background: linear-gradient(180deg, #ffb27a, var(--accent) 45%, #d29f1c);
+  border-color: #ffc493;
   box-shadow:
-    0 5px 0 var(--gold-dark),
-    0 18px 36px rgba(232, 185, 49, 0.25);
+    0 5px 0 var(--accent-dark),
+    0 18px 36px rgba(255, 122, 26, 0.25);
 }
 .menu-item.primary:active {
   box-shadow:
-    0 2px 0 var(--gold-dark),
-    0 8px 18px rgba(232, 185, 49, 0.2);
+    0 2px 0 var(--accent-dark),
+    0 8px 18px rgba(255, 122, 26, 0.2);
 }
 .menu-item.primary .menu-text strong {
   font-size: 1.5rem;
@@ -3207,7 +3216,7 @@ button.danger {
   font-size: 0.9rem;
 }
 .back-button:hover {
-  border-color: var(--gold);
+  border-color: var(--accent);
 }
 .sub-screen .live-rooms {
   margin-top: 0;
@@ -3229,10 +3238,10 @@ button.danger {
   text-align: center;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
-    #172a20;
+    #231d38;
   border: 1px solid var(--line-strong);
   box-shadow:
-    0 7px 0 #0a1510,
+    0 7px 0 #0b0814,
     0 18px 36px rgba(0, 0, 0, 0.35);
 }
 .choice-icon {
@@ -3325,7 +3334,7 @@ button.danger {
     background-color 0.6s;
 }
 .score-gauge span.warm {
-  background: linear-gradient(90deg, #c9a23a, var(--gold));
+  background: linear-gradient(90deg, #c9a23a, var(--accent));
 }
 .score-gauge span.danger {
   background: linear-gradient(90deg, #e07a2e, var(--danger));
@@ -3381,7 +3390,7 @@ button.danger {
 }
 .felt-preview.felt-onyx {
   box-shadow:
-    inset 0 0 0 4px #b98b12,
+    inset 0 0 0 4px #b44e07,
     inset 0 0 0 5px rgba(255, 230, 160, 0.5);
 }
 
@@ -3400,9 +3409,9 @@ button.danger {
 }
 .avatar.frame.frame-or {
   box-shadow:
-    0 0 0 2px #ffe08a,
-    0 0 0 4px var(--gold-dark),
-    0 0 14px rgba(232, 185, 49, 0.55);
+    0 0 0 2px #ffc493,
+    0 0 0 4px var(--accent-dark),
+    0 0 14px rgba(255, 122, 26, 0.55);
 }
 .avatar.frame.frame-diamant {
   box-shadow:
@@ -3440,7 +3449,7 @@ button.danger {
   font-size: 0.72rem;
   font-weight: 800;
   color: var(--ink);
-  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  background: linear-gradient(180deg, #ffc493, var(--accent));
   border: 2px solid #1a120a;
 }
 .profile-level .level-badge,
@@ -3469,8 +3478,8 @@ button.danger {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #b98b12, #f6d36b);
-  box-shadow: 0 0 8px rgba(232, 185, 49, 0.6);
+  background: linear-gradient(90deg, #b44e07, #ffb27a);
+  box-shadow: 0 0 8px rgba(255, 122, 26, 0.6);
   transition: width 1.4s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 .player-card-text {
@@ -3510,7 +3519,7 @@ button.danger {
 }
 .level-title,
 .seat-title {
-  color: var(--gold);
+  color: var(--accent);
   font-style: italic;
 }
 .seat-title {
@@ -3531,7 +3540,7 @@ button.danger {
   margin: 0 0 0.2rem;
   font-family: var(--font-title);
   font-size: 1.05rem;
-  color: #f3d27a;
+  color: #ffb27a;
 }
 .profile-screen .muted.small {
   margin: 0 0 0.75rem;
@@ -3558,9 +3567,9 @@ button.danger {
   border: 1px solid var(--line-strong);
 }
 .reward.on {
-  border-color: var(--gold);
-  background: rgba(232, 185, 49, 0.12);
-  box-shadow: 0 0 0 1px var(--gold);
+  border-color: var(--accent);
+  background: rgba(255, 122, 26, 0.12);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .reward.locked,
 .chip.locked {
@@ -3591,7 +3600,7 @@ button.danger {
   gap: 0.4rem 0.6rem;
   margin: -0.4rem auto 1rem;
   max-width: 22rem;
-  color: var(--gold);
+  color: var(--accent);
   font-style: italic;
 }
 .profile-level .level-bar {
@@ -3606,7 +3615,7 @@ button.danger {
   padding: 0.85rem 1rem;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(232, 185, 49, 0.35);
+  border: 1px solid rgba(255, 122, 26, 0.35);
   animation: row-in 0.4s ease-out 0.8s backwards;
 }
 .xp-gain-head {
@@ -3619,8 +3628,8 @@ button.danger {
 .xp-amount {
   font-family: var(--font-title);
   font-size: 1.5rem;
-  color: var(--gold);
-  text-shadow: 0 0 16px rgba(232, 185, 49, 0.45);
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(255, 122, 26, 0.45);
 }
 .level-up-tag {
   margin-left: 0.5rem;
@@ -3629,16 +3638,16 @@ button.danger {
   font-size: 0.75rem;
   font-weight: 800;
   color: var(--ink);
-  background: var(--gold);
+  background: var(--accent);
   animation: winner-pop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1.4) 1.6s both;
 }
 .xp-gain.level-up {
-  border-color: var(--gold);
-  box-shadow: 0 0 24px rgba(232, 185, 49, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 0 24px rgba(255, 122, 26, 0.25);
 }
 .xp-rewards {
   margin: 0.2rem 0 0;
-  color: #f3d27a;
+  color: #ffb27a;
   font-weight: 600;
 }
 
@@ -3692,8 +3701,8 @@ button.danger {
 }
 .felt-preview.felt-legende {
   box-shadow:
-    inset 0 0 0 4px var(--gold),
-    inset 0 0 18px rgba(232, 185, 49, 0.55);
+    inset 0 0 0 4px var(--accent),
+    inset 0 0 18px rgba(255, 122, 26, 0.55);
 }
 
 /* Cadres débloqués plus loin dans la progression */
@@ -3724,15 +3733,15 @@ button.danger {
 /* Le cadre légendaire change lentement de couleur. */
 .avatar.frame.frame-legende {
   box-shadow:
-    0 0 0 2px #fff3c4,
-    0 0 0 4px var(--gold),
-    0 0 18px rgba(232, 185, 49, 0.8);
+    0 0 0 2px #ffe6d1,
+    0 0 0 4px var(--accent),
+    0 0 18px rgba(255, 122, 26, 0.8);
   animation: legend-frame 4s linear infinite;
 }
 @keyframes legend-frame {
   0%,
   100% {
-    filter: drop-shadow(0 0 4px rgba(232, 185, 49, 0.9));
+    filter: drop-shadow(0 0 4px rgba(255, 122, 26, 0.9));
   }
   33% {
     filter: drop-shadow(0 0 6px rgba(255, 90, 120, 0.9)) hue-rotate(-30deg);
@@ -3744,26 +3753,45 @@ button.danger {
 
 /* ——— Le site : en-tête avec les onglets, catalogue des jeux, saison, communauté ——— */
 .site-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   font-family: var(--font-title);
   font-weight: 800;
-  font-size: 1.5rem;
-  color: var(--gold);
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
   background: none;
   border: none;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem;
   cursor: pointer;
+}
+/* Logo provisoire : l'initiale du site sur une tuile orange penchée, en attendant le vrai. */
+.site-mark {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 1.4rem;
+  transform: rotate(-6deg);
+  transition: transform 0.2s ease;
+}
+.site-brand:hover .site-mark {
+  transform: rotate(4deg) scale(1.05);
 }
 .site-tabs {
   display: flex;
-  gap: 0.25rem;
-  padding: 0.25rem;
+  gap: 0.3rem;
+  padding: 0.35rem;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--line);
+  background: var(--panel);
 }
 .site-tabs button {
   min-height: 0;
-  padding: 0.5rem 1.1rem;
+  padding: 0.6rem 1.25rem;
   border-radius: 999px;
   border: none;
   background: transparent;
@@ -3771,9 +3799,13 @@ button.danger {
   font-weight: 600;
   box-shadow: none;
 }
+.site-tabs button:not(.on):hover {
+  background: var(--surface);
+}
 .site-tabs button.on {
-  background: var(--gold);
+  background: var(--accent);
   color: var(--ink);
+  font-weight: 800;
 }
 .menu-topbar-actions {
   display: flex;
@@ -3800,8 +3832,8 @@ button.danger {
   .player-card {
     padding: 0.25rem;
   }
-  .game-card.soon {
-    min-height: 130px;
+  .game-card.upcoming {
+    min-height: 150px;
   }
 }
 
@@ -3813,115 +3845,241 @@ button.danger {
   display: grid;
   gap: 1.25rem;
 }
+.catalog-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+.catalog-hero-text {
+  flex: 999 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: 0.5rem 0;
+}
 .catalog-hero .site-title {
   margin: 0;
   font-family: var(--font-title);
-  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 5.6vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
   color: var(--page-title);
 }
+.catalog-hero .site-title span {
+  color: var(--accent);
+}
 .catalog-hero .tagline {
-  margin: 0.25rem 0 0;
+  display: block;
+  margin: 0;
   text-align: left;
-  justify-content: flex-start;
+  max-width: 34rem;
+  font-size: 1.15rem;
+  line-height: 1.5;
+  color: var(--page-sub);
 }
-.catalog-hero .tagline::before,
-.catalog-hero .tagline::after {
-  display: none;
-}
-.catalog-title {
-  margin: 0.5rem 0 0;
-  font-family: var(--font-title);
-}
-.season-strip {
+.catalog-hero-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 1rem;
-  width: 100%;
-  padding: 0.9rem 1.2rem;
-  border-radius: var(--radius);
-  border: 1px solid rgba(232, 185, 49, 0.4);
-  background: rgba(232, 185, 49, 0.1);
+  gap: 0.75rem;
+}
+.catalog-title {
+  margin: 0.75rem 0 0;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.85rem;
+}
+
+/* La saison en cours, à côté de l'accroche : son nom, le compte à rebours et le podium. */
+.season-card {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.4rem;
+  border-radius: 24px;
+  border: 2px solid var(--line);
+  background: var(--panel);
   color: var(--text);
   text-align: left;
+  font-weight: 400;
   box-shadow: none;
 }
-.season-strip strong {
-  font-size: 1.05rem;
-  color: var(--gold);
+.season-card:not(:disabled):hover {
+  border-color: var(--line-strong);
 }
-.season-strip-link {
-  margin-left: auto;
+.season-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.season-card-head strong {
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.3rem;
+}
+.season-card-left {
+  flex: none;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--pink);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+.season-podium {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+}
+.season-podium li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.season-podium li.rank-1 {
+  background: var(--surface);
+}
+.season-podium-rank {
+  width: 1.3rem;
+  font-weight: 800;
+  color: #d7d0ea;
+}
+.rank-1 .season-podium-rank {
+  color: var(--yellow);
+}
+.rank-3 .season-podium-rank {
+  color: var(--accent);
+}
+.season-podium-name {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.season-podium-wins {
+  font-size: 0.9rem;
+  color: var(--page-sub);
+}
+.season-card-empty {
+  color: var(--page-sub);
+}
+.season-card-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .game-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
 }
 .game-card {
   position: relative;
-  display: grid;
-  align-content: end;
-  gap: 0.25rem;
-  min-height: 210px;
-  padding: 1.1rem;
-  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-height: 230px;
+  padding: 1.35rem;
+  border-radius: 24px;
   text-align: left;
+  font-weight: 400;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--panel);
+  border: 2px dashed var(--line-strong);
   overflow: hidden;
-  box-shadow: var(--panel-shadow);
+  box-shadow: none;
 }
 .game-card strong {
   font-family: var(--font-title);
-  font-size: 1.5rem;
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 .game-card small {
+  font-size: 0.95rem;
   color: var(--page-sub);
 }
-.game-card-players {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.game-card.live {
-  cursor: pointer;
-  border-color: rgba(232, 185, 49, 0.5);
-  background: radial-gradient(ellipse at top right, #2b6a4c, var(--surface) 70%);
-  transition: transform 0.15s ease;
-}
-.game-card.live:hover {
-  transform: translateY(-3px);
-}
-.game-card.soon {
-  border-style: dashed;
-  background: var(--surface-2);
-  box-shadow: none;
-}
-.game-card.soon strong {
-  color: var(--page-sub);
-}
-.game-card .menu-pill {
+.game-card-top {
   position: absolute;
-  top: 0.9rem;
-  left: 0.9rem;
+  top: 1.1rem;
+  left: 1.35rem;
+  right: 1.35rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
 }
+.game-card-players,
 .game-card-status {
-  position: absolute;
-  top: 0.9rem;
-  left: 0.9rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
+  font-weight: 800;
+}
+/* Le jeu jouable : un aplat orange, texte sombre, qui saute au survol. */
+.game-card.live {
+  cursor: pointer;
+  border: none;
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: 0 6px 0 var(--accent-dark);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.game-card.live:hover {
+  transform: translateY(-3px) rotate(-0.4deg);
+  box-shadow: 0 9px 0 var(--accent-dark);
+}
+.game-card.live:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--accent-dark);
+}
+.game-card.live small {
+  color: var(--ink);
+  font-weight: 600;
+}
+.game-card.live .game-card-players {
+  background: var(--ink);
+  color: var(--accent);
+}
+.game-card-live {
+  font-size: 0.85rem;
   font-weight: 700;
-  background: var(--soft);
-  color: var(--muted);
+}
+/* Les jeux à venir : pointillés, et chacun sa couleur. */
+.game-card.upcoming {
+  --game-color: var(--pink);
+}
+.game-card.status-later {
+  --game-color: var(--cyan);
+}
+.game-card.upcoming strong {
+  color: var(--game-color);
+}
+.game-card.upcoming .game-card-status {
+  background: var(--game-color);
+  color: var(--ink);
 }
 .game-card-art {
   position: absolute;
-  top: 0.8rem;
-  right: 1rem;
+  top: 3.4rem;
+  right: 1.2rem;
   height: 104px;
   width: 140px;
 }
@@ -3929,8 +4087,10 @@ button.danger {
   position: absolute;
   top: 0;
   width: 62px;
-  border-radius: 6px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  border: 3px solid var(--ink);
+  box-shadow: none;
+  transition: transform 0.2s ease;
 }
 .game-card-art img:nth-child(1) {
   right: 70px;
@@ -3943,6 +4103,12 @@ button.danger {
 .game-card-art img:nth-child(3) {
   right: 6px;
   transform: rotate(12deg);
+}
+.game-card.live:hover .game-card-art img:nth-child(1) {
+  transform: rotate(-20deg) translateX(-6px);
+}
+.game-card.live:hover .game-card-art img:nth-child(3) {
+  transform: rotate(18deg) translateX(6px);
 }
 .game-hub {
   position: relative;
@@ -4036,11 +4202,13 @@ button.danger {
   flex: none;
   display: grid;
   place-items: center;
-  width: 3.2rem;
-  min-height: 3.2rem;
+  width: 3.4rem;
+  min-height: 3.4rem;
   padding: 0.2rem;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  border: 2px solid var(--line-strong);
+  font-weight: 800;
+  font-size: 1.05rem;
   background: transparent;
   color: var(--text);
   box-shadow: none;
@@ -4049,10 +4217,13 @@ button.danger {
 .vote span {
   font-size: 0.7rem;
 }
+.vote:not(:disabled):hover {
+  border-color: var(--accent);
+}
 .vote.on {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: rgba(232, 185, 49, 0.1);
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--accent);
 }
 .idea-body {
   flex: 1;
@@ -4087,13 +4258,13 @@ button.danger {
   background: var(--soft);
 }
 .idea-kind.kind-bug {
-  color: #ff9a8f;
+  color: var(--pink);
 }
 .idea-status.status-planned {
-  color: var(--gold);
+  color: var(--yellow);
 }
 .idea-status.status-done {
-  color: var(--ok);
+  color: var(--cyan);
 }
 .idea-details {
   display: grid;
