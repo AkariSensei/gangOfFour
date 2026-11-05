@@ -1,9 +1,10 @@
 import { Anchor, Eye, Pause, RotateCw, Shuffle, Timer, Trophy, Waves } from 'lucide-react';
-import { type BattleshipView, FLEET, GRID, type Ship, randomFleet, shipAt, validFleet } from '@gof/engine';
-import { useEffect, useMemo, useState } from 'react';
+import { type BattleshipView, FLEET, GRID, type Ship, kindOf, neighbours, randomFleet, shipAt, validFleet } from '@gof/engine';
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatButton } from './Chat';
+import { ShipArt } from './NavalShips';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
 import { RatingChange, useRatingChange } from './RatingChange';
 import { errorLabel } from './labels';
@@ -14,110 +15,237 @@ const LETTERS = 'ABCDEFGHIJ';
 /** « B7 » : la lettre de la ligne, puis le numéro de la colonne. */
 export const cellName = (cell: number) => `${LETTERS[Math.floor(cell / GRID)]}${(cell % GRID) + 1}`;
 const CELLS = Array.from({ length: GRID * GRID }, (_, c) => c);
+const RESULT_LABELS = { miss: 'À l’eau', hit: 'Touché', sunk: 'Touché-coulé' } as const;
 
-/** Ce que montre une case d'une grille. */
-interface CellLook {
-  ship?: boolean;
-  /** Bateau coulé (le sien, ou celui de l'adversaire une fois coulé). */
+const isVertical = (ship: Ship) => ship.cells.length > 1 && ship.cells[1]! - ship.cells[0]! === GRID;
+/** Place d'une case dans la grille CSS (la première ligne et la première colonne portent les repères). */
+const at = (cell: number): CSSProperties => ({ gridRow: Math.floor(cell / GRID) + 2, gridColumn: (cell % GRID) + 2 });
+/** Place d'un bateau dans la grille CSS : il s'étend sur ses cases. */
+const spanOf = (ship: Ship): CSSProperties => {
+  const first = Math.min(...ship.cells);
+  const vertical = isVertical(ship);
+  return {
+    gridRow: `${Math.floor(first / GRID) + 2} / span ${vertical ? ship.cells.length : 1}`,
+    gridColumn: `${(first % GRID) + 2} / span ${vertical ? 1 : ship.cells.length}`,
+  };
+};
+
+interface BoardShip extends Ship {
+  kind: number;
   sunk?: boolean;
-  shot?: 'miss' | 'hit' | 'sunk';
-  selected?: boolean;
-  last?: boolean;
+  /** État au placement : choisi, en train d'être déplacé, ou fantôme d'aperçu (permis ou non). */
+  state?: 'selected' | 'dragging' | 'ghost' | 'ghost-bad';
+  index?: number;
 }
 
-/** Une grille de 10 × 10 avec ses repères (A à J, 1 à 10). `onCell` rend les cases cliquables. */
-function Grid({
-  look,
+/**
+ * Une grille de 10 × 10 en trois couches : l'eau (les cases), les navires par-dessus, et les impacts au-dessus.
+ * `onCell` rend les cases cliquables ; `onShipDown` permet de saisir un navire (placement).
+ */
+function Board({
+  label,
+  ships,
+  shots,
+  water,
+  halo,
+  last,
   onCell,
   canClick,
-  label,
+  onShipDown,
+  onShipDouble,
   small,
 }: {
-  look: (cell: number) => CellLook;
+  label: string;
+  ships: BoardShip[];
+  shots: Map<number, 'miss' | 'hit' | 'sunk'>;
+  /** Cases forcément vides (autour d'une épave) : grisées, on n'y tire pas. */
+  water?: Set<number>;
+  /** Cases interdites au placement (autour des autres navires). */
+  halo?: Set<number>;
+  last?: number | null;
   onCell?: (cell: number) => void;
   canClick?: (cell: number) => boolean;
-  label: string;
+  onShipDown?: (e: ReactPointerEvent, index: number) => void;
+  onShipDouble?: (index: number) => void;
   small?: boolean;
 }) {
   return (
     <div className={`naval-grid ${small ? 'small' : ''}`} role="grid" aria-label={label}>
       <span className="naval-corner" />
       {Array.from({ length: GRID }, (_, c) => (
-        <span key={`c${c}`} className="naval-axis">
+        <span key={`c${c}`} className="naval-axis" style={{ gridRow: 1, gridColumn: c + 2 }}>
           {c + 1}
         </span>
       ))}
-      {Array.from({ length: GRID }, (_, r) => [
-        <span key={`r${r}`} className="naval-axis">
+      {Array.from({ length: GRID }, (_, r) => (
+        <span key={`r${r}`} className="naval-axis" style={{ gridRow: r + 2, gridColumn: 1 }}>
           {LETTERS[r]}
-        </span>,
-        ...CELLS.slice(r * GRID, r * GRID + GRID).map((cell) => {
-          const l = look(cell);
-          const classes = ['naval-cell', l.ship && 'ship', l.sunk && 'sunk', l.shot, l.selected && 'selected', l.last && 'last'].filter(Boolean).join(' ');
-          const clickable = !!onCell && (canClick?.(cell) ?? true);
-          return clickable ? (
-            <button key={cell} type="button" className={`${classes} clickable`} onClick={() => onCell!(cell)} aria-label={cellName(cell)} />
-          ) : (
-            <span key={cell} className={classes} aria-label={cellName(cell)} />
-          );
-        }),
-      ])}
+        </span>
+      ))}
+      {CELLS.map((cell) => {
+        const clickable = !!onCell && (canClick?.(cell) ?? true);
+        const classes = ['naval-cell', water?.has(cell) && 'water', halo?.has(cell) && 'halo', clickable && 'clickable'].filter(Boolean).join(' ');
+        return clickable ? (
+          <button key={cell} type="button" className={classes} style={at(cell)} data-cell={cell} onClick={() => onCell!(cell)} aria-label={cellName(cell)} title={cellName(cell)} />
+        ) : (
+          <span key={cell} className={classes} style={at(cell)} data-cell={cell} />
+        );
+      })}
+      {ships.map((ship, k) => (
+        <div
+          key={`s${ship.index ?? k}-${ship.state ?? ''}`}
+          className={`naval-ship ${ship.sunk ? 'sunk' : ''} ${ship.state ?? ''} ${onShipDown && !ship.state?.startsWith('ghost') ? 'grabbable' : ''}`}
+          style={spanOf(ship)}
+          onPointerDown={onShipDown && ship.index !== undefined && !ship.state?.startsWith('ghost') ? (e) => onShipDown(e, ship.index!) : undefined}
+          onDoubleClick={onShipDouble && ship.index !== undefined ? () => onShipDouble(ship.index!) : undefined}
+          title={FLEET[ship.kind]?.name}
+        >
+          <ShipArt kind={ship.kind} vertical={isVertical(ship)} />
+        </div>
+      ))}
+      {[...shots].map(([cell, result]) => (
+        <span key={`m${cell}`} className={`naval-mark ${result === 'miss' ? 'miss' : 'hit'} ${last === cell ? 'last' : ''}`} style={at(cell)} aria-label={`${cellName(cell)} : ${RESULT_LABELS[result]}`}>
+          {result !== 'miss' && (
+            <svg viewBox="0 0 40 40" aria-hidden>
+              <path d="M20 3 L24 14 L35 9 L28 19 L38 24 L26 25 L29 37 L20 29 L11 37 L14 25 L2 24 L12 19 L5 9 L16 14 Z" />
+            </svg>
+          )}
+        </span>
+      ))}
     </div>
   );
 }
 
-/** Le bateau qui contient cette case, s'il y en a un. */
-const shipOf = (ships: Ship[], cell: number) => ships.findIndex((s) => s.cells.includes(cell));
-const isVertical = (ship: Ship) => ship.cells.length > 1 && ship.cells[1]! - ship.cells[0]! === GRID;
+/** La flotte d'un joueur en liste : chaque navire, barré s'il est coulé. */
+function FleetStatus({ sunk }: { sunk: number[] }) {
+  return (
+    <ul className="naval-fleet-status" aria-label="Flotte">
+      {FLEET.map((f, kind) => (
+        <li key={kind} className={sunk.includes(kind) ? 'sunk' : ''} title={`${f.name}, ${f.size} cases${sunk.includes(kind) ? ', coulé' : ''}`}>
+          <span className="naval-fleet-ship" style={{ '--size': f.size } as CSSProperties}>
+            <ShipArt kind={kind} />
+          </span>
+          <span>{f.name}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
- * Placement de la flotte : elle part placée au hasard. On choisit un bateau en cliquant dessus, puis une case pour
- * l'y déplacer, ou « Pivoter » pour le tourner ; « Mélanger » replace tout au hasard.
+ * Placement de la flotte : elle part placée au hasard. On fait glisser un navire pour le déplacer (ou on le choisit,
+ * puis on touche une case), un double-clic ou « Pivoter » (touche R) le tourne. Autour des autres navires, les
+ * cases hachurées sont interdites : les bateaux ne se touchent pas, même par un coin.
  */
 function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
   const [ships, setShips] = useState<Ship[]>(() => randomFleet(Math.random));
   const [selected, setSelected] = useState<number | null>(null);
   const [hint, setHint] = useState('');
+  const [drag, setDrag] = useState<{ index: number; grab: number; moved: boolean; preview: Ship | null; valid: boolean } | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
 
+  const fleetWith = (index: number, ship: Ship | null) => (ship ? ships.map((s, i) => (i === index ? ship : s)) : null);
   function tryChange(index: number, start: number, vertical: boolean) {
-    const moved = shipAt(start, ships[index]!.cells.length, vertical);
-    const next = moved && ships.map((s, i) => (i === index ? moved : s));
+    const next = fleetWith(index, shipAt(start, ships[index]!.cells.length, vertical));
     if (!next || !validFleet(next)) return setHint('Pas la place ici : les bateaux ne se touchent pas, même par un coin.');
     setHint('');
     setShips(next);
   }
+  const rotate = (index: number) => tryChange(index, ships[index]!.cells[0]!, !isVertical(ships[index]!));
 
-  function click(cell: number) {
-    const owner = shipOf(ships, cell);
-    if (owner >= 0) {
-      setSelected(owner === selected ? null : owner);
-      setHint('');
-      return;
-    }
-    if (selected === null) return setHint('Clique d’abord sur un bateau pour le choisir.');
+  // Touche R : pivoter le navire choisi.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'r' || e.key === 'R') && selected !== null) rotate(selected);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Glisser-déposer : la case sous le doigt (ou la souris) donne la nouvelle place, la partie saisie restant sous le doigt.
+  function onShipDown(e: ReactPointerEvent, index: number) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const ship = ships[index]!;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const along = isVertical(ship) ? (e.clientY - rect.top) / rect.height : (e.clientX - rect.left) / rect.width;
+    setSelected(index);
+    setHint('');
+    setDrag({ index, grab: Math.min(ship.cells.length - 1, Math.max(0, Math.floor(along * ship.cells.length))), moved: false, preview: null, valid: false });
+  }
+  useEffect(() => {
+    if (!drag) return;
+    const move = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const cell = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-cell]')?.dataset.cell;
+      if (cell === undefined) return setDrag({ ...d, moved: true, preview: null, valid: false });
+      const ship = ships[d.index]!;
+      const vertical = isVertical(ship);
+      const start = Number(cell) - d.grab * (vertical ? GRID : 1);
+      // La partie saisie reste sur sa ligne (ou sa colonne) : pas de retour à la ligne d'un bord à l'autre.
+      const sameLine = vertical || Math.floor(start / GRID) === Math.floor(Number(cell) / GRID);
+      const preview = sameLine ? shipAt(start, ship.cells.length, vertical) : null;
+      const next = fleetWith(d.index, preview);
+      setDrag({ ...d, moved: true, preview, valid: !!next && validFleet(next) });
+    };
+    const up = () => {
+      const d = dragRef.current;
+      if (d?.moved && d.preview && d.valid) setShips(fleetWith(d.index, d.preview)!);
+      else if (d?.moved) setHint('Pas la place ici : les bateaux ne se touchent pas, même par un coin.');
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [drag !== null, ships]);
+
+  // Sans glisser (au doigt) : un navire choisi se pose sur la case touchée.
+  function onCell(cell: number) {
+    if (selected === null) return setHint('Touche d’abord un bateau pour le choisir.');
     tryChange(selected, cell, isVertical(ships[selected]!));
   }
 
+  const focus = drag?.index ?? selected;
+  const halo = useMemo(() => {
+    if (focus === null) return new Set<number>();
+    const others = ships.filter((_, i) => i !== focus).flatMap((s) => s.cells);
+    return new Set(others.flatMap((c) => [c, ...neighbours(c)]));
+  }, [ships, focus]);
+  const shown: BoardShip[] = ships.map((s, i) => ({
+    ...s,
+    index: i,
+    kind: kindOf(s, i),
+    state: drag?.index === i && drag.moved ? 'dragging' : selected === i ? 'selected' : undefined,
+  }));
+  if (drag?.moved && drag.preview) shown.push({ ...drag.preview, kind: kindOf(ships[drag.index]!, drag.index), state: drag.valid ? 'ghost' : 'ghost-bad' });
+
   return (
     <section className="naval-placement">
-      <h2>Place ta flotte</h2>
-      <p className="muted">
-        Clique sur un bateau pour le choisir, puis sur une case pour l’y déplacer. Les bateaux ne se touchent pas, même par un
-        coin.
-      </p>
-      <Grid label="Ta flotte" look={(cell) => ({ ship: shipOf(ships, cell) >= 0, selected: selected !== null && ships[selected]!.cells.includes(cell) })} onCell={click} />
-      <ul className="naval-fleet-list">
+      <div className="naval-placement-head">
+        <h2>Place ta flotte</h2>
+        <p className="muted">Fais glisser un bateau pour le déplacer, double-clic ou R pour le tourner. Les zones hachurées sont interdites.</p>
+      </div>
+      <Board label="Ta flotte" ships={shown} shots={new Map()} halo={halo} onCell={onCell} onShipDown={onShipDown} onShipDouble={rotate} />
+      <ul className="naval-fleet-pick">
         {ships.map((s, i) => (
           <li key={i}>
-            <button type="button" className={`link small ${selected === i ? 'on' : ''}`} onClick={() => setSelected(selected === i ? null : i)}>
-              {FLEET[i]?.name} · {s.cells.length}
+            <button type="button" className={selected === i ? 'on' : ''} onClick={() => setSelected(selected === i ? null : i)}>
+              <span className="naval-fleet-ship" style={{ '--size': s.cells.length } as CSSProperties}>
+                <ShipArt kind={kindOf(s, i)} />
+              </span>
+              {FLEET[kindOf(s, i)]?.name}
             </button>
           </li>
         ))}
       </ul>
-      {hint && <p className="hint bad">{hint}</p>}
+      <p className={`hint ${hint ? 'bad' : ''}`}>{hint || (selected === null ? 'Choisis un bateau pour le tourner' : `${FLEET[kindOf(ships[selected]!, selected)]?.name} choisi`)}</p>
       <div className="naval-placement-actions">
-        <button type="button" disabled={selected === null} onClick={() => selected !== null && tryChange(selected, ships[selected]!.cells[0]!, !isVertical(ships[selected]!))}>
+        <button type="button" disabled={selected === null} onClick={() => selected !== null && rotate(selected)}>
           <RotateCw /> Pivoter
         </button>
         <button
@@ -138,8 +266,6 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
   );
 }
 
-const RESULT_LABELS = { miss: 'À l’eau', hit: 'Touché', sunk: 'Touché-coulé' } as const;
-
 /** La table de la bataille navale : le placement, puis la grille de l'adversaire (où l'on tire) et la sienne. */
 export function BattleshipTable({
   game,
@@ -156,9 +282,11 @@ export function BattleshipTable({
   onLeave: () => void;
 }) {
   const [error, setError] = useState('');
+  const [endOpen, setEndOpen] = useState(true);
   const me = game.you;
   const spectator = me < 0;
   const other = spectator ? 1 : 1 - me;
+  const ownIndex = spectator ? 0 : me;
   const reactions = useReactions();
   const notifications = useTurnNotifications();
   const rating = useRatingChange(game.phase === 'gameOver');
@@ -172,6 +300,9 @@ export function BattleshipTable({
     setTurnEndsAt(room.turnRemainingMs === null || room.paused ? null : Date.now() + room.turnRemainingMs);
   }, [room]);
   const countdown = useCountdown(turnEndsAt);
+  useEffect(() => {
+    if (game.phase !== 'gameOver') setEndOpen(true);
+  }, [game.phase]);
 
   async function send(result: Promise<{ ok: true } | { ok: false; error: string }>) {
     const r = await result;
@@ -190,19 +321,24 @@ export function BattleshipTable({
     if (spectator || game.phase === 'gameOver' || room.training || confirm('Quitter la bataille ? Ton adversaire ne pourra plus la finir.')) void exit();
   }
 
-  // Les cases de chaque grille : les tirs de l'un sont sur la grille de l'autre.
+  // Les tirs de l'un tombent sur la grille de l'autre.
   const shotsOn = (player: number) => new Map(game.players[1 - player]!.shots.map((s) => [s.cell, s.result]));
-  const sunkCells = (player: number) => new Set((game.revealed[player] ?? []).flatMap((s) => s.cells));
-  const last = game.lastShot;
   const onEnemy = useMemo(() => shotsOn(other), [game]);
-  const enemySunk = useMemo(() => sunkCells(other), [game]);
-  const onMine = useMemo(() => (spectator ? shotsOn(0) : shotsOn(me)), [game]);
-  const myShipCells = useMemo(
-    () => new Set((spectator ? (game.revealed[0] ?? []) : (game.myShips ?? [])).flatMap((s) => s.cells)),
-    [game],
-  );
-  const mineSunk = useMemo(() => sunkCells(spectator ? 0 : me), [game]);
-  const ownIndex = spectator ? 0 : me;
+  const onMine = useMemo(() => shotsOn(ownIndex), [game]);
+  const enemyWrecks = game.revealed[other] ?? [];
+  // Autour d'une épave il n'y a que de l'eau (les bateaux ne se touchent pas) : inutile d'y tirer.
+  const enemyWater = useMemo(() => {
+    const wreck = new Set(enemyWrecks.flatMap((s) => s.cells));
+    return new Set(enemyWrecks.flatMap((s) => s.cells.flatMap(neighbours)).filter((c) => !wreck.has(c) && !onEnemy.has(c)));
+  }, [game]);
+  // Un navire est coulé quand toutes ses cases ont été touchées (à la fin, toute la flotte est montrée, coulée ou non).
+  const sunkOn = (shots: Map<number, string>) => (ship: Ship) => ship.cells.every((c) => shots.has(c));
+  const ownSunk = new Set((game.revealed[ownIndex] ?? []).filter(sunkOn(onMine)).map((s) => s.kind));
+  const ownShips: BoardShip[] = spectator
+    ? (game.revealed[0] ?? []).map((s) => ({ ...s, sunk: sunkOn(onMine)(s) }))
+    : (game.myShips ?? []).map((s, i) => ({ ...s, kind: kindOf(s, i), sunk: ownSunk.has(kindOf(s, i)) }));
+  const enemyShips: BoardShip[] = enemyWrecks.map((s) => ({ ...s, sunk: sunkOn(onEnemy)(s) }));
+  const last = game.lastShot;
 
   const youName = (i: number) => (i === me ? 'Toi' : game.players[i]!.name);
   let status: string;
@@ -226,12 +362,16 @@ export function BattleshipTable({
               Entraînement
             </span>
           )}
-          {countdown !== null && game.phase === 'playing' && <span className="direction">
+          {countdown !== null && game.phase === 'playing' && (
+            <span className="direction">
               <Timer /> {Math.min(countdown, room.turnSeconds)} s
-            </span>}
-          {room.spectators > 0 && <span className="direction">
+            </span>
+          )}
+          {room.spectators > 0 && (
+            <span className="direction">
               <Eye /> {room.spectators}
-            </span>}
+            </span>
+          )}
         </div>
         <div className="header-right">
           <ChatButton messages={messages} me={game.players[me]?.id ?? ''} muted={room.players[me]?.muted} />
@@ -248,9 +388,11 @@ export function BattleshipTable({
       </header>
 
       <div className={`naval-status ${myTurn ? 'active' : ''}`} role="status">
+        {myTurn && <span className="turn-token" aria-hidden />}
         {last && game.phase !== 'placing' && (
           <span key={`${last.playerIndex}-${last.cell}`} className={`naval-last ${last.result}`}>
             {youName(last.playerIndex)} · {cellName(last.cell)} : {RESULT_LABELS[last.result]}
+            {last.result === 'sunk' && last.ship !== undefined && ` (${FLEET[last.ship]?.name.toLowerCase()})`}
           </span>
         )}
         <span>{status}</span>
@@ -263,8 +405,9 @@ export function BattleshipTable({
           {[other, ownIndex].map((p, k) => {
             const enemy = k === 0;
             const reaction = reactions[room.players[p]?.id ?? ''];
+            const sunkKinds = (game.revealed[p] ?? []).filter(sunkOn(enemy ? onEnemy : onMine)).map((s) => s.kind);
             return (
-              <section key={p} className={`naval-board ${enemy ? 'enemy' : 'own'} ${game.phase === 'playing' && game.currentPlayer !== p ? 'targeted' : ''}`}>
+              <section key={p} className={`naval-board ${enemy ? 'enemy' : 'own'} ${enemy && myTurn ? 'targeted' : ''}`}>
                 <header className="naval-board-head">
                   {reaction && (
                     <span key={reaction.id} className="reaction" aria-hidden>
@@ -278,17 +421,17 @@ export function BattleshipTable({
                     {game.players[p]!.ready ? `${game.players[p]!.afloat} / ${FLEET.length} à flot` : 'place sa flotte…'}
                   </span>
                 </header>
-                <Grid
+                <Board
                   label={enemy ? 'Grille de l’adversaire' : 'Ta flotte'}
                   small={!enemy}
-                  look={(cell) =>
-                    enemy
-                      ? { shot: onEnemy.get(cell), sunk: enemySunk.has(cell), ship: enemySunk.has(cell), last: last?.playerIndex !== p && last?.cell === cell }
-                      : { ship: myShipCells.has(cell), shot: onMine.get(cell), sunk: mineSunk.has(cell), last: last?.playerIndex !== ownIndex && last?.cell === cell }
-                  }
+                  ships={enemy ? enemyShips : ownShips}
+                  shots={enemy ? onEnemy : onMine}
+                  water={enemy ? enemyWater : undefined}
+                  last={last && last.playerIndex !== p ? last.cell : null}
                   onCell={enemy && myTurn ? (cell) => void send(socket.emitWithAck('game:shoot', { cell })) : undefined}
-                  canClick={(cell) => !onEnemy.has(cell)}
+                  canClick={(cell) => !onEnemy.has(cell) && !enemyWater.has(cell)}
                 />
+                <FleetStatus sunk={sunkKinds} />
               </section>
             );
           })}
@@ -300,7 +443,12 @@ export function BattleshipTable({
           {error}
         </div>
       )}
-      {game.phase === 'gameOver' && (
+      {game.phase === 'gameOver' && !endOpen && (
+        <button type="button" className="primary naval-end-reopen" onClick={() => setEndOpen(true)}>
+          Fin de la bataille
+        </button>
+      )}
+      {game.phase === 'gameOver' && endOpen && (
         <div className="overlay" role="dialog" aria-label="Fin de la bataille">
           <div className="panel modal pop-in duel-over">
             <div className="trophy" aria-hidden>
@@ -311,7 +459,7 @@ export function BattleshipTable({
                 ? `${game.players[game.winners[0]!]!.name} gagne`
                 : game.winners.includes(me)
                   ? 'Victoire, flotte adverse coulée'
-                  : 'Ta flotte est coulée…'}
+                  : 'Ta flotte est coulée'}
             </h2>
             <RatingChange change={rating} />
             <p className="muted small">
@@ -323,6 +471,9 @@ export function BattleshipTable({
                   Revanche
                 </button>
               )}
+              <button className="ghost" onClick={() => setEndOpen(false)}>
+                Voir les grilles
+              </button>
               <button className="ghost" onClick={() => void exit()}>
                 Retour à l’accueil
               </button>

@@ -4729,12 +4729,16 @@ button.danger {
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 0.4rem 1rem;
-  font-weight: 600;
+  gap: 8px 16px;
+  font-weight: 500;
   text-align: center;
+  color: var(--page-sub);
 }
 .naval-status.active {
-  color: var(--accent);
+  color: var(--text);
+}
+.naval-status .turn-token {
+  margin-right: 0;
 }
 .naval-last {
   padding: 2px 10px;
@@ -4744,20 +4748,19 @@ button.danger {
   animation: pop-in 0.25s var(--ease);
 }
 .naval-last.hit {
-  background: var(--accent);
-  color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--accent-light);
 }
 .naval-last.sunk {
-  background: var(--pink);
+  background: var(--accent);
   color: var(--ink);
 }
 .naval-boards {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: clamp(1rem, 3vw, 2.5rem);
+  gap: 24px;
   align-items: start;
-  justify-content: center;
-  width: min(1100px, 100%);
+  width: min(1120px, 100%);
   margin: 0 auto;
   min-height: 0;
   overflow-y: auto;
@@ -4765,19 +4768,20 @@ button.danger {
 .naval-board {
   position: relative;
   display: grid;
-  gap: 0.6rem;
-  padding: clamp(0.7rem, 2vw, 1.1rem);
+  gap: 12px;
+  padding: 16px;
   border-radius: 20px;
   background: var(--panel);
   border: 1px solid var(--line);
+  transition: border-color 0.2s var(--ease);
 }
-.naval-board.enemy.targeted {
+.naval-board.targeted {
   border-color: var(--accent-line);
 }
 .naval-board-head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
 }
 .naval-board-head .avatar {
   width: 32px;
@@ -4786,141 +4790,290 @@ button.danger {
 .naval-board-head strong {
   flex: 1;
   min-width: 0;
+  font-weight: 500;
 }
 .naval-afloat {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
+
+/*
+ * La grille : l'eau en cases, les navires posés par-dessus sur leurs cases, et les impacts au-dessus de tout.
+ * La mer est un bleu éteint, pour que l'orange des touches ressorte.
+ */
 .naval-grid {
+  --gap: 2px;
   display: grid;
-  grid-template-columns: 1.4em repeat(10, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: 20px repeat(10, minmax(0, 1fr));
+  grid-template-rows: 20px;
+  grid-auto-rows: auto;
+  gap: var(--gap);
   width: 100%;
-  max-width: min(520px, 62vh);
+  max-width: min(540px, 64vh);
   margin: 0 auto;
+  padding: 6px;
+  border-radius: 14px;
+  background: #142226;
+  user-select: none;
+  touch-action: none;
 }
 .naval-grid.small {
-  max-width: min(400px, 48vh);
+  max-width: min(400px, 46vh);
 }
 .naval-corner,
 .naval-axis {
   display: grid;
   place-items: center;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: 0.6875rem;
+  color: #7f9499;
+  font-variant-numeric: tabular-nums;
+}
+.naval-corner {
+  grid-row: 1;
+  grid-column: 1;
 }
 .naval-cell {
-  position: relative;
   aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   border: none;
-  border-radius: 5px;
-  background: #24414a;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
-  min-height: 0;
+  border-radius: 4px;
+  background: #1e3a42;
+  box-shadow: none;
+  transition: background-color 0.12s var(--ease);
 }
 .naval-cell.clickable {
   cursor: crosshair;
 }
 .naval-cell.clickable:hover {
-  background: #2f5662;
+  background: #2c5560;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+/* Eau certaine, autour d'une épave : on n'y tire plus. */
+.naval-cell.water {
+  background: #182d33;
+  background-image: radial-gradient(circle, rgba(201, 214, 217, 0.35) 0 12%, transparent 14%);
+}
+/* Placement : autour des autres navires, la place est interdite. */
+.naval-cell.halo {
+  background: #1e3a42 repeating-linear-gradient(135deg, rgba(229, 72, 77, 0.28) 0 3px, transparent 3px 7px);
+}
+/* Le navire couvre ses cases sans les pousser : son dessin est posé en absolu, il ne donne pas sa taille à la grille. */
+.naval-ship {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+.naval-ship .ship-art {
+  position: absolute;
+  inset: 4%;
+  width: 92%;
+  height: 92%;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
+}
+.naval-ship.grabbable {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.naval-ship.selected .ship-art {
+  filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 0 3px var(--accent));
+}
+.naval-ship.selected {
   outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 8px;
 }
-.naval-cell.ship {
-  background: #b8ae9f;
+.naval-ship.dragging {
+  opacity: 0.35;
 }
-.naval-cell.ship.selected {
-  background: var(--yellow);
+.naval-ship.ghost,
+.naval-ship.ghost-bad {
+  z-index: 2;
+  border-radius: 8px;
+  pointer-events: none;
 }
-.naval-cell.sunk {
-  background: #6e4a32;
+.naval-ship.ghost {
+  outline: 2px dashed var(--accent-light);
 }
-.naval-cell.miss::after,
-.naval-cell.hit::after,
-.naval-cell.sunk::after {
+.naval-ship.ghost-bad {
+  outline: 2px dashed var(--danger);
+}
+.naval-ship.ghost-bad .ship-art {
+  opacity: 0.55;
+}
+/* Une épave : la coque assombrie, brûlée. */
+.naval-ship.sunk .ship-art {
+  filter: grayscale(0.5) sepia(0.6) brightness(0.55) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+}
+.naval-mark {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+/* À l'eau : une gerbe, en ronds clairs. */
+.naval-mark.miss::before {
+  content: '';
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: rgba(214, 228, 231, 0.8);
+  box-shadow: 0 0 0 3px rgba(214, 228, 231, 0.18);
+}
+/* Touché : un impact orange. */
+.naval-mark.hit svg {
+  width: 74%;
+  height: 74%;
+  fill: var(--accent);
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.naval-mark.last {
+  animation: naval-splash 0.6s var(--ease);
+}
+.naval-mark.last::after {
   content: '';
   position: absolute;
-  inset: 30%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.75);
-}
-.naval-cell.hit,
-.naval-cell.sunk.hit {
-  background: var(--accent);
-}
-.naval-cell.hit::after,
-.naval-cell.sunk::after {
-  inset: 18%;
-  background: none;
-  border-radius: 0;
-  /* Une croix : la case touchée. */
-  background:
-    linear-gradient(45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%),
-    linear-gradient(-45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%);
-}
-.naval-cell.sunk {
-  background: var(--pink);
-}
-.naval-cell.last {
-  animation: naval-splash 0.6s ease;
-  outline: 2px solid #fff;
-  z-index: 1;
+  inset: -2px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 @keyframes naval-splash {
   from {
-    transform: scale(1.35);
+    transform: scale(1.6);
+    opacity: 0;
   }
 }
+
+/* La flotte en liste : chaque navire en petit, barré une fois coulé. */
+.naval-fleet-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--page-sub);
+}
+.naval-fleet-status li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.naval-fleet-status li.sunk {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.naval-fleet-status li.sunk .ship-art {
+  filter: grayscale(1) brightness(0.5);
+}
+.naval-fleet-ship {
+  display: inline-grid;
+  width: calc(var(--size) * 9px);
+  height: 10px;
+}
+.naval-fleet-ship .ship-art {
+  width: 100%;
+  height: 100%;
+}
+
 .naval-placement {
   display: grid;
   justify-items: center;
-  gap: 0.75rem;
-  width: min(560px, 100%);
+  gap: 12px;
+  width: min(580px, 100%);
   margin: 0 auto;
-  padding: 1.2rem;
+  padding: 20px;
   border-radius: 20px;
   background: var(--panel);
   border: 1px solid var(--line);
   text-align: center;
   overflow-y: auto;
 }
-.naval-placement h2 {
-  margin: 0;
+.naval-placement-head h2 {
+  margin: 0 0 4px;
   font-family: var(--font-title);
+  font-weight: 500;
 }
-.naval-placement p {
+.naval-placement-head p {
   margin: 0;
+  font-size: 0.875rem;
 }
-.naval-fleet-list {
+.naval-placement .naval-grid {
+  max-width: min(460px, 52vh);
+}
+.naval-placement .hint {
+  margin: 0;
+  min-height: 1.4em;
+}
+.naval-fleet-pick {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.naval-fleet-list button.on {
-  background: var(--yellow);
-  color: var(--ink);
+.naval-fleet-pick button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+}
+.naval-fleet-pick button.on {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-light);
+}
+.naval-fleet-pick .naval-fleet-ship {
+  width: calc(var(--size) * 12px);
+  height: 13px;
 }
 .naval-placement-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 8px;
+}
+.naval-end-reopen {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 15;
 }
 @media (max-width: 760px) {
   .naval-boards {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .naval-board {
+    padding: 12px;
   }
   .naval-grid,
   .naval-grid.small {
     max-width: 100%;
   }
+  .naval-grid {
+    grid-template-columns: 14px repeat(10, minmax(0, 1fr));
+    grid-template-rows: 14px repeat(10, auto);
+    padding: 4px;
+  }
   .naval-board.own .naval-grid {
-    max-width: 70%;
+    max-width: 72%;
   }
 }
 

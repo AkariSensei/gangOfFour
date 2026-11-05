@@ -21,6 +21,16 @@ export interface Ship {
   cells: number[];
 }
 
+/** Un bateau montré à la table : ses cases, et lequel de la flotte c'est (son rang dans FLEET). */
+export interface ShownShip extends Ship {
+  kind: number;
+}
+
+/** Le rang dans FLEET du bateau rangé à cette place de la flotte (d'après sa taille si la flotte est dans le désordre). */
+export function kindOf(ship: Ship, index: number): number {
+  return FLEET[index]?.size === ship.cells.length ? index : FLEET.findIndex((f) => f.size === ship.cells.length);
+}
+
 export type ShotResult = 'miss' | 'hit' | 'sunk';
 
 export interface Shot {
@@ -223,7 +233,7 @@ export interface BattleshipView {
   /** Sa propre flotte (null pour un spectateur, ou tant qu'elle n'est pas placée). */
   myShips: Ship[] | null;
   /** Les bateaux coulés de chaque joueur, visibles de tous ; toute la flotte à la fin de la partie. */
-  revealed: Ship[][];
+  revealed: ShownShip[][];
   lastShot: BattleshipState['lastShot'];
   winners: number[];
 }
@@ -249,9 +259,8 @@ export function battleshipView(state: BattleshipState, you: number): BattleshipV
     myShips: state.players[you]?.ships ?? null,
     revealed: state.players.map((p, i) => {
       if (!p.ships) return [];
-      if (over) return p.ships;
       const sunk = sunkShips(p.ships, state.players[1 - i]!.shots);
-      return p.ships.filter((_, k) => sunk.includes(k));
+      return p.ships.flatMap((s, k) => (over || sunk.includes(k) ? [{ cells: s.cells, kind: kindOf(s, k) }] : []));
     }),
     lastShot: state.lastShot,
     winners: state.winners,

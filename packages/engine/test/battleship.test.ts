@@ -81,7 +81,7 @@ describe('bataille navale', () => {
     expect(state.lastShot).toMatchObject({ result: 'sunk', ship: 4 });
     // Le torpilleur coulé se voit chez l'adversaire ; le reste de la flotte reste caché.
     const view = battleshipView(state, 0);
-    expect(view.revealed[1]).toEqual([{ cells: [80, 81] }]);
+    expect(view.revealed[1]).toEqual([{ cells: [80, 81], kind: 4 }]);
     expect(view.players[1]!.afloat).toBe(4);
     expect(view.myShips).toEqual(rows());
     expect(JSON.stringify(battleshipView(state, 0).revealed[1])).not.toContain('[0,1,2,3,4]');
