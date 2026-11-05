@@ -4851,15 +4851,6 @@ button.danger {
   background: #2c5560;
   box-shadow: inset 0 0 0 2px var(--accent);
 }
-/* Eau certaine, autour d'une épave : on n'y tire plus. */
-.naval-cell.water {
-  background: #182d33;
-  background-image: radial-gradient(circle, rgba(201, 214, 217, 0.35) 0 12%, transparent 14%);
-}
-/* Placement : autour des autres navires, la place est interdite. */
-.naval-cell.halo {
-  background: #1e3a42 repeating-linear-gradient(135deg, rgba(229, 72, 77, 0.28) 0 3px, transparent 3px 7px);
-}
 /* Le navire couvre ses cases sans les pousser : son dessin est posé en absolu, il ne donne pas sa taille à la grille. */
 .naval-ship {
   position: relative;

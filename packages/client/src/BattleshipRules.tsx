@@ -27,7 +27,7 @@ export function BattleshipRules({ onClose }: { onClose: () => void }) {
               </li>
             ))}
           </ul>
-          <p>Les bateaux ne se touchent pas, même par un coin. La flotte part placée au hasard : déplace-la à ta guise.</p>
+          <p>Les bateaux peuvent se toucher, mais pas se chevaucher. La flotte part placée au hasard : déplace-la à ta guise.</p>
         </section>
         <section>
           <h3>La bataille</h3>

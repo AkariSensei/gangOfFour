@@ -1,5 +1,5 @@
 import { Anchor, Eye, Pause, RotateCw, Shuffle, Timer, Trophy, Waves } from 'lucide-react';
-import { type BattleshipView, FLEET, GRID, type Ship, kindOf, neighbours, randomFleet, shipAt, validFleet } from '@gof/engine';
+import { type BattleshipView, FLEET, GRID, type Ship, kindOf, randomFleet, shipAt, validFleet } from '@gof/engine';
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
@@ -46,8 +46,7 @@ function Board({
   label,
   ships,
   shots,
-  water,
-  halo,
+  taken,
   last,
   onCell,
   canClick,
@@ -58,10 +57,8 @@ function Board({
   label: string;
   ships: BoardShip[];
   shots: Map<number, 'miss' | 'hit' | 'sunk'>;
-  /** Cases forcément vides (autour d'une épave) : grisées, on n'y tire pas. */
-  water?: Set<number>;
-  /** Cases interdites au placement (autour des autres navires). */
-  halo?: Set<number>;
+  /** Cases déjà prises par les autres navires, pendant le placement. */
+  taken?: Set<number>;
   last?: number | null;
   onCell?: (cell: number) => void;
   canClick?: (cell: number) => boolean;
@@ -84,7 +81,7 @@ function Board({
       ))}
       {CELLS.map((cell) => {
         const clickable = !!onCell && (canClick?.(cell) ?? true);
-        const classes = ['naval-cell', water?.has(cell) && 'water', halo?.has(cell) && 'halo', clickable && 'clickable'].filter(Boolean).join(' ');
+        const classes = ['naval-cell', taken?.has(cell) && 'taken', clickable && 'clickable'].filter(Boolean).join(' ');
         return clickable ? (
           <button key={cell} type="button" className={classes} style={at(cell)} data-cell={cell} onClick={() => onCell!(cell)} aria-label={cellName(cell)} title={cellName(cell)} />
         ) : (
@@ -134,8 +131,8 @@ function FleetStatus({ sunk }: { sunk: number[] }) {
 
 /**
  * Placement de la flotte : elle part placée au hasard. On fait glisser un navire pour le déplacer (ou on le choisit,
- * puis on touche une case), un double-clic ou « Pivoter » (touche R) le tourne. Autour des autres navires, les
- * cases hachurées sont interdites : les bateaux ne se touchent pas, même par un coin.
+ * puis on touche une case), un double-clic ou « Pivoter » (touche R) le tourne. Les bateaux peuvent se toucher, mais
+ * pas se chevaucher.
  */
 function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
   const [ships, setShips] = useState<Ship[]>(() => randomFleet(Math.random));
@@ -148,7 +145,7 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
   const fleetWith = (index: number, ship: Ship | null) => (ship ? ships.map((s, i) => (i === index ? ship : s)) : null);
   function tryChange(index: number, start: number, vertical: boolean) {
     const next = fleetWith(index, shipAt(start, ships[index]!.cells.length, vertical));
-    if (!next || !validFleet(next)) return setHint('Pas la place ici : les bateaux ne se touchent pas, même par un coin.');
+    if (!next || !validFleet(next)) return setHint('Pas la place ici : un bateau ne peut pas en chevaucher un autre.');
     setHint('');
     setShips(next);
   }
@@ -193,7 +190,7 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
     const up = () => {
       const d = dragRef.current;
       if (d?.moved && d.preview && d.valid) setShips(fleetWith(d.index, d.preview)!);
-      else if (d?.moved) setHint('Pas la place ici : les bateaux ne se touchent pas, même par un coin.');
+      else if (d?.moved) setHint('Pas la place ici : un bateau ne peut pas en chevaucher un autre.');
       setDrag(null);
     };
     window.addEventListener('pointermove', move);
@@ -211,11 +208,10 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
   }
 
   const focus = drag?.index ?? selected;
-  const halo = useMemo(() => {
-    if (focus === null) return new Set<number>();
-    const others = ships.filter((_, i) => i !== focus).flatMap((s) => s.cells);
-    return new Set(others.flatMap((c) => [c, ...neighbours(c)]));
-  }, [ships, focus]);
+  const taken = useMemo(
+    () => (focus === null ? new Set<number>() : new Set(ships.filter((_, i) => i !== focus).flatMap((s) => s.cells))),
+    [ships, focus],
+  );
   const shown: BoardShip[] = ships.map((s, i) => ({
     ...s,
     index: i,
@@ -228,9 +224,9 @@ function Placement({ onReady }: { onReady: (ships: Ship[]) => void }) {
     <section className="naval-placement">
       <div className="naval-placement-head">
         <h2>Place ta flotte</h2>
-        <p className="muted">Fais glisser un bateau pour le déplacer, double-clic ou R pour le tourner. Les zones hachurées sont interdites.</p>
+        <p className="muted">Fais glisser un bateau pour le déplacer, double-clic ou R pour le tourner. Les bateaux peuvent se toucher, pas se chevaucher.</p>
       </div>
-      <Board label="Ta flotte" ships={shown} shots={new Map()} halo={halo} onCell={onCell} onShipDown={onShipDown} onShipDouble={rotate} />
+      <Board label="Ta flotte" ships={shown} shots={new Map()} taken={taken} onCell={onCell} onShipDown={onShipDown} onShipDouble={rotate} />
       <ul className="naval-fleet-pick">
         {ships.map((s, i) => (
           <li key={i}>
@@ -326,11 +322,6 @@ export function BattleshipTable({
   const onEnemy = useMemo(() => shotsOn(other), [game]);
   const onMine = useMemo(() => shotsOn(ownIndex), [game]);
   const enemyWrecks = game.revealed[other] ?? [];
-  // Autour d'une épave il n'y a que de l'eau (les bateaux ne se touchent pas) : inutile d'y tirer.
-  const enemyWater = useMemo(() => {
-    const wreck = new Set(enemyWrecks.flatMap((s) => s.cells));
-    return new Set(enemyWrecks.flatMap((s) => s.cells.flatMap(neighbours)).filter((c) => !wreck.has(c) && !onEnemy.has(c)));
-  }, [game]);
   // Un navire est coulé quand toutes ses cases ont été touchées (à la fin, toute la flotte est montrée, coulée ou non).
   const sunkOn = (shots: Map<number, string>) => (ship: Ship) => ship.cells.every((c) => shots.has(c));
   const ownSunk = new Set((game.revealed[ownIndex] ?? []).filter(sunkOn(onMine)).map((s) => s.kind));
@@ -426,10 +417,9 @@ export function BattleshipTable({
                   small={!enemy}
                   ships={enemy ? enemyShips : ownShips}
                   shots={enemy ? onEnemy : onMine}
-                  water={enemy ? enemyWater : undefined}
                   last={last && last.playerIndex !== p ? last.cell : null}
                   onCell={enemy && myTurn ? (cell) => void send(socket.emitWithAck('game:shoot', { cell })) : undefined}
-                  canClick={(cell) => !onEnemy.has(cell) && !enemyWater.has(cell)}
+                  canClick={(cell) => !onEnemy.has(cell)}
                 />
                 <FleetStatus sunk={sunkKinds} />
               </section>

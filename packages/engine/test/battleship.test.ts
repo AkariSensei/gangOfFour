@@ -34,11 +34,13 @@ function placed(): BattleshipState {
 }
 
 describe('bataille navale', () => {
-  it('vérifie la flotte : bonnes tailles, droite, sans chevauchement ni contact', () => {
+  it('vérifie la flotte : bonnes tailles, droite, sans chevauchement, les bateaux pouvant se toucher', () => {
     expect(validFleet(rows())).toBe(true);
-    // Deux bateaux qui se touchent par un côté, puis par un coin.
-    expect(validFleet([shipAt(0, 5, false)!, shipAt(10, 4, false)!, shipAt(40, 3, false)!, shipAt(60, 3, false)!, shipAt(80, 2, false)!])).toBe(false);
-    expect(validFleet([shipAt(0, 5, false)!, shipAt(15, 4, false)!, shipAt(40, 3, false)!, shipAt(60, 3, false)!, shipAt(80, 2, false)!])).toBe(false);
+    // Deux bateaux qui se touchent par un côté, puis par un coin : c'est permis.
+    expect(validFleet([shipAt(0, 5, false)!, shipAt(10, 4, false)!, shipAt(40, 3, false)!, shipAt(60, 3, false)!, shipAt(80, 2, false)!])).toBe(true);
+    expect(validFleet([shipAt(0, 5, false)!, shipAt(15, 4, false)!, shipAt(40, 3, false)!, shipAt(60, 3, false)!, shipAt(80, 2, false)!])).toBe(true);
+    // Deux bateaux l'un sur l'autre : refusé.
+    expect(validFleet([shipAt(0, 5, false)!, shipAt(2, 4, true)!, shipAt(40, 3, false)!, shipAt(60, 3, false)!, shipAt(80, 2, false)!])).toBe(false);
     // Un bateau en trop court, un bateau tordu, un bateau qui passe d'une ligne à l'autre.
     expect(validFleet([...rows().slice(0, 4), { cells: [80] }])).toBe(false);
     expect(validFleet([...rows().slice(0, 4), { cells: [80, 91] }])).toBe(false);

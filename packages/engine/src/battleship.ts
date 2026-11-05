@@ -1,8 +1,8 @@
 import { createRng } from './random';
 
 /**
- * Bataille navale à deux, sur une grille de 10 × 10. Chacun place sa flotte en secret (cinq bateaux, qui ne se
- * touchent pas, même en diagonale), puis on tire chacun son tour. Le premier qui coule toute la flotte adverse gagne.
+ * Bataille navale à deux, sur une grille de 10 × 10. Chacun place sa flotte en secret (cinq bateaux, qui peuvent se
+ * toucher mais pas se chevaucher), puis on tire chacun son tour. Le premier qui coule toute la flotte adverse gagne.
  * Une case est un nombre de 0 à 99 : ligne × 10 + colonne.
  */
 
@@ -99,7 +99,7 @@ function straight(ship: Ship): boolean {
   return horizontal || vertical;
 }
 
-/** La flotte est-elle réglementaire : les bonnes tailles, droits, sans chevauchement ni contact ? */
+/** La flotte est-elle réglementaire : les bonnes tailles, droits, sans chevauchement (se toucher est permis) ? */
 export function validFleet(ships: Ship[]): boolean {
   if (!Array.isArray(ships) || ships.length !== FLEET.length) return false;
   const sizes = ships.map((s) => (Array.isArray(s?.cells) ? s.cells.length : 0)).sort((a, b) => b - a);
@@ -107,9 +107,7 @@ export function validFleet(ships: Ship[]): boolean {
   if (!ships.every(straight)) return false;
   const owner = new Map<number, number>();
   ships.forEach((s, i) => s.cells.forEach((c) => owner.set(c, owner.has(c) ? -1 : i)));
-  if ([...owner.values()].includes(-1)) return false;
-  // Deux bateaux ne se touchent pas, même par un coin.
-  return ships.every((s, i) => s.cells.every((c) => neighbours(c).every((n) => owner.get(n) === undefined || owner.get(n) === i)));
+  return ![...owner.values()].includes(-1);
 }
 
 /** Une flotte placée au hasard, réglementaire. */
@@ -130,16 +128,14 @@ export function randomFleet(random: () => number): Ship[] {
   }
 }
 
-/** Les bateaux déjà posés ne se chevauchent ni ne se touchent (sans vérifier les tailles). */
+/** Les bateaux déjà posés ne se chevauchent pas (sans vérifier les tailles). */
 function validFleetSoFar(ships: Ship[]): boolean {
-  const owner = new Map<number, number>();
-  for (const [i, s] of ships.entries()) {
-    for (const c of s.cells) {
-      if (owner.has(c)) return false;
-      owner.set(c, i);
-    }
+  const taken = new Set<number>();
+  for (const c of ships.flatMap((s) => s.cells)) {
+    if (taken.has(c)) return false;
+    taken.add(c);
   }
-  return ships.every((s, i) => s.cells.every((c) => neighbours(c).every((n) => owner.get(n) === undefined || owner.get(n) === i)));
+  return true;
 }
 
 export function createBattleship(players: { id: string; name: string }[], seed: number): BattleshipState {
@@ -268,8 +264,8 @@ export function battleshipView(state: BattleshipState, you: number): BattleshipV
 }
 
 /**
- * Le tir du bot : il achève d'abord un bateau touché (dans l'alignement des touches), sinon il tire au hasard en
- * damier, en évitant les cases autour des bateaux coulés (où rien ne peut se trouver).
+ * Le tir du bot : il achève d'abord un bateau touché (dans l'alignement des touches, sinon tout autour : deux bateaux
+ * qui se touchent peuvent brouiller l'alignement), puis il tire au hasard en damier.
  */
 export function battleshipBotShot(state: BattleshipState, index: number, random: () => number): number {
   const me = state.players[index]!;
@@ -278,17 +274,16 @@ export function battleshipBotShot(state: BattleshipState, index: number, random:
   const sunkCells = new Set(
     sunkShips(enemy.ships ?? [], me.shots).flatMap((k) => enemy.ships![k]!.cells),
   );
-  const blocked = new Set([...sunkCells].flatMap((c) => neighbours(c)));
-  const free = (c: number) => c >= 0 && c < GRID * GRID && !shot.has(c) && !blocked.has(c);
+  const free = (c: number) => c >= 0 && c < GRID * GRID && !shot.has(c);
   const open = me.shots.filter((s) => s.result === 'hit' && !sunkCells.has(s.cell)).map((s) => s.cell);
   if (open.length > 0) {
     const sameRow = open.length > 1 && open.every((c) => rowOf(c) === rowOf(open[0]!));
     const sameCol = open.length > 1 && open.every((c) => colOf(c) === colOf(open[0]!));
-    const steps = sameRow ? [-1, 1] : sameCol ? [-GRID, GRID] : [-1, 1, -GRID, GRID];
     // Un pas de côté reste sur la même ligne ; un pas vertical change de ligne.
-    const candidates = open.flatMap((c) =>
-      steps.flatMap((d) => (free(c + d) && (Math.abs(d) === GRID || rowOf(c + d) === rowOf(c)) ? [c + d] : [])),
-    );
+    const around = (steps: number[]) =>
+      open.flatMap((c) => steps.flatMap((d) => (free(c + d) && (Math.abs(d) === GRID || rowOf(c + d) === rowOf(c)) ? [c + d] : [])));
+    const aligned = around(sameRow ? [-1, 1] : sameCol ? [-GRID, GRID] : [-1, 1, -GRID, GRID]);
+    const candidates = aligned.length > 0 ? aligned : around([-1, 1, -GRID, GRID]);
     if (candidates.length > 0) return candidates[Math.floor(random() * candidates.length)]!;
   }
   const all = Array.from({ length: GRID * GRID }, (_, c) => c).filter(free);
