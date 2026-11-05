@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPlayingDeck } from '@gof/engine';
-import { type BotLevel, GAMES, type GameId, type LiveRoom, type Session } from '../../server/src/protocol';
+import { type BotLevel, GAMES, type GameId, type LiveRoom, type OpenRoom, type Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
 import { Avatar } from './Avatar';
 import { CommunityScreen } from './Community';
@@ -330,7 +330,7 @@ export function Home({
                 </div>
               )}
               <nav className="game-menu" aria-label="Gang of Four">
-                <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon, rejoindre des collègues, partie rapide" onClick={() => open('jouer')} />
+                <MenuItem primary icon="🃏" title="Jouer" subtitle="Créer un salon ou rejoindre ceux qui attendent" onClick={() => open('jouer')} />
                 <MenuItem
                   icon="👀"
                   title="Regarder"
@@ -365,7 +365,7 @@ export function Home({
             </div>
             <div className="menu-side">
               <nav className="game-menu" aria-label="Président">
-                <MenuItem primary icon="👑" title="Jouer" subtitle="De 3 à 7 joueurs, collègues ou bots" onClick={() => open('president-jouer')} />
+                <MenuItem primary icon="👑" title="Jouer" subtitle="De 3 à 7 joueurs : crée un salon ou rejoins-en un" onClick={() => open('president-jouer')} />
                 <MenuItem
                   icon="👀"
                   title="Regarder"
@@ -551,15 +551,38 @@ function SubScreen({
   );
 }
 
-/** Bots de la partie rapide : trois à Gang of Four, quatre au Président. */
-const QUICK_BOTS: Record<GameId, number> = { gof: 3, president: 4 };
+/** Bots de l'entraînement : trois à Gang of Four, quatre au Président. */
+const TRAINING_BOTS: Record<GameId, number> = { gof: 3, president: 4 };
 
-/** Écran « Jouer » : créer un salon, rejoindre avec un code, ou lancer tout de suite une partie contre des bots. */
+/** Salons de ce jeu qui attendent des joueurs, rechargés toutes les 5 secondes. */
+function useOpenRooms(game: GameId): OpenRoom[] | null {
+  const [rooms, setRooms] = useState<OpenRoom[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const result = await socket.emitWithAck('rooms:open', { game });
+      if (active && result.ok) setRooms(result.rooms);
+    };
+    void load();
+    const t = setInterval(load, 5_000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, [game]);
+  return rooms;
+}
+
+/**
+ * Écran « Jouer » : créer un salon, ou rejoindre un des salons qui attendent des joueurs. Les parties comptent
+ * seulement entre humains ; l'entraînement contre les bots, à part, ne compte nulle part.
+ */
 function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode: string; onEnter: (s: Session) => void }) {
-  const [code, setCode] = useState(initialCode);
   const [level, setLevel] = useState<BotLevel>('normal');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const open = useOpenRooms(game);
+  const info = GAMES.find((g) => g.id === game);
 
   async function run(action: () => Promise<{ ok: true } & Session | { ok: false; error: string }>) {
     setBusy(true);
@@ -570,11 +593,11 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
     else setError(errorLabel(result.error));
   }
 
-  /** Partie rapide : un salon, trois bots du niveau choisi, et la partie démarre aussitôt (sans passer par le salon). */
-  async function quickGame() {
-    const created = await socket.emitWithAck('room:create', { game });
+  /** Entraînement : un salon fermé, des bots du niveau choisi, et la partie démarre aussitôt. */
+  async function training() {
+    const created = await socket.emitWithAck('room:create', { game, training: true });
     if (!created.ok) return created;
-    for (let i = 0; i < QUICK_BOTS[game]; i++) {
+    for (let i = 0; i < TRAINING_BOTS[game]; i++) {
       const added = await socket.emitWithAck('room:addBot', { level });
       if (!added.ok) return added;
     }
@@ -586,53 +609,66 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
     return created;
   }
 
+  const join = (code: string) => run(() => socket.emitWithAck('room:join', { code }));
+
   return (
     <>
-      <div className="choices">
-        <section className="choice">
+      {initialCode && (
+        <section className="panel invite-banner">
+          <span>
+            Tu as été invité dans le salon <strong>{initialCode}</strong>.
+          </span>
+          <button type="button" className="primary" disabled={busy} onClick={() => void join(initialCode)}>
+            Rejoindre
+          </button>
+        </section>
+      )}
+      <div className="play-grid">
+        <section className="panel play-create">
           <span className="choice-icon" aria-hidden>
             🪑
           </span>
-          <strong>Créer un salon</strong>
-          <p>Invite tes collègues avec un code, ou complète la table avec des bots.</p>
-          <button type="button" className="primary" disabled={busy} onClick={() => void run(() => socket.emitWithAck('room:create', { game }))}>
-            Créer
+          <h3>Créer un salon</h3>
+          <p>Il apparaît dans les salons actifs pour les collègues. Tu peux aussi leur envoyer le lien.</p>
+          <button type="button" className="primary big" disabled={busy} onClick={() => void run(() => socket.emitWithAck('room:create', { game }))}>
+            Créer un salon
           </button>
         </section>
-        <form
-          className="choice"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.length === 4) void run(() => socket.emitWithAck('room:join', { code }));
-          }}
-        >
-          <span className="choice-icon" aria-hidden>
-            🔑
-          </span>
-          <strong>Rejoindre</strong>
-          <p>Un collègue t'a donné le code de son salon&nbsp;?</p>
-          <div className="join">
-            <input
-              value={code}
-              // Codes en chiffres ; les lettres restent acceptées pour les salons ouverts avant ce changement.
-              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
-              maxLength={4}
-              inputMode="numeric"
-              placeholder="1234"
-              aria-label="Code du salon"
-              className="code-input"
-            />
-            <button type="submit" className="primary" disabled={busy || code.length !== 4}>
-              Go
-            </button>
-          </div>
-        </form>
-        <section className="choice">
-          <span className="choice-icon" aria-hidden>
-            🤖
-          </span>
-          <strong>Partie rapide</strong>
-          <p>Toi contre {QUICK_BOTS[game] === 3 ? 'trois' : 'quatre'} bots, au niveau de ton choix : la partie démarre tout de suite.</p>
+        <section className="panel play-open">
+          <h3>Salons actifs</h3>
+          {open === null ? (
+            <p className="muted">Chargement…</p>
+          ) : open.length === 0 ? (
+            <p className="muted">Aucun salon n’attend de joueur pour l’instant : crée le tien !</p>
+          ) : (
+            <ul className="open-rooms">
+              {open.map((r) => (
+                <li key={r.code}>
+                  <span className="open-room-text">
+                    <strong>Salon de {r.host}</strong>
+                    <small>
+                      {r.players} / {r.maxPlayers} joueurs
+                      {r.players < r.minPlayers && ` · encore ${r.minPlayers - r.players} pour lancer`}
+                    </small>
+                  </span>
+                  <button type="button" className="primary" disabled={busy} onClick={() => void join(r.code)}>
+                    Rejoindre
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+      <section className="panel play-training">
+        <div className="play-training-text">
+          <h3>🤖 Entraînement contre les bots</h3>
+          <p>
+            Toi contre {TRAINING_BOTS[game] === 3 ? 'trois' : 'quatre'} bots pour t’exercer{info ? ` à ${info.name}` : ''}.{' '}
+            <strong>Ne compte pas dans les classements et ne rapporte rien.</strong>
+          </p>
+        </div>
+        <div className="play-training-actions">
           <div className="segmented" role="radiogroup" aria-label="Niveau des bots">
             {(Object.entries(LEVEL_LABELS) as [BotLevel, string][]).map(([id, label]) => (
               <button key={id} type="button" role="radio" aria-checked={level === id} className={level === id ? 'on' : ''} onClick={() => setLevel(id)}>
@@ -640,11 +676,11 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
               </button>
             ))}
           </div>
-          <button type="button" className="primary" disabled={busy} onClick={() => void run(quickGame)}>
-            Lancer
+          <button type="button" disabled={busy} onClick={() => void run(training)}>
+            S’entraîner
           </button>
-        </section>
-      </div>
+        </div>
+      </section>
       {error && <p className="error">{error}</p>}
     </>
   );

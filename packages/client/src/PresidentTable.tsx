@@ -342,6 +342,11 @@ export function PresidentTable({
             Manche {game.round} / {game.rounds}
           </span>
           <span className="direction">Président</span>
+          {room.training && (
+            <span className="training-tag" title="Entraînement contre les bots : ne compte pas dans les classements et ne rapporte rien">
+              Entraînement
+            </span>
+          )}
           {room.turnSeconds > 0 && <span className="direction">⏱ {room.turnSeconds} s par tour</span>}
           {room.spectators > 0 && <span className="direction">👀 {room.spectators}</span>}
         </div>

@@ -135,8 +135,9 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const room = rooms.get(code);
     if (!room?.game || !rulesOfRoom(room).over(room.game) || room.recorded) return;
     room.recorded = true;
-    // Le tutoriel ne compte pas : c'est une manche écrite à l'avance.
-    if (room.tutorial) return;
+    // Ne comptent que les parties entre humains : ni le tutoriel (une manche écrite à l'avance), ni l'entraînement,
+    // ni une table où l'hôte avait encore pu asseoir des bots (salons d'avant l'entraînement).
+    if (room.tutorial || room.training || room.seats.some((s) => s.bot)) return;
     const game = room.game;
     withProgress(room, () =>
       history.add(
@@ -630,7 +631,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { account, name } = seated;
       const allowed = canCreateRoom(socket.data.ip ?? '', socket.id);
       const game = isGameId(payload.game) ? payload.game : 'gof';
-      return allowed.ok ? enter(rooms.create(name, account, account.id, game), ack) : ack(allowed);
+      return allowed.ok ? enter(rooms.create(name, account, account.id, game, payload.training === true), ack) : ack(allowed);
     });
     on('tutorial:start', (_payload, ack) => {
       const seated = player();
@@ -669,6 +670,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       ack({ ok: true, code: room.code, playerId: '', token: '', spectator: true });
       await broadcast(room.code);
     });
+    on('rooms:open', (payload, ack) => ack({ ok: true, rooms: rooms.open(isGameId(payload.game) ? payload.game : 'gof') }));
     on('rooms:live', async (_payload, ack) => {
       const live = await Promise.all(
         rooms.live().map(async (room) => {
@@ -770,8 +772,6 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const statsOf = (game: GameId): GameStats => ({
         leaderboard: history.leaderboard(10, undefined, 'online', game),
         seasonal: history.leaderboard(10, season.id, 'online', game),
-        botLeaderboard: history.leaderboard(10, undefined, 'bots', game),
-        botSeasonal: history.leaderboard(10, season.id, 'bots', game),
         recent: history.recent(5, game),
         streak: history.bestStreak('online', game),
       });

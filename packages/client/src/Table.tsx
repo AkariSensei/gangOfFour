@@ -1066,6 +1066,11 @@ export function Table({
     <main className={`table-screen players-${n}${room.paused ? ' paused' : ''} felt-${felt || 'vert'}`}>
       <header className="table-header">
         <div className="header-left">
+          {room.training && (
+            <span className="training-tag" title="Entraînement contre les bots : ne compte pas dans les classements et ne rapporte rien">
+              Entraînement
+            </span>
+          )}
           {room.tutorial ? (
             <span className="round">Tutoriel</span>
           ) : (

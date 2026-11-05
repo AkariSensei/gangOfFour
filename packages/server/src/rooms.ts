@@ -64,6 +64,18 @@ export interface Room {
   paused?: boolean;
   /** Tutoriel : la manche écrite à l'avance, et le rang du prochain coup du script. */
   tutorial?: { step: number };
+  /** Entraînement contre les bots : personne d'autre n'y entre, et la partie ne compte nulle part. */
+  training?: boolean;
+}
+
+/** Salon qui attend des joueurs, proposé sur la page de son jeu. */
+export interface OpenRoom {
+  code: string;
+  game: GameId;
+  host: string;
+  players: number;
+  minPlayers: number;
+  maxPlayers: number;
 }
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | PresidentError };
@@ -126,10 +138,18 @@ export class RoomManager {
     return { code: room.code, playerId: seat.playerId, token: seat.token };
   }
 
-  create(rawName: unknown, look?: unknown, account?: string, game: GameId = 'gof'): Result<Session> {
+  /** `training` : partie d'entraînement contre les bots, que personne d'autre ne peut rejoindre. */
+  create(rawName: unknown, look?: unknown, account?: string, game: GameId = 'gof', training = false): Result<Session> {
     const name = cleanName(rawName);
     if (!name) return { ok: false, error: 'invalidName' };
-    const room: Room = { code: this.newCode(), hostId: '', ...(game !== 'gof' ? { kind: game } : {}), seats: [], game: null };
+    const room: Room = {
+      code: this.newCode(),
+      hostId: '',
+      ...(game !== 'gof' ? { kind: game } : {}),
+      seats: [],
+      game: null,
+      ...(training ? { training: true } : {}),
+    };
     const session = this.seat(room, name, look, account);
     room.hostId = session.playerId;
     this.rooms.set(room.code, room);
@@ -169,6 +189,7 @@ export class RoomManager {
     if (!name) return { ok: false, error: 'invalidName' };
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
+    if (room.training || room.tutorial) return { ok: false, error: 'trainingRoom' };
     if (account && room.kicked?.includes(account)) return { ok: false, error: 'kicked' };
     const vacant = room.game ? room.seats.find((s) => s.vacant) : undefined;
     if (room.game && !vacant) return { ok: false, error: 'gameAlreadyStarted' };
@@ -247,6 +268,8 @@ export class RoomManager {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'roomNotFound' };
     if (room.hostId !== playerId) return { ok: false, error: 'notHost' };
+    // Les bots ne jouent qu'à l'entraînement : une vraie table n'a que des humains.
+    if (!room.training) return { ok: false, error: 'trainingOnly' };
     if (room.game) return { ok: false, error: 'gameAlreadyStarted' };
     if (room.seats.length >= rulesOfRoom(room).maxPlayers) return { ok: false, error: 'roomFull' };
     const name = BOT_NAMES.find((n) => !room.seats.some((s) => s.name === n)) ?? 'Robot';
@@ -451,6 +474,7 @@ export class RoomManager {
       code: room.code,
       hostId: room.hostId,
       game: room.kind ?? 'gof',
+      training: room.training ?? false,
       players: room.seats.map((s) => ({
         id: s.playerId,
         name: s.name,
@@ -491,7 +515,7 @@ export class RoomManager {
     // Seulement les parties où au moins un vrai joueur est encore là : pas celles que les bots jouent seuls.
     return this.all().flatMap((room) => {
       const rules = rulesOfRoom(room);
-      if (!room.game || rules.over(room.game) || room.tutorial || this.isAbandoned(room.code)) return [];
+      if (!room.game || rules.over(room.game) || room.tutorial || room.training || this.isAbandoned(room.code)) return [];
       const scores = rules.scores(room.game);
       return [
         {
@@ -502,6 +526,17 @@ export class RoomManager {
           players: room.seats.map((s, i) => ({ name: s.name, score: scores[i] ?? 0, bot: !!(s.bot || s.vacant) })),
         },
       ];
+    });
+  }
+
+  /** Salons de ce jeu qui attendent encore des joueurs (pas lancés, pas pleins, avec leur hôte connecté). */
+  open(game: GameId): OpenRoom[] {
+    return this.all().flatMap((room) => {
+      const rules = rulesOfRoom(room);
+      const host = room.seats.find((s) => s.playerId === room.hostId);
+      if (rules.id !== game || room.game || room.training || room.tutorial || !host?.connected) return [];
+      if (room.seats.length >= rules.maxPlayers) return [];
+      return [{ code: room.code, game: rules.id, host: host.name, players: room.seats.length, minPlayers: rules.minPlayers, maxPlayers: rules.maxPlayers }];
     });
   }
 

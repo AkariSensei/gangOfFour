@@ -4733,3 +4733,110 @@ button.danger {
 .p-places li {
   justify-content: flex-start;
 }
+
+/* ——— Jouer : créer un salon, les salons actifs, et l'entraînement à part ——— */
+.play-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 1rem;
+}
+.play-grid .panel,
+.play-training,
+.invite-banner {
+  margin: 0;
+}
+.play-create {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  text-align: center;
+}
+.play-create h3,
+.play-open h3,
+.play-training h3 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.3rem;
+}
+.play-create p,
+.play-training p {
+  margin: 0;
+  color: var(--page-sub);
+}
+.play-open {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.open-rooms {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+.open-rooms li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.open-room-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.open-room-text small {
+  color: var(--muted);
+}
+.play-training {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1rem;
+  border-style: dashed;
+  background: transparent;
+}
+.play-training-text {
+  flex: 1 1 320px;
+  display: grid;
+  gap: 0.3rem;
+}
+.play-training-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.invite-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  border-color: var(--accent);
+}
+.training-tag {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--cyan);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.lobby-note {
+  margin: 0;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .play-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

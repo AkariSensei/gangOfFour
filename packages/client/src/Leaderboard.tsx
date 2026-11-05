@@ -56,16 +56,14 @@ export function Leaderboard({
 }) {
   const [shown, setShown] = useState<string | null>(null);
   const [tab, setTab] = useState<'season' | 'all'>('season');
-  // Parties en ligne (au moins deux personnes) ou jouées seul contre des bots : deux classements séparés.
-  const [mode, setMode] = useState<'online' | 'bots'>('online');
 
   if (!all) return null;
   const stats = all.games[game];
   // La fiche d'un joueur ne parle que de Gang of Four pour l'instant : pas de fiche depuis les autres classements.
   const withProfile = game === 'gof';
   const period = seasonOnly ? 'season' : tab;
-  const ranking =
-    mode === 'online' ? (period === 'season' ? stats.seasonal : stats.leaderboard) : period === 'season' ? stats.botSeasonal : stats.botLeaderboard;
+  // Seules les parties entre humains comptent : l'entraînement contre les bots n'est pas classé.
+  const ranking = period === 'season' ? stats.seasonal : stats.leaderboard;
 
   return (
     <>
@@ -87,23 +85,11 @@ export function Leaderboard({
             </div>
           )}
         </div>
-        <div className="segmented ranking-mode" role="tablist" aria-label="Type de parties">
-          {(
-            [
-              ['online', '👥 En ligne'],
-              ['bots', '🤖 Contre les bots'],
-            ] as const
-          ).map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? 'on' : ''} onClick={() => setMode(id)}>
-              {label}
-            </button>
-          ))}
-        </div>
         {shown && <Profile name={shown} onClose={() => setShown(null)} />}
         {withProfile && <p className="muted small">Clique sur un nom pour voir ses statistiques.</p>}
         {ranking.length === 0 && (
           <p className="muted">
-            Aucune partie {mode === 'online' ? 'en ligne' : 'contre les bots'} terminée {period === 'season' ? 'cette saison ' : ''}pour l'instant.
+            Aucune partie terminée {period === 'season' ? 'cette saison ' : ''}pour l'instant.
           </p>
         )}
         <ol className="ranking">
@@ -128,7 +114,7 @@ export function Leaderboard({
             </li>
           ))}
         </ol>
-        {stats.streak && mode === 'online' && (
+        {stats.streak && (
           <p className="streak" title="Record du bureau : plus longue série de victoires d'affilée">
             🔥 Record :{' '}
             {withProfile ? (
@@ -158,7 +144,6 @@ export function Leaderboard({
                   <span className="muted">
                     · {r.players.length} joueurs · {r.rounds} manche
                     {r.rounds > 1 ? 's' : ''}
-                    {r.players.filter((p) => !p.bot).length < 2 && ' · 🤖 contre les bots'}
                   </span>
                 </span>
               </li>

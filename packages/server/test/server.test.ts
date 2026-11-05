@@ -366,15 +366,16 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('community:list')).toEqual({ ok: true, ideas: [] });
   });
 
-  it('fait jouer une partie entière de Président à sept, et la range dans le classement du Président', async () => {
+  it('fait jouer un entraînement de Président à sept contre des bots, qui ne compte nulle part', async () => {
     // Le minuteur fait jouer l'humain à sa place : il ne lui reste qu'à rendre ses cartes et lancer les manches.
     await start({ botDelayMs: 0, turnSecondMs: 1 });
     const human = connect('Alice');
-    expect(await human.emitWithAck('room:create', { game: 'president' })).toMatchObject({ ok: true });
+    expect(await human.emitWithAck('room:create', { game: 'president', training: true })).toMatchObject({ ok: true });
     for (let i = 0; i < 6; i++) expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
     expect(await human.emitWithAck('room:addBot', {})).toEqual({ ok: false, error: 'roomFull' });
     await waitFor(() => human.room?.players.length === 7);
     expect(human.room!.game).toBe('president');
+    expect(human.room!.training).toBe(true);
     expect((await human.emitWithAck('game:start', { rounds: 3, turnSeconds: 30 })).ok).toBe(true);
 
     const view = () => human.game as unknown as PresidentGameView | undefined;
@@ -397,13 +398,24 @@ describe('serveur de jeu', () => {
     expect(view()!.players.reduce((n, p) => n + p.score, 0)).toBe(63);
 
     const stats = await human.emitWithAck('stats:get');
-    expect(stats.ok && stats.games.president.recent).toHaveLength(1);
-    expect(stats.ok && stats.games.president.recent[0]!.game).toBe('president');
-    expect(stats.ok && stats.games.president.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
-    // Le Président ne compte ni dans le classement de Gang of Four, ni dans son niveau.
+    expect(stats.ok && stats.games.president.recent).toEqual([]);
     expect(stats.ok && stats.games.gof.recent).toEqual([]);
     expect(server.history.progressOfAccount(server.accounts.byName('Alice')!.id).xp).toBe(0);
   }, 60000);
+
+  it('liste les salons qui attendent des joueurs, jeu par jeu', async () => {
+    await start();
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'president' });
+    if (!created.ok) throw new Error(created.error);
+    await alice.emitWithAck('room:addBot', {}).then((r) => expect(r).toEqual({ ok: false, error: 'trainingOnly' }));
+    const bruno = connect('Bruno');
+    const open = await bruno.emitWithAck('rooms:open', { game: 'president' });
+    expect(open).toEqual({ ok: true, rooms: [{ code: created.code, game: 'president', host: 'Alice', players: 1, minPlayers: 3, maxPlayers: 7 }] });
+    expect(await bruno.emitWithAck('rooms:open', { game: 'gof' })).toEqual({ ok: true, rooms: [] });
+    expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+    await waitFor(() => alice.room?.players.length === 2);
+  });
 
   it('donne la saison en cours avec les classements', async () => {
     await start();
@@ -427,17 +439,15 @@ describe('serveur de jeu', () => {
     await start({ abandonDelayMs: 60_000, lobbyAbandonDelayMs: 60_000 });
     // Salon d'attente : l'hôte seul avec des bots s'en va, le salon disparaît.
     const waiting = await lobby(1);
-    expect((await waiting.players[0]!.emitWithAck('room:addBot', {})).ok).toBe(true);
     expect((await waiting.players[0]!.emitWithAck('room:leave')).ok).toBe(true);
     expect(server.rooms.get(waiting.code)).toBeUndefined();
 
     // Partie lancée : tant qu'un joueur reste, elle continue ; quand le dernier quitte, elle est supprimée.
-    const playing = await lobby(2);
-    expect((await playing.players[0]!.emitWithAck('room:addBot', {})).ok).toBe(true);
-    await waitFor(() => playing.players[0]!.room?.players.length === 3);
+    const playing = await lobby(3);
     await playing.players[0]!.emitWithAck('game:start', {});
     await waitFor(() => playing.players.every((p) => p.game));
     expect((await playing.players[0]!.emitWithAck('room:leave')).ok).toBe(true);
+    playing.players[2]!.disconnect();
     expect(server.rooms.get(playing.code)).toBeDefined();
     const watcher = connect();
     const live = async () => {
@@ -693,10 +703,12 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.games.gof.leaderboard).toHaveLength(count);
   }, 60000);
 
-  it('fait jouer les bots tout seuls : une partie complète avec un humain et deux bots', async () => {
+  it('fait jouer les bots tout seuls : un entraînement complet avec un humain et deux bots, qui ne compte pas', async () => {
     await start({ botDelayMs: 0 });
-    const { code, players } = await lobby(1);
-    const human = players[0]!;
+    const human = connect('Alice');
+    const created = await human.emitWithAck('room:create', { training: true });
+    if (!created.ok) throw new Error(created.error);
+    const code = created.code;
     expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
     expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
     await waitFor(() => human.room?.players.length === 3);
@@ -721,14 +733,13 @@ describe('serveur de jeu', () => {
       await waitFor(() => JSON.stringify(human.game) !== before);
     }
 
+    // L'entraînement n'est enregistré nulle part : ni classement, ni historique, ni expérience.
     const stats = await human.emitWithAck('stats:get');
-    expect(stats.ok && stats.games.gof.recent).toHaveLength(1);
-    // Seule contre des bots : la partie compte dans le classement « contre les bots », pas dans celui en ligne.
-    expect(stats.ok && stats.games.gof.botLeaderboard.map((e) => e.name)).toEqual(['Alice']);
+    expect(stats.ok && stats.games.gof.recent).toEqual([]);
     expect(stats.ok && stats.games.gof.leaderboard).toEqual([]);
     expect(server.rooms.get(code)!.game!.phase).toBe('gameOver');
 
-    // Revanche : nouvelle partie, mêmes joueurs, même score de fin, et elle sera enregistrée à son tour.
+    // Revanche : nouvelle partie, mêmes joueurs, même score de fin.
     const target = (server.rooms.get(code)!.game as GameState).config.targetScore;
     expect((await human.emitWithAck('game:rematch')).ok).toBe(true);
     await waitFor(() => human.game!.phase !== 'gameOver');

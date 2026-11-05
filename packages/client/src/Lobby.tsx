@@ -97,7 +97,10 @@ export function Lobby({
         {/* La table vue de dessus : sa propre place en bas, les autres autour, le code du salon sur le tapis. */}
         <div className={`lobby-table ${maxSeats > 4 ? 'many' : ''}`}>
           <div className="lobby-felt">
-            <p className="lobby-game">{president ? 'Président' : 'Gang of Four'}</p>
+            <p className="lobby-game">
+              {president ? 'Président' : 'Gang of Four'}
+              {room.training && ' · entraînement'}
+            </p>
             <p className="muted">Code du salon</p>
             <div className="room-code">{room.code}</div>
             <button onClick={copy}>{copied ? 'Lien copié !' : "Copier le lien d'invitation"}</button>
@@ -134,7 +137,7 @@ export function Lobby({
               ) : (
                 <li key={`libre-${i}`} className={`lobby-seat empty at-${at(i)}`}>
                   <span className="lobby-seat-name">Place libre</span>
-                  {isHost ? (
+                  {isHost && room.training ? (
                     <span className="bot-levels" role="group" aria-label="Ajouter un bot">
                       <small>🤖 Ajouter un bot</small>
                       {BOT_LEVELS.map(([level, label]) => (
@@ -144,7 +147,7 @@ export function Lobby({
                       ))}
                     </span>
                   ) : (
-                    <span className="muted small">En attente…</span>
+                    <span className="muted small">En attente d’un joueur…</span>
                   )}
                 </li>
               ),
@@ -200,9 +203,12 @@ export function Lobby({
             </div>
           </div>
         )}
+        {!room.training && (
+          <p className="muted small lobby-note">Le salon est visible dans les salons actifs : les collègues peuvent le rejoindre depuis la page du jeu.</p>
+        )}
         {isHost ? (
           <button className="primary" disabled={room.players.length < 3} onClick={start}>
-            {room.players.length < 3 ? 'Il faut au moins 3 joueurs' : 'Lancer la partie'}
+            {room.players.length < 3 ? `En attente : il faut au moins 3 joueurs (${room.players.length}/3)` : 'Lancer la partie'}
           </button>
         ) : (
           <p className="muted">L'hôte lancera la partie dès que tout le monde est là.</p>

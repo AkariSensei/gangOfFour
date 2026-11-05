@@ -1,5 +1,7 @@
 import type { ActionError, Card, PlayerView, PlayingCard, PresidentError, PresidentView } from '@gof/engine';
 import type { GameId } from './rules';
+import type { OpenRoom } from './rooms';
+export type { OpenRoom };
 import type { BotLevel } from './bot';
 import type { Progress } from './progression';
 import type { Season } from './seasons';
@@ -38,6 +40,8 @@ export interface RoomView {
   hostId: string;
   /** Jeu du salon. */
   game: GameId;
+  /** Entraînement contre les bots : hors classement, ne rapporte rien. */
+  training: boolean;
   players: ({
     id: string;
     name: string;
@@ -102,14 +106,12 @@ export type { GameId };
 export const isPresidentView = (view: GameView): view is PresidentGameView => 'game' in view && view.game === 'president';
 
 /**
- * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours : `leaderboard` et `seasonal` pour les
- * parties en ligne, `botLeaderboard` et `botSeasonal` pour celles jouées seul contre des bots.
+ * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours (`leaderboard`) : seulement les parties entre
+ * humains (au moins deux personnes, aucun bot), les seules qui comptent.
  */
 export interface GameStats {
   leaderboard: LeaderboardEntry[];
   seasonal: LeaderboardEntry[];
-  botLeaderboard: LeaderboardEntry[];
-  botSeasonal: LeaderboardEntry[];
   recent: GameRecord[];
   streak: WinStreak | null;
 }
@@ -128,6 +130,8 @@ export interface LiveRoom {
 export type RoomError =
   | 'roomNotFound'
   | 'roomFull'
+  | 'trainingOnly'
+  | 'trainingRoom'
   | 'gameAlreadyStarted'
   | 'invalidName'
   | 'notInRoom'
@@ -231,8 +235,13 @@ export interface ClientToServerEvents {
   'admin:unrank': (payload: { id: string }, ack: Ack) => void;
   /** L'admin remet le classement à zéro : les parties jouées jusqu'ici sont archivées. */
   'admin:resetRanking': (ack: Ack) => void;
-  /** Crée un salon pour ce jeu (Gang of Four sans jeu précisé). */
-  'room:create': (payload: { game?: GameId }, ack: Ack<Session>) => void;
+  /**
+   * Crée un salon pour ce jeu (Gang of Four sans jeu précisé). `training` : entraînement contre les bots, que personne
+   * ne peut rejoindre et qui ne compte nulle part ; c'est le seul salon où l'on peut ajouter des bots.
+   */
+  'room:create': (payload: { game?: GameId; training?: boolean }, ack: Ack<Session>) => void;
+  /** Salons de ce jeu qui attendent des joueurs, pour les rejoindre depuis la page du jeu. */
+  'rooms:open': (payload: { game: GameId }, ack: Ack<{ rooms: OpenRoom[] }>) => void;
   'room:join': (payload: { code: string }, ack: Ack<Session>) => void;
   'room:rejoin': (payload: { code: string; token: string; onlyIfFree?: boolean }, ack: Ack<Session>) => void;
   'room:leave': (ack: Ack) => void;
