@@ -1,4 +1,4 @@
-import type { ActionError, Card, CombinationType, PresidentError } from '@gof/engine';
+import type { ActionError, Card, CombinationType, SlotsError } from '@gof/engine';
 import type { BotLevel, RoomError } from '../../server/src/protocol';
 
 /** Niveaux de bot, affichés dans le salon et sur la table. */
@@ -20,7 +20,7 @@ export function combinationLabel(type: CombinationType, size: number): string {
   return ['Gang of Four', 'Gang of Five', 'Gang of Six', 'Gang of Seven'][size - 4] ?? 'Gang';
 }
 
-export const ERROR_LABELS: Record<RoomError | ActionError | PresidentError | 'disconnected', string> = {
+export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | 'disconnected', string> = {
   roomNotFound: 'Salon introuvable. Vérifie le code.',
   roomFull: 'Ce salon est complet.',
   maintenance: 'Le site est en maintenance : reviens un peu plus tard.',
@@ -60,8 +60,6 @@ export const ERROR_LABELS: Record<RoomError | ActionError | PresidentError | 'di
   mustPlayHighestSingle: 'Le joueur suivant n\'a plus qu\'une carte : joue ta carte la plus forte.',
   mustLeadCombination: 'Le joueur suivant n\'a plus qu\'une carte : ouvre avec une combinaison.',
   invalidCut: 'Coupe le paquet entre deux cartes.',
-  wrongCount: 'Pose autant de cartes que sur la table.',
-  mustPlayForcedRank: 'Même valeur deux fois de suite : pose encore cette valeur, ou passe.',
   serverError: 'Le serveur a eu un problème, réessaie.',
   emptyMessage: 'Message vide.',
   muted: 'Ton chat a été coupé dans ce salon.',

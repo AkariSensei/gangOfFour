@@ -1,12 +1,11 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
-import { createPlayingDeck } from '@gof/engine';
 import { type BotLevel, GAMES, type GameId, type LiveRoom, type OpenRoom, type Session } from '../../server/src/protocol';
 import { AccountForm, AdminPanel, GoogleButton, InviteForm, PasswordSignIn } from './Account';
 import { Avatar } from './Avatar';
 import { CommunityScreen } from './Community';
 import { Leaderboard, useStats } from './Leaderboard';
-import { PlayingCardView } from './PlayingCard';
-import { PresidentRules } from './PresidentRules';
+import { SlotIcon } from './SlotsTable';
+import { SlotsRules } from './SlotsRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonCard, SeasonScreen } from './Season';
@@ -31,10 +30,10 @@ const SCREENS = [
   'jouer',
   'regarder',
   'classement',
-  'president',
-  'president-jouer',
-  'president-regarder',
-  'president-classement',
+  'slots',
+  'slots-jouer',
+  'slots-regarder',
+  'slots-classement',
 ] as const;
 type Screen = (typeof SCREENS)[number];
 
@@ -50,23 +49,30 @@ const PARENT: Partial<Record<Screen, Screen>> = {
   jouer: 'gof',
   regarder: 'gof',
   classement: 'gof',
-  president: 'jeux',
-  'president-jouer': 'president',
-  'president-regarder': 'president',
-  'president-classement': 'president',
+  slots: 'jeux',
+  'slots-jouer': 'slots',
+  'slots-regarder': 'slots',
+  'slots-classement': 'slots',
   profil: 'jeux',
 };
 
 /** Les écrans de chaque jeu : sa page, puis jouer, regarder et son classement. */
 const GAME_SCREENS: Record<GameId, { hub: Screen; play: Screen; watch: Screen; ranking: Screen }> = {
   gof: { hub: 'gof', play: 'jouer', watch: 'regarder', ranking: 'classement' },
-  president: { hub: 'president', play: 'president-jouer', watch: 'president-regarder', ranking: 'president-classement' },
+  slots: { hub: 'slots', play: 'slots-jouer', watch: 'slots-regarder', ranking: 'slots-classement' },
 };
-const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', president: 'Président' };
+const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot' };
 
-/** Quelques cartes classiques pour les illustrations du Président. */
-const PLAYING_DECK = createPlayingDeck();
-const playingCards = (...ids: string[]) => ids.map((id) => PLAYING_DECK.find((c) => c.id === id)!);
+/** Les trois rouleaux qui illustrent le Duel Jackpot. */
+function JackpotArt() {
+  return (
+    <span className="jackpot-art">
+      <SlotIcon symbol="seven" />
+      <SlotIcon symbol="seven" />
+      <SlotIcon symbol="seven" />
+    </span>
+  );
+}
 const depth = (s: Screen): number => (PARENT[s] ? 1 + depth(PARENT[s]!) : 0);
 /** L'onglet d'un écran : lui-même, ou celui de son parent. */
 const tabOf = (s: Screen): Screen => (PARENT[s] ? tabOf(PARENT[s]!) : s);
@@ -242,6 +248,7 @@ export function Home({
                   <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open(GAME_SCREENS[g.id as GameId].hub)}>
                     <span className="game-card-top">
                       <span className="game-card-players">{g.players}</span>
+                      {g.beta && <span className="beta-badge">Bêta</span>}
                       {liveOf(g.id as GameId).length > 0 && (
                         <span className="game-card-live">
                           {liveOf(g.id as GameId).length} partie{liveOf(g.id as GameId).length > 1 ? 's' : ''} en cours
@@ -249,8 +256,8 @@ export function Home({
                       )}
                     </span>
                     <span className="game-card-art" aria-hidden>
-                      {g.id === 'president' ? (
-                        playingCards('KH', 'AS', '2D').map((c) => <PlayingCardView key={c.id} card={c} />)
+                      {g.id === 'slots' ? (
+                        <JackpotArt />
                       ) : (
                         <>
                           <img src="/cards/PV.webp" alt="" />
@@ -348,34 +355,34 @@ export function Home({
             </div>
           </div>
         );
-      case 'president':
+      case 'slots':
         return (
-          <div className="menu-screen game-hub president-hub">
+          <div className="menu-screen game-hub slots-hub">
             <button type="button" className="back-button hub-back" onClick={back}>
               ← Jeux
             </button>
             <div className="menu-title">
-              <div className="p-fan" aria-hidden>
-                {playingCards('3C', '7D', 'QS', 'AH', '2S').map((c, i) => (
-                  <PlayingCardView key={c.id} card={c} style={{ '--i': i - 2 } as CSSProperties} />
-                ))}
+              <div className="slots-hub-machine" aria-hidden>
+                <JackpotArt />
               </div>
-              <h1 className="game-title">Président</h1>
-              <p className="tagline">Le premier sera président, le dernier… trou.</p>
+              <h1 className="game-title">
+                Duel Jackpot <span className="beta-badge big">Bêta</span>
+              </h1>
+              <p className="tagline">100 € chacun, une machine chacun : le premier à 300 € gagne.</p>
             </div>
             <div className="menu-side">
-              <nav className="game-menu" aria-label="Président">
-                <MenuItem primary icon="👑" title="Jouer" subtitle="De 3 à 7 joueurs : crée un salon ou rejoins-en un" onClick={() => open('president-jouer')} />
+              <nav className="game-menu" aria-label="Duel Jackpot">
+                <MenuItem primary icon="🎰" title="Jouer" subtitle="Un duel à deux : crée un salon ou rejoins-en un" onClick={() => open('slots-jouer')} />
                 <MenuItem
                   icon="👀"
                   title="Regarder"
-                  subtitle={liveOf('president').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
-                  pill={liveOf('president').length > 0 ? { text: `${liveOf('president').length} en cours`, live: true } : undefined}
-                  onClick={() => open('president-regarder')}
+                  subtitle={liveOf('slots').length === 0 ? 'Aucun duel en cours' : 'Duels en cours des collègues'}
+                  pill={liveOf('slots').length > 0 ? { text: `${liveOf('slots').length} en cours`, live: true } : undefined}
+                  onClick={() => open('slots-regarder')}
                 />
                 <div className="menu-tiles two">
-                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('president-classement')} />
-                  <MenuItem tile icon="📜" title="Règles" subtitle="Celles du bureau" onClick={() => setRules('president')} />
+                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('slots-classement')} />
+                  <MenuItem tile icon="📜" title="Règles" subtitle="Mises et gains" onClick={() => setRules('slots')} />
                 </div>
               </nav>
               {error && <p className="error">{error}</p>}
@@ -383,8 +390,8 @@ export function Home({
           </div>
         );
       case 'jouer':
-      case 'president-jouer': {
-        const game: GameId = s === 'jouer' ? 'gof' : 'president';
+      case 'slots-jouer': {
+        const game: GameId = s === 'jouer' ? 'gof' : 'slots';
         return (
           <SubScreen title="Jouer" onBack={back} backLabel={GAME_NAMES[game]}>
             <PlayScreen game={game} initialCode={game === 'gof' ? invite : ''} onEnter={onEnter} />
@@ -392,8 +399,8 @@ export function Home({
         );
       }
       case 'regarder':
-      case 'president-regarder': {
-        const game: GameId = s === 'regarder' ? 'gof' : 'president';
+      case 'slots-regarder': {
+        const game: GameId = s === 'regarder' ? 'gof' : 'slots';
         return (
           <SubScreen title="Regarder" onBack={back} backLabel={GAME_NAMES[game]} narrow>
             <LiveRooms rooms={liveOf(game)} onWatch={onEnter} />
@@ -401,8 +408,8 @@ export function Home({
         );
       }
       case 'classement':
-      case 'president-classement': {
-        const game: GameId = s === 'classement' ? 'gof' : 'president';
+      case 'slots-classement': {
+        const game: GameId = s === 'classement' ? 'gof' : 'slots';
         return (
           <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
             <div className="ranking-screen">
@@ -479,7 +486,7 @@ export function Home({
         </div>
       </div>
       {rules === 'gof' && <Rules onClose={() => setRules(null)} />}
-      {rules === 'president' && <PresidentRules onClose={() => setRules(null)} />}
+      {rules === 'slots' && <SlotsRules onClose={() => setRules(null)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
     </main>
   );
@@ -551,8 +558,9 @@ function SubScreen({
   );
 }
 
-/** Bots de l'entraînement : trois à Gang of Four, quatre au Président. */
-const TRAINING_BOTS: Record<GameId, number> = { gof: 3, president: 4 };
+/** Bots de l'entraînement : trois à Gang of Four, un au Duel Jackpot. */
+const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1 };
+const BOT_COUNT: Record<number, string> = { 1: 'un bot', 3: 'trois bots' };
 
 /** Salons de ce jeu qui attendent des joueurs, rechargés toutes les 5 secondes. */
 function useOpenRooms(game: GameId): OpenRoom[] | null {
@@ -664,7 +672,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
         <div className="play-training-text">
           <h3>🤖 Entraînement contre les bots</h3>
           <p>
-            Toi contre {TRAINING_BOTS[game] === 3 ? 'trois' : 'quatre'} bots pour t’exercer{info ? ` à ${info.name}` : ''}.{' '}
+            Toi contre {BOT_COUNT[TRAINING_BOTS[game]]} pour t’exercer{info ? ` à ${info.name}` : ''}.{' '}
             <strong>Ne compte pas dans les classements et ne rapporte rien.</strong>
           </p>
         </div>

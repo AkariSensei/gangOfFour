@@ -1,10 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { type ActionError, type PresidentError, createGame } from '@gof/engine';
+import { type ActionError, type SlotsError, createGame } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
 import { AVATARS, COLORS, type Cosmetics, type Look, type RoomError, type RoomView, type Session } from './protocol';
 import { FRAMES } from './progression';
-import { type AnyGame, type GameId, type GameSettings, type PlayerAction, rulesOf } from './rules';
+import { type AnyGame, type GameId, type GameSettings, type PlayerAction, isGameId, rulesOf } from './rules';
 
 export type { PlayerAction };
 const MAX_NAME_LENGTH = 20;
@@ -78,7 +78,7 @@ export interface OpenRoom {
   maxPlayers: number;
 }
 
-export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | PresidentError };
+export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | SlotsError };
 
 /** Les règles du jeu d'un salon. */
 export const rulesOfRoom = (room: Room) => rulesOf(room.kind);
@@ -406,6 +406,8 @@ export class RoomManager {
     for (const room of saved) {
       // Les défis du jour n'existent plus : une manche de défi en cours au redémarrage est abandonnée.
       if ('challenge' in room) continue;
+      // Un jeu retiré du site (le Président) : son salon est abandonné.
+      if (room.kind && !isGameId(room.kind)) continue;
       room.seats.forEach((s) => (s.connected = !!s.bot));
       this.rooms.set(room.code, room);
     }
@@ -463,7 +465,7 @@ export class RoomManager {
       if (!scripted || scripted.player !== playerIndex || !same) return { ok: false, error: 'tutorialMove' };
     }
     const result = rulesOfRoom(room).act(room.game, playerIndex, action);
-    if (!result.ok) return { ok: false, error: result.error as ActionError | PresidentError };
+    if (!result.ok) return { ok: false, error: result.error as ActionError | SlotsError };
     room.game = result.game;
     if (room.tutorial) room.tutorial.step += 1;
     return { ok: true };

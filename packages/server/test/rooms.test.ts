@@ -137,8 +137,9 @@ describe('RoomManager', () => {
     const room = rooms.get(host.code)!;
     const view = rooms.gameView(room, others[1]!.playerId) as PlayerView;
     expect(view.you).toBe(2);
-    expect(view.hand).toEqual(room.game!.players[2]!.hand);
-    expect(JSON.stringify(view)).not.toContain(JSON.stringify(room.game!.players[0]!.hand));
+    const game = room.game as GameState;
+    expect(view.hand).toEqual(game.players[2]!.hand);
+    expect(JSON.stringify(view)).not.toContain(JSON.stringify(game.players[0]!.hand));
   });
 
   it('n\'accepte des bots qu\'à l\'entraînement, où personne d\'autre ne peut entrer', () => {
@@ -170,11 +171,11 @@ describe('RoomManager', () => {
 
   it('liste les salons d\'un jeu qui attendent des joueurs, sans les entraînements ni les parties lancées', () => {
     const rooms = new RoomManager();
-    const waiting = rooms.create('Alice', {}, undefined, 'president');
+    const waiting = rooms.create('Alice', {}, undefined, 'slots');
     const gof = rooms.create('Bruno');
-    const training = rooms.create('Chloé', {}, undefined, 'president', true);
+    const training = rooms.create('Chloé', {}, undefined, 'slots', true);
     if (!waiting.ok || !gof.ok || !training.ok) throw new Error('salon');
-    expect(rooms.open('president')).toEqual([{ code: waiting.code, game: 'president', host: 'Alice', players: 1, minPlayers: 3, maxPlayers: 7 }]);
+    expect(rooms.open('slots')).toEqual([{ code: waiting.code, game: 'slots', host: 'Alice', players: 1, minPlayers: 2, maxPlayers: 2 }]);
     expect(rooms.open('gof').map((r) => r.code)).toEqual([gof.code]);
     // Lancée, ou l'hôte parti : le salon n'est plus proposé.
     rooms.join(gof.code, 'David');
@@ -182,7 +183,7 @@ describe('RoomManager', () => {
     rooms.start(gof.code, gof.playerId);
     expect(rooms.open('gof')).toEqual([]);
     rooms.setConnected(waiting.code, waiting.playerId, false);
-    expect(rooms.open('president')).toEqual([]);
+    expect(rooms.open('slots')).toEqual([]);
   });
 
   it('donne à chaque bot le niveau choisi par l\'hôte, et moyen pour un niveau inconnu', () => {

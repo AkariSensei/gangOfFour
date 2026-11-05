@@ -1,44 +1,36 @@
 import {
   type GameState,
-  PRESIDENT_DEFAULT_ROUNDS,
-  PRESIDENT_MAX_PLAYERS,
-  PRESIDENT_MIN_PLAYERS,
-  PRESIDENT_ROUNDS,
-  type PresidentState,
+  type SlotsState,
   applyAction,
-  applyPresidentAction,
+  applySlotsAction,
   createGame,
-  createPresident,
+  createSlots,
   getPlayerView,
   playableCards,
-  presidentPlayable,
-  presidentToAct,
-  presidentView,
+  slotsView,
 } from '@gof/engine';
 import { type BotLevel, chooseBotAction } from './bot';
 import { type GameSummary, gofSummary } from './history';
-import { choosePresidentAction } from './presidentBot';
 
 /** Les jeux jouables : chacun a ses règles ci-dessous. */
-export type GameId = 'gof' | 'president';
-export const GAME_IDS: GameId[] = ['gof', 'president'];
+export type GameId = 'gof' | 'slots';
+export const GAME_IDS: GameId[] = ['gof', 'slots'];
 
 /** Partie en cours, de n'importe quel jeu ; ses règles savent la lire. */
-export type AnyGame = GameState | PresidentState;
+export type AnyGame = GameState | SlotsState;
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
 export type PlayerAction =
   | { type: 'play'; cardIds: string[] }
   | { type: 'pass' }
   | { type: 'giveCard'; cardId: string }
-  | { type: 'giveCards'; cardIds: string[] }
+  | { type: 'spin' }
   | { type: 'nextRound' }
   | { type: 'cut'; position: number };
 
 /** Réglages choisis par l'hôte au lancement : chaque jeu prend ce qui le concerne. */
 export interface GameSettings {
   targetScore?: number;
-  rounds?: number;
 }
 
 /** Scores de fin de partie de Gang of Four que l'hôte peut choisir. */
@@ -92,7 +84,7 @@ const renamed = <T extends { players: { name: string }[] }>(game: T, index: numb
 });
 
 const gof = (game: AnyGame) => game as GameState;
-const president = (game: AnyGame) => game as PresidentState;
+const slots = (game: AnyGame) => game as SlotsState;
 
 const GOF: GameRules = {
   id: 'gof',
@@ -102,7 +94,7 @@ const GOF: GameRules = {
     createGame(players, seed, { targetScore: TARGET_SCORES.includes(settings.targetScore!) ? settings.targetScore! : DEFAULT_TARGET_SCORE }),
   again: (game, players, seed) => createGame(players, seed, gof(game).config),
   act(game, playerIndex, action) {
-    if (action.type === 'giveCards') return { ok: false, error: 'wrongPhase' };
+    if (action.type === 'spin') return { ok: false, error: 'wrongPhase' };
     const result = applyAction(gof(game), action.type === 'nextRound' ? action : { ...action, playerIndex });
     return result.ok ? { ok: true, game: result.state } : result;
   },
@@ -144,71 +136,42 @@ const GOF: GameRules = {
   summary: (game) => gofSummary(gof(game)),
 };
 
-const PRESIDENT: GameRules = {
-  id: 'president',
-  minPlayers: PRESIDENT_MIN_PLAYERS,
-  maxPlayers: PRESIDENT_MAX_PLAYERS,
-  create: (players, seed, settings) =>
-    createPresident(players, seed, { rounds: PRESIDENT_ROUNDS.includes(settings.rounds!) ? settings.rounds! : PRESIDENT_DEFAULT_ROUNDS }),
-  again: (game, players, seed) => createPresident(players, seed, president(game).config),
+const SLOTS: GameRules = {
+  id: 'slots',
+  minPlayers: 2,
+  maxPlayers: 2,
+  create: (players, seed) => createSlots(players, seed),
+  again: (_game, players, seed) => createSlots(players, seed),
   act(game, playerIndex, action) {
-    const g = president(game);
-    const result =
-      action.type === 'play'
-        ? applyPresidentAction(g, { type: 'play', playerIndex, cardIds: action.cardIds })
-        : action.type === 'pass'
-          ? applyPresidentAction(g, { type: 'pass', playerIndex })
-          : action.type === 'giveCards'
-            ? applyPresidentAction(g, { type: 'giveCards', playerIndex, cardIds: action.cardIds })
-            : action.type === 'nextRound'
-              ? applyPresidentAction(g, { type: 'nextRound' })
-              : ({ ok: false, error: 'wrongPhase' } as const);
+    if (action.type !== 'spin') return { ok: false, error: 'wrongPhase' };
+    const result = applySlotsAction(slots(game), { type: 'spin', playerIndex });
     return result.ok ? { ok: true, game: result.state } : result;
   },
-  toAct: (game) => presidentToAct(president(game)),
-  over: (game) => president(game).phase === 'gameOver',
-  turnKey(game) {
-    const g = president(game);
-    return `${g.round}-${g.phase}-${g.trick.length}-${g.gifts.filter((x) => x.given).length}-${g.currentPlayer}`;
-  },
-  untimed: (game) => president(game).phase === 'exchange',
-  botAction: (game, index, random, level) => withoutIndex(choosePresidentAction(president(game), index, random, level)),
-  fallback(game, index) {
-    const g = president(game);
-    if (g.phase !== 'playing') return null;
-    return g.table ? { type: 'pass' } : { type: 'play', cardIds: [g.players[index]!.hand[0]!.id] };
-  },
-  timeout(game, index) {
-    const g = president(game);
-    if (g.phase === 'playing' && g.table) return { type: 'pass' };
-    return withoutIndex(choosePresidentAction(g, index));
-  },
-  stuck(game, index) {
-    const g = president(game);
-    return g.phase === 'playing' && !!g.table && presidentPlayable(g.players[index]!.hand, g.table, g.forcedRank).size === 0;
-  },
-  view: (game, index) => presidentView(president(game), index),
-  spectatorView: (game) => ({ ...presidentView(president(game), -1), hands: president(game).players.map((p) => p.hand) }),
-  rename: (game, index, name) => renamed(president(game), index, name),
-  round: (game) => president(game).round,
-  scores: (game) => president(game).players.map((p) => p.score),
+  toAct: (game) => (slots(game).phase === 'playing' ? slots(game).currentPlayer : -1),
+  over: (game) => slots(game).phase === 'gameOver',
+  turnKey: (game) => `${slots(game).spins.length}-${slots(game).currentPlayer}`,
+  untimed: () => false,
+  // Un seul coup possible : tirer. Le bot de l'entraînement, le minuteur et le secours tirent tous.
+  botAction: () => ({ type: 'spin' }),
+  fallback: () => null,
+  timeout: () => ({ type: 'spin' }),
+  stuck: () => false,
+  view: (game, index) => slotsView(slots(game), index),
+  spectatorView: (game) => slotsView(slots(game), -1),
+  rename: (game, index, name) => renamed(slots(game), index, name),
+  round: (game) => slots(game).round,
+  scores: (game) => slots(game).players.map((p) => p.balance),
   summary(game) {
-    const g = president(game);
+    const g = slots(game);
     return {
-      game: 'president',
+      game: 'slots',
       rounds: g.round,
-      players: g.players.map((p, i) => ({
-        name: p.name,
-        score: p.score,
-        winner: g.winners.includes(i),
-        // Manches finies Président.
-        roundsWon: g.places[i]?.filter((place) => place === 0).length ?? 0,
-      })),
+      players: g.players.map((p, i) => ({ name: p.name, score: p.balance, winner: g.winners.includes(i) })),
     };
   },
 };
 
-const RULES: Record<GameId, GameRules> = { gof: GOF, president: PRESIDENT };
+const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS };
 
 /** Règles d'un jeu ; un salon sans jeu (d'avant les autres jeux) joue à Gang of Four. */
 export function rulesOf(game: GameId | undefined): GameRules {

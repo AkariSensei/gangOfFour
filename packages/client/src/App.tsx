@@ -1,7 +1,7 @@
-import { type GameView, type RoomView, isPresidentView } from '../../server/src/protocol';
+import { type GameView, type RoomView, isSlotsView } from '../../server/src/protocol';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
-import { PresidentTable } from './PresidentTable';
+import { SlotsTable } from './SlotsTable';
 import { Table } from './Table';
 import { MaintenanceBanner, MaintenanceScreen, useMaintenance } from './Maintenance';
 import { errorLabel } from './labels';
@@ -16,7 +16,7 @@ export function App() {
   /** La table du jeu du salon. */
   const table = (game: GameView, room: RoomView) => {
     const props = { room, messages, admin, felt: account.account?.felt, onLeave: () => remember(null) };
-    return isPresidentView(game) ? <PresidentTable game={game} {...props} /> : <Table game={game} {...props} />;
+    return isSlotsView(game) ? <SlotsTable game={game} {...props} /> : <Table game={game} {...props} />;
   };
 
   let screen;

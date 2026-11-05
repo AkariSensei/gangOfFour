@@ -1,4 +1,4 @@
-import type { ActionError, Card, PlayerView, PlayingCard, PresidentError, PresidentView } from '@gof/engine';
+import type { ActionError, Card, PlayerView, SlotsError, SlotsView } from '@gof/engine';
 import type { GameId } from './rules';
 import type { OpenRoom } from './rooms';
 export type { OpenRoom };
@@ -98,12 +98,12 @@ export interface IdeaView {
 
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
 export type GofView = PlayerView & { hands?: Card[][] };
-export type PresidentGameView = PresidentView & { hands?: PlayingCard[][] };
-export type GameView = GofView | PresidentGameView;
+export type GameView = GofView | SlotsView;
 export type { GameId };
 
-/** La vue est-elle celle d'une partie de Président ? */
-export const isPresidentView = (view: GameView): view is PresidentGameView => 'game' in view && view.game === 'president';
+/** La vue est-elle celle d'un duel de machines à sous ? */
+export const isSlotsView = (view: GameView): view is SlotsView => 'game' in view && view.game === 'slots';
+export type { SlotsError };
 
 /**
  * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours (`leaderboard`) : seulement les parties entre
@@ -263,15 +263,15 @@ export interface ClientToServerEvents {
   'room:kick': (payload: { playerId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin met la partie en pause (pour une réunion, un café) ou la relance. */
   'room:pause': (payload: { paused: boolean }, ack: Ack) => void;
-  /** `targetScore` : Gang of Four ; `rounds` : nombre de manches du Président. */
-  'game:start': (payload: { targetScore?: number; rounds?: number; turnSeconds?: number }, ack: Ack) => void;
+  /** `targetScore` : score de fin de Gang of Four (les autres jeux l'ignorent). */
+  'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
   'game:autoPass': (payload: { enabled: boolean }, ack: Ack) => void;
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
-  /** Président : les cartes rendues pendant l'échange (2 pour le Président, 1 pour le Vice-président). */
-  'game:giveCards': (payload: { cardIds: string[] }, ack: Ack) => void;
+  /** Duel de machines à sous : tirer, avec la mise du tour. */
+  'game:spin': (ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
   /** La saison en cours, et les classements de chaque jeu jouable. */

@@ -1,7 +1,7 @@
 /**
  * Les jeux du site. Chaque jeu est un module : une fiche ici (ce que l'accueil en montre), et, une fois jouable, ses
  * règles dans le moteur (branchées au serveur par rules.ts), ses écrans côté client et son classement de saison.
- * Gang of Four et le Président sont jouables ; les autres sont annoncés.
+ * Un nouveau jeu porte le badge « Bêta » tant que l'admin ne l'a pas retiré.
  */
 export interface GameInfo {
   id: string;
@@ -12,12 +12,20 @@ export interface GameInfo {
   status: 'live' | 'soon' | 'later';
   /** Le score le plus bas gagne (Gang of Four, où l'on marque des pénalités). */
   lowScoreWins?: boolean;
+  /** Nouveau jeu encore en rodage : un badge « Bêta » l'annonce, jusqu'à ce que l'admin décide de l'enlever. */
+  beta?: boolean;
 }
 
 export const GAMES: GameInfo[] = [
   { id: 'gof', name: 'Gang of Four', tagline: 'Combinaisons, gangs et dragon rouge', players: '3 ou 4 joueurs', status: 'live', lowScoreWins: true },
-  { id: 'president', name: 'Président', tagline: 'Le premier sera président, le dernier… trou', players: '3 à 7 joueurs', status: 'live' },
-  { id: 'coinche', name: 'Coinche', tagline: 'Deux contre deux, annonces et belote', players: '4 joueurs en équipes', status: 'later' },
+  {
+    id: 'slots',
+    name: 'Duel Jackpot',
+    tagline: 'Deux machines à sous, 100 € chacun : le premier à 300 € gagne',
+    players: '2 joueurs',
+    status: 'live',
+    beta: true,
+  },
 ];
 
 /** Le jeu des parties enregistrées avant l'arrivée des autres jeux. */

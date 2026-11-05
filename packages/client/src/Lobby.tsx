@@ -7,10 +7,11 @@ import { socket } from './socket';
 
 /** Scores de fin de partie de Gang of Four proposés à l'hôte (le serveur accepte les mêmes). */
 const TARGET_SCORES = [50, 100, 200];
-/** Nombres de manches du Président proposés à l'hôte. */
-const ROUNDS = [3, 5, 10];
-/** Nombre de places du salon, selon le jeu. */
-const MAX_SEATS: Record<RoomView['game'], number> = { gof: 4, president: 7 };
+/** Places du salon selon le jeu : le minimum pour lancer, et le maximum. */
+const SEAT_COUNTS: Record<RoomView['game'], { min: number; max: number; name: string }> = {
+  gof: { min: 3, max: 4, name: 'Gang of Four' },
+  slots: { min: 2, max: 2, name: 'Duel Jackpot' },
+};
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];
 /** Emplacement des quatre places autour de la table, dans l'ordre d'arrivée à partir de la sienne. */
@@ -38,9 +39,9 @@ export function Lobby({
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [targetScore, setTargetScore] = useState(100);
-  const [rounds, setRounds] = useState(5);
-  const president = room.game === 'president';
-  const maxSeats = MAX_SEATS[room.game] ?? 4;
+  const counts = SEAT_COUNTS[room.game] ?? SEAT_COUNTS.gof;
+  const maxSeats = counts.max;
+  const gof = room.game === 'gof';
   const [turnSeconds, setTurnSeconds] = useState(0);
   const isHost = room.hostId === session.playerId;
   // Places dans l'ordre d'arrivée, en commençant par la sienne (en bas) ; les places vides restent à la fin.
@@ -48,11 +49,12 @@ export function Lobby({
   const seated = [...room.players.slice(mine), ...room.players.slice(0, mine)];
   const seats = Array.from({ length: maxSeats }, (_, i) => seated[i]);
   // Au-delà de quatre, les places ne tiennent plus autour du tapis : elles s'alignent en dessous.
-  const at = (i: number) => (maxSeats > 4 ? 'list' : SEATS[i]);
+  // À deux, on se fait face : sa place en bas, l'adversaire en haut.
+  const at = (i: number) => (maxSeats > 4 ? 'list' : maxSeats === 2 ? (['bottom', 'top'] as const)[i] : SEATS[i]);
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
-    const result = await socket.emitWithAck('game:start', president ? { rounds, turnSeconds } : { targetScore, turnSeconds });
+    const result = await socket.emitWithAck('game:start', gof ? { targetScore, turnSeconds } : { turnSeconds });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -98,7 +100,7 @@ export function Lobby({
         <div className={`lobby-table ${maxSeats > 4 ? 'many' : ''}`}>
           <div className="lobby-felt">
             <p className="lobby-game">
-              {president ? 'Président' : 'Gang of Four'}
+              {counts.name}
               {room.training && ' · entraînement'}
             </p>
             <p className="muted">Code du salon</p>
@@ -155,19 +157,7 @@ export function Lobby({
           </ul>
         </div>
 
-        {isHost && president && (
-          <div className="target-score">
-            <span className="muted">Partie en</span>
-            <div className="segmented" role="radiogroup" aria-label="Nombre de manches">
-              {ROUNDS.map((count) => (
-                <button key={count} role="radio" aria-checked={rounds === count} className={rounds === count ? 'on' : ''} onClick={() => setRounds(count)}>
-                  {count} manches
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {isHost && !president && (
+        {isHost && gof && (
           <div className="target-score">
             <span className="muted">Partie en</span>
             <div className="segmented" role="radiogroup" aria-label="Score de fin de partie">
@@ -207,8 +197,10 @@ export function Lobby({
           <p className="muted small lobby-note">Le salon est visible dans les salons actifs : les collègues peuvent le rejoindre depuis la page du jeu.</p>
         )}
         {isHost ? (
-          <button className="primary" disabled={room.players.length < 3} onClick={start}>
-            {room.players.length < 3 ? `En attente : il faut au moins 3 joueurs (${room.players.length}/3)` : 'Lancer la partie'}
+          <button className="primary" disabled={room.players.length < counts.min} onClick={start}>
+            {room.players.length < counts.min
+              ? `En attente : il faut ${counts.min === counts.max ? '' : 'au moins '}${counts.min} joueurs (${room.players.length}/${counts.min})`
+              : 'Lancer la partie'}
           </button>
         ) : (
           <p className="muted">L'hôte lancera la partie dès que tout le monde est là.</p>

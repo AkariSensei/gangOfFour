@@ -770,7 +770,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
       handle(ack, (code, playerId) =>
-        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), rounds: Number(payload.rounds), turnSeconds: Number(payload.turnSeconds) }),
+        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
       ),
     );
     on('game:rematch', (_payload, ack) => handle(ack, (code, playerId) => rooms.rematch(code, playerId)));
@@ -780,13 +780,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:pass', (_payload, ack) => act({ type: 'pass' }, ack));
     on('game:autoPass', (payload, ack) => handle(ack, (code, playerId) => rooms.setAutoPass(code, playerId, payload.enabled === true)));
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
-    on('game:giveCards', (payload, ack) =>
-      act({ type: 'giveCards', cardIds: Array.isArray(payload.cardIds) ? payload.cardIds.map(String) : [] }, ack),
-    );
+    on('game:spin', (_payload, ack) => act({ type: 'spin' }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
-    // Deux classements : les parties en ligne (au moins deux personnes) et celles jouées seul contre des bots.
-    // Le record de série ne compte que les parties en ligne.
+    // Seules les parties entre humains sont enregistrées : les classements n'ont plus qu'elles.
     on('stats:get', (_payload, ack) => {
       const season = seasonOf(new Date());
       const statsOf = (game: GameId): GameStats => ({
@@ -795,7 +792,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         recent: history.recent(5, game),
         streak: history.bestStreak('online', game),
       });
-      ack({ ok: true, season, games: { gof: statsOf('gof'), president: statsOf('president') } });
+      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

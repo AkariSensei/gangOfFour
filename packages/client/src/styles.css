@@ -4262,476 +4262,15 @@ button.danger {
   align-items: center;
 }
 
-/* ——— Président : cartes classiques dessinées, table jusqu'à sept, page du jeu ——— */
-.card.playing-card {
-  display: block;
-  overflow: hidden;
-  aspect-ratio: 5 / 7;
-  border-radius: 9%/6.5%;
-  background: #fffaf2;
-  border: 2px solid var(--ink);
-  color: #1b1830;
-  font-family: var(--font-title);
-  text-align: left;
-  container-type: inline-size;
-}
-.card.playing-card.red {
-  color: #e0234e;
-}
-.pc-corner {
-  position: absolute;
-  top: 5%;
-  left: 7%;
-  display: grid;
-  justify-items: center;
-  line-height: 0.9;
-}
-.pc-corner-bottom {
-  top: auto;
-  left: auto;
-  bottom: 5%;
-  right: 7%;
-  transform: rotate(180deg);
-}
-.pc-rank {
-  font-weight: 800;
-  font-size: 30cqw;
-  letter-spacing: -0.04em;
-}
-.pc-suit {
-  font-size: 22cqw;
-}
-.pc-center {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 58cqw;
-  line-height: 1;
-}
-/* Dos de carte : quadrillage orange et violet, aux couleurs du site. */
-.card.playing-card.back {
-  background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.12) 0 4px, transparent 4px 9px),
-    linear-gradient(135deg, var(--accent), var(--pink));
-  border-color: var(--ink);
-}
-.hand .card.playing-card.dimmed {
-  filter: brightness(0.5) saturate(0.6);
-}
-.hand.p-hand {
-  --overlap: 0.42;
-}
-.hand.p-hand .card.playing-card {
-  --card-w: clamp(54px, 6vw, 96px);
-}
-
-.president-table .p-felt {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  align-items: stretch;
-  gap: 0.5rem;
-  padding: clamp(0.6rem, 2vh, 1.2rem);
-}
-.p-opponents {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  position: relative;
-  z-index: 1;
-}
-.p-opponent {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 0.5rem;
-  row-gap: 0.3rem;
-  min-width: 150px;
-  max-width: 220px;
-  padding: 0.5rem 0.7rem;
-  border-radius: 16px;
-  background: rgba(18, 14, 31, 0.78);
-  border: 2px solid var(--line-strong);
-  transition:
-    border-color 0.2s ease,
-    transform 0.2s ease;
-}
-.p-opponent.active {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 4px rgba(255, 122, 26, 0.25);
-}
-.p-opponent.out {
-  opacity: 0.6;
-}
-.p-opponent.offline {
-  filter: grayscale(0.7);
-}
-.p-opponent .avatar {
-  width: 36px;
-  height: 36px;
-  font-size: 0.8rem;
-}
-.p-opponent-text {
-  display: grid;
-  min-width: 0;
-}
-.p-opponent-text strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.p-opponent-text small {
-  color: var(--page-sub);
-  font-size: 0.75rem;
-}
-.p-opponent .p-title {
-  grid-column: 1 / -1;
-  justify-self: start;
-}
-.p-backs {
-  grid-column: 1 / -1;
-  display: flex;
-  padding-left: 10px;
-}
-.p-backs .card.playing-card.back {
-  width: 18px;
-  margin-left: -10px;
-  border-width: 1.5px;
-  box-shadow: none;
-}
-.p-opponent .bubble {
-  position: absolute;
-  top: -0.7rem;
-  right: 0.5rem;
-}
-.p-moderate {
-  position: absolute;
-  bottom: 0.3rem;
-  right: 0.4rem;
-}
-.p-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  white-space: nowrap;
-  background: var(--surface);
-  color: var(--text);
-}
-.p-title.title-president {
-  background: var(--yellow);
-  color: var(--ink);
-}
-.p-title.title-vicePresident {
-  background: var(--cyan);
-  color: var(--ink);
-}
-.p-title.title-viceTrou {
-  background: #6b5a99;
-}
-.p-title.title-trou {
-  background: var(--pink);
-  color: var(--ink);
-}
-
-.p-center {
-  position: relative;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 0.5rem;
-  min-height: 0;
-}
-.p-pile {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-.p-play {
-  grid-area: 1 / 1;
-  display: flex;
-  gap: 0.3rem;
-}
-.p-play .card.playing-card {
-  --card-w: clamp(62px, 7vw, 104px);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
-}
-.p-play.top {
-  animation: p-drop 0.25s ease-out;
-}
-.p-play.earlier {
-  opacity: 0.45;
-  transform: translate(calc(var(--k) * -26px), calc(var(--k) * -14px)) rotate(calc(var(--k) * -6deg));
-}
-.p-play.earlier .card.playing-card {
-  --card-w: clamp(48px, 5vw, 76px);
-}
-.p-center.closed .p-play.top {
-  opacity: 0.65;
-}
-@keyframes p-drop {
-  from {
-    transform: translateY(-24px) scale(1.06);
-    opacity: 0;
-  }
-}
-.p-center-note {
-  margin: 0;
-  padding: 0.25rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  font-weight: 600;
-}
-.p-forced {
-  padding: 0.3rem 0.9rem;
-  border-radius: 999px;
-  background: var(--pink);
-  color: var(--ink);
-  font-family: var(--font-title);
-  font-weight: 800;
-  font-size: 1.05rem;
-  animation: pop-in 0.25s ease;
-}
-.p-gifts {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.4rem;
-  max-width: 30rem;
-  text-align: center;
-}
-.p-gifts li {
-  padding: 0.5rem 0.8rem;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.35);
-}
-.p-gifts li.done {
-  opacity: 0.6;
-}
-
-.p-summary {
-  width: min(520px, 100%);
-  display: grid;
-  gap: 0.9rem;
-}
-.p-summary h2 {
-  margin: 0;
-  font-family: var(--font-title);
-}
-.p-winner {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-.p-places {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.4rem;
-}
-.p-places li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.8rem;
-  border-radius: 12px;
-  background: var(--surface-2);
-}
-.p-places li.me {
-  outline: 2px solid var(--accent);
-}
-.p-place {
-  width: 1.3rem;
-  font-weight: 800;
-  color: var(--muted);
-}
-.p-place-name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-}
-.p-points {
-  font-weight: 800;
-  color: var(--accent);
-}
-.p-totals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-.p-totals span {
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: 0.85rem;
-}
-.p-totals span.winner {
-  background: var(--yellow);
-  color: var(--ink);
-}
-.p-summary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-.score-chip {
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-.score-chip.me {
-  outline: 2px solid var(--accent);
-}
-.president-table .scores {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  justify-content: center;
-}
-
-/* Page du jeu et catalogue : le Président a sa couleur, le rose. */
-.game-card.live.game-president {
-  background: var(--pink);
-  box-shadow: 0 6px 0 #a3164a;
-}
-.game-card.live.game-president:hover {
-  box-shadow: 0 9px 0 #a3164a;
-}
-.game-card.live.game-president:active {
-  box-shadow: 0 2px 0 #a3164a;
-}
-.game-card.live.game-president .game-card-players {
-  color: var(--pink);
-}
-.game-card-art .card.playing-card {
-  position: absolute;
-  top: 0;
-  --card-w: 62px;
-  width: 62px;
-}
-.game-card-art .card.playing-card:nth-child(1) {
-  right: 70px;
-  transform: rotate(-14deg);
-}
-.game-card-art .card.playing-card:nth-child(2) {
-  right: 38px;
-  transform: rotate(-2deg);
-}
-.game-card-art .card.playing-card:nth-child(3) {
-  right: 6px;
-  transform: rotate(12deg);
-}
-.p-fan {
-  position: relative;
-  height: clamp(150px, 26vh, 240px);
-  width: clamp(240px, 36vw, 380px);
-  margin: 0 auto 0.5rem;
-}
-.p-fan .card.playing-card {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: clamp(90px, 13vw, 140px);
-  transform-origin: 50% 110%;
-  transform: translateX(-50%) rotate(calc(var(--i) * 13deg));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
-}
-.president-hub .game-title {
-  color: var(--pink);
-}
-.menu-tiles.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.p-rules-cards {
-  display: flex;
-  gap: 0.35rem;
-}
-.p-rules-cards .card.playing-card {
-  width: 46px;
-}
+/* Nom du jeu sur le tapis du salon, et deux tuiles côte à côte sur la page d'un jeu. */
 .lobby-game {
   margin: 0;
   font-family: var(--font-title);
   font-weight: 800;
   color: var(--accent);
 }
-.lobby.game-president .lobby-game {
-  color: var(--pink);
-}
-/* Salon à plus de quatre places : le tapis en haut, les places alignées en dessous. */
-.lobby-table.many {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  grid-template-rows: none;
-  gap: 0.6rem;
-}
-.lobby-table.many .lobby-felt {
-  grid-area: auto;
-  grid-column: 1 / -1;
-  padding: 1.6rem 1rem;
-}
-.lobby-seat.at-list {
-  justify-self: stretch;
-  width: auto;
-}
-@media (max-width: 760px) {
-  .p-opponents {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-  }
-  .p-opponent {
-    min-width: 0;
-    max-width: none;
-    padding: 0.3rem 0.45rem;
-    column-gap: 0.35rem;
-  }
-  .p-opponent .avatar {
-    width: 28px;
-    height: 28px;
-  }
-  .p-opponent-text strong {
-    font-size: 0.85rem;
-  }
-  .p-opponent .p-title {
-    font-size: 0.65rem;
-  }
-  .p-backs {
-    display: none;
-  }
-  .hand.p-hand {
-    --overlap: 0.55;
-  }
-  .hand.p-hand .card.playing-card {
-    --card-w: clamp(44px, 12vw, 64px);
-  }
-}
-@media (max-width: 760px) {
-  .p-bot-level {
-    display: none;
-  }
-}
-.p-places li,
-.p-totals {
-  text-align: left;
-}
-.p-places li {
-  justify-content: flex-start;
+.menu-tiles.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* ——— Jouer : créer un salon, les salons actifs, et l'entraînement à part ——— */
@@ -4919,4 +4458,362 @@ button.danger {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.8rem;
+}
+
+/* ——— Badge des jeux en bêta ——— */
+.beta-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: 'Figtree', system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.beta-badge.big {
+  font-size: 0.9rem;
+  padding: 0.25rem 0.75rem;
+  transform: rotate(-4deg) translateY(-0.6em);
+}
+
+/* ——— Duel Jackpot : deux machines à sous face à face ——— */
+.game-card.live.game-slots {
+  background: var(--cyan);
+  box-shadow: 0 6px 0 #138a98;
+}
+.game-card.live.game-slots:hover {
+  box-shadow: 0 9px 0 #138a98;
+}
+.game-card.live.game-slots:active {
+  box-shadow: 0 2px 0 #138a98;
+}
+.game-card.live.game-slots .game-card-players {
+  color: var(--cyan);
+}
+.jackpot-art {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.45rem;
+  border-radius: 14px;
+  background: var(--ink);
+  border: 3px solid var(--ink);
+}
+.jackpot-art > span {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 3.2rem;
+  border-radius: 8px;
+  background: #fffaf2;
+}
+.game-card-art .jackpot-art {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  transform: rotate(6deg);
+}
+.slot-seven {
+  font-family: var(--font-title);
+  font-weight: 800;
+  color: #e0234e;
+  font-size: 1.6em;
+  line-height: 1;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+}
+.slot-emoji {
+  font-size: 1.4em;
+  line-height: 1;
+}
+.slots-hub-machine {
+  display: grid;
+  place-items: center;
+  margin-bottom: 1rem;
+}
+.slots-hub-machine .jackpot-art {
+  padding: 0.8rem;
+  gap: 0.5rem;
+  border-radius: 24px;
+  background: linear-gradient(180deg, var(--cyan), #138a98);
+  box-shadow: 0 10px 0 #0e6a75, 0 24px 50px rgba(0, 0, 0, 0.45);
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+}
+.slots-hub-machine .jackpot-art > span {
+  width: 1.9em;
+  height: 2.4em;
+  border-radius: 14px;
+}
+.slots-hub .game-title {
+  color: var(--cyan);
+}
+
+.slots-table {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.machines {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1rem, 4vw, 3rem);
+  align-items: center;
+  width: min(1000px, 100%);
+  margin: 0 auto;
+  min-height: 0;
+}
+.machines-versus {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  padding: 0.3rem 0.7rem;
+  border-radius: 12px;
+  background: var(--pink);
+  color: var(--ink);
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.3rem;
+  box-shadow: 0 4px 0 #a3164a;
+}
+.machine {
+  position: relative;
+  display: grid;
+  gap: 0.8rem;
+  padding: clamp(0.9rem, 2.5vw, 1.4rem);
+  border-radius: 28px;
+  background: var(--panel);
+  border: 3px solid var(--line-strong);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.machine.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 6px rgba(255, 122, 26, 0.2);
+  transform: translateY(-3px);
+}
+.machine.big-win {
+  animation: big-win 0.9s ease 2;
+}
+@keyframes big-win {
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 201, 60, 0.45), 0 0 60px rgba(255, 201, 60, 0.5);
+  }
+}
+.machine-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.machine-head .avatar {
+  width: 40px;
+  height: 40px;
+}
+.machine-who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.machine-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.machine-who small {
+  color: var(--muted);
+}
+.machine-balance {
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+  color: var(--yellow);
+  letter-spacing: -0.02em;
+}
+.machine-balance.broke {
+  color: var(--danger);
+}
+.machine-goal {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: visible;
+  margin-bottom: 0.8rem;
+}
+.machine-goal-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--yellow));
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.machine-goal-start,
+.machine-goal-end {
+  position: absolute;
+  top: 15px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+/* 100 € de départ, au tiers de la barre (objectif 300 €). */
+.machine-goal-start {
+  left: 33.3%;
+  transform: translateX(-50%);
+}
+.machine-goal-end {
+  right: 0;
+}
+.reels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 20px;
+  background: var(--ink);
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.6);
+}
+.reel {
+  position: relative;
+  height: clamp(80px, 14vh, 120px);
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #d9d2c6, #fffaf2 30%, #fffaf2 70%, #d9d2c6);
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+.reel-cell {
+  display: grid;
+  place-items: center;
+  height: clamp(80px, 14vh, 120px);
+}
+.reel-strip {
+  display: block;
+  animation: reel-roll 0.35s linear infinite;
+  filter: blur(1.5px);
+}
+@keyframes reel-roll {
+  to {
+    transform: translateY(-50%);
+  }
+}
+/* Les rouleaux s'arrêtent l'un après l'autre : le CSS échelonne leur arrêt avec --reel. */
+.reel.rolling .reel-strip {
+  animation-duration: calc(0.3s + var(--reel) * 0.05s);
+}
+.reel.landed .reel-cell {
+  animation: reel-land 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes reel-land {
+  from {
+    transform: translateY(-30%);
+  }
+}
+.machine-result {
+  margin: 0;
+  min-height: 1.4em;
+  text-align: center;
+  font-weight: 700;
+  color: var(--muted);
+}
+.machine-result.win {
+  color: var(--ok);
+}
+.machine-result.lose {
+  color: var(--page-sub);
+}
+.spin-button {
+  width: 100%;
+  font-size: 1.15rem;
+}
+.slots-footer {
+  text-align: center;
+}
+.slots-footer p {
+  margin: 0.2rem 0;
+}
+.duel-over {
+  display: grid;
+  justify-items: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+.duel-over h2 {
+  margin: 0;
+  font-family: var(--font-title);
+}
+.duel-balances {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.duel-balances span {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.duel-balances span.winner {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.duel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.slots-paytable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.slots-paytable td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+.slots-paytable td:first-child {
+  white-space: nowrap;
+}
+.slots-paytable td:last-child {
+  text-align: right;
+}
+@media (max-width: 760px) {
+  .machines {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.2rem;
+    align-content: start;
+    overflow-y: auto;
+  }
+  /* Sur téléphone : l'adversaire en haut, sa propre machine en bas, près du pouce. */
+  .machine.mine {
+    order: 2;
+  }
+  .machines-versus {
+    position: static;
+    order: 1;
+    justify-self: center;
+    transform: rotate(-8deg);
+  }
+  .reel,
+  .reel-cell {
+    height: 72px;
+  }
+  .slots-footer {
+    display: none;
+  }
+}
+.reel-empty {
+  font-family: var(--font-title);
+  font-weight: 800;
+  color: #c9bfe6;
+}
+/* Le badge dans un titre de jeu garde ses propres couleurs (le titre a un texte en dégradé). */
+.game-title .beta-badge {
+  background: var(--yellow);
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: var(--ink);
+  color: var(--ink);
+  text-shadow: none;
+  filter: none;
 }

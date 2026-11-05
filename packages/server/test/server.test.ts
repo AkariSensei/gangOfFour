@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { type GameState, type PlayerView, createDeck } from '@gof/engine';
+import { type GameState, type PlayerView, type SlotsView, createDeck } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -12,7 +12,6 @@ import {
   type GameServer,
   type GameServerOptions,
   type GofView,
-  type PresidentGameView,
   type RoomView,
   type ServerToClientEvents,
   createGameServer,
@@ -60,7 +59,7 @@ function connectWith(auth?: { session: string }): Client {
   const { port } = server.http.address() as AddressInfo;
   const client: Client = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true, auth });
   client.on('room:state', (room) => (client.room = room));
-  // Les tests de Gang of Four lisent la vue telle quelle ; ceux du Président la convertissent eux-mêmes.
+  // Les tests de Gang of Four lisent la vue telle quelle ; ceux des autres jeux la convertissent eux-mêmes.
   client.on('game:state', (game) => (client.game = game as GofView));
   clients.push(client);
   return client;
@@ -387,52 +386,62 @@ describe('serveur de jeu', () => {
     expect(await alice.emitWithAck('community:list')).toEqual({ ok: true, ideas: [] });
   });
 
-  it('fait jouer un entraînement de Président à sept contre des bots, qui ne compte nulle part', async () => {
-    // Le minuteur fait jouer l'humain à sa place : il ne lui reste qu'à rendre ses cartes et lancer les manches.
-    await start({ botDelayMs: 0, turnSecondMs: 1 });
-    const human = connect('Alice');
-    expect(await human.emitWithAck('room:create', { game: 'president', training: true })).toMatchObject({ ok: true });
-    for (let i = 0; i < 6; i++) expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
-    expect(await human.emitWithAck('room:addBot', {})).toEqual({ ok: false, error: 'roomFull' });
-    await waitFor(() => human.room?.players.length === 7);
-    expect(human.room!.game).toBe('president');
-    expect(human.room!.training).toBe(true);
-    expect((await human.emitWithAck('game:start', { rounds: 3, turnSeconds: 30 })).ok).toBe(true);
+  it('fait jouer un duel de machines à sous entre deux humains, rangé dans son propre classement', async () => {
+    await start();
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'slots' });
+    if (!created.ok) throw new Error(created.error);
+    const bruno = connect('Bruno');
+    expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+    // Deux places seulement.
+    expect(await connect('Chloé').emitWithAck('room:join', { code: created.code })).toEqual({ ok: false, error: 'roomFull' });
+    expect((await alice.emitWithAck('game:start', {})).ok).toBe(true);
 
-    const view = () => human.game as unknown as PresidentGameView | undefined;
-    await waitFor(() => view()?.game === 'president');
-    expect(view()!.rounds).toBe(3);
-    expect(view()!.players).toHaveLength(7);
-    const deadline = Date.now() + 30000;
-    while (view()!.phase !== 'gameOver') {
-      if (Date.now() > deadline) throw new Error('partie bloquée');
-      const v = view()!;
-      if (v.phase === 'roundOver') await human.emitWithAck('game:nextRound');
-      if (v.phase === 'exchange' && v.currentPlayer === v.you) {
-        const gift = v.gifts.find((g) => !g.done)!;
-        expect(gift.received).toHaveLength(gift.count);
-        await human.emitWithAck('game:giveCards', { cardIds: v.hand.slice(0, gift.count).map((c) => c.id) });
-      }
-      await new Promise((r) => setTimeout(r, 5));
+    const players = [alice, bruno];
+    const view = (c: Client) => c.game as unknown as SlotsView | undefined;
+    await waitFor(() => players.every((p) => view(p)?.game === 'slots'));
+    expect(view(alice)).toMatchObject({ you: 0, round: 1, stake: 5, currentPlayer: 0 });
+    expect(await bruno.emitWithAck('game:spin')).toEqual({ ok: false, error: 'notYourTurn' });
+    for (let spins = 0; view(alice)!.phase !== 'gameOver'; spins++) {
+      expect(spins).toBeLessThan(400);
+      const turn = view(alice)!;
+      expect((await players[turn.currentPlayer]!.emitWithAck('game:spin')).ok).toBe(true);
+      const before = JSON.stringify(turn);
+      await waitFor(() => JSON.stringify(view(alice)) !== before);
     }
-    // 7 joueurs : 6 + 5 + … + 0 = 21 points par manche.
-    expect(view()!.players.reduce((n, p) => n + p.score, 0)).toBe(63);
+    const end = view(alice)!;
+    expect(end.players.some((p) => p.balance <= 0 || p.balance >= end.goal)).toBe(true);
 
-    const stats = await human.emitWithAck('stats:get');
-    expect(stats.ok && stats.games.president.recent).toEqual([]);
+    const stats = await alice.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.slots.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.slots.leaderboard.map((e) => e.name).sort()).toEqual(['Alice', 'Bruno']);
+    // Le duel ne compte ni dans le classement de Gang of Four, ni dans son niveau.
     expect(stats.ok && stats.games.gof.recent).toEqual([]);
     expect(server.history.progressOfAccount(server.accounts.byName('Alice')!.id).xp).toBe(0);
   }, 60000);
 
+  it('laisse s’entraîner au duel contre un bot, sans rien enregistrer', async () => {
+    await start({ botDelayMs: 0, turnSecondMs: 1 });
+    const human = connect('Alice');
+    expect(await human.emitWithAck('room:create', { game: 'slots', training: true })).toMatchObject({ ok: true });
+    expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
+    expect(await human.emitWithAck('room:addBot', {})).toEqual({ ok: false, error: 'roomFull' });
+    // Le minuteur tire à la place de l'humain : la partie va au bout toute seule.
+    expect((await human.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => (human.game as unknown as SlotsView | undefined)?.phase === 'gameOver', 20000);
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.slots.recent).toEqual([]);
+  }, 30000);
+
   it('liste les salons qui attendent des joueurs, jeu par jeu', async () => {
     await start();
     const alice = connect('Alice');
-    const created = await alice.emitWithAck('room:create', { game: 'president' });
+    const created = await alice.emitWithAck('room:create', { game: 'slots' });
     if (!created.ok) throw new Error(created.error);
     await alice.emitWithAck('room:addBot', {}).then((r) => expect(r).toEqual({ ok: false, error: 'trainingOnly' }));
     const bruno = connect('Bruno');
-    const open = await bruno.emitWithAck('rooms:open', { game: 'president' });
-    expect(open).toEqual({ ok: true, rooms: [{ code: created.code, game: 'president', host: 'Alice', players: 1, minPlayers: 3, maxPlayers: 7 }] });
+    const open = await bruno.emitWithAck('rooms:open', { game: 'slots' });
+    expect(open).toEqual({ ok: true, rooms: [{ code: created.code, game: 'slots', host: 'Alice', players: 1, minPlayers: 2, maxPlayers: 2 }] });
     expect(await bruno.emitWithAck('rooms:open', { game: 'gof' })).toEqual({ ok: true, rooms: [] });
     expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
     await waitFor(() => alice.room?.players.length === 2);
@@ -444,7 +453,7 @@ describe('serveur de jeu', () => {
     expect(stats).toMatchObject({
       ok: true,
       season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) },
-      games: { gof: { seasonal: [] }, president: { seasonal: [] } },
+      games: { gof: { seasonal: [] }, slots: { seasonal: [] } },
     });
   });
 
@@ -798,7 +807,7 @@ describe('serveur de jeu', () => {
     await waitFor(() => players.every((p) => p.game));
     await playBotTurn(players);
     await waitFor(() => players[0]!.game!.phase !== 'cut' || players[0]!.game!.round > 1);
-    const before = server.rooms.get(code)!.game!;
+    const before = server.rooms.get(code)!.game as GameState;
     const session = { code, token: server.rooms.get(code)!.seats[1]!.token };
 
     // Arrêt « propre » comme alwaysData (SIGTERM), puis nouveau serveur sur le même fichier.
@@ -825,8 +834,8 @@ describe('serveur de jeu', () => {
     expect(players[0]!.room!.turnRemainingMs).toBeGreaterThan(250);
     // Une « seconde » du minuteur dure ici 10 ms : au bout de 300 ms, le serveur joue pour le joueur qui doit ouvrir.
     const code = players[0]!.room!.code;
-    const before = server.rooms.get(code)!.game!.trick.length;
-    await waitFor(() => server.rooms.get(code)!.game!.trick.length > before, 2000);
+    const before = (server.rooms.get(code)!.game as GameState).trick.length;
+    await waitFor(() => (server.rooms.get(code)!.game as GameState).trick.length > before, 2000);
     // Et un nouveau tour relance le minuteur pour le joueur suivant.
     await waitFor(() => players.every((p) => p.room!.turnRemainingMs !== null && p.room!.turnRemainingMs > 250));
   });
@@ -837,7 +846,7 @@ describe('serveur de jeu', () => {
     expect((await players[0]!.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
     await waitFor(() => players.every((p) => p.game));
     const code = players[0]!.room!.code;
-    const game = server.rooms.get(code)!.game!;
+    const game = server.rooms.get(code)!.game as GameState;
     // Échange arrangé : Alice a gagné la manche et doit rendre une carte à Bruno.
     const given = game.players[1]!.hand[0]!;
     Object.assign(game, { phase: 'exchange', currentPlayer: 0, exchange: { winnerIndex: 0, loserIndex: 1, loserCard: given } });
