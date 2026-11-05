@@ -781,6 +781,10 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('game:autoPass', (payload, ack) => handle(ack, (code, playerId) => rooms.setAutoPass(code, playerId, payload.enabled === true)));
     on('game:giveCard', (payload, ack) => act({ type: 'giveCard', cardId: text(payload.cardId) }, ack));
     on('game:spin', (_payload, ack) => act({ type: 'spin' }, ack));
+    on('game:place', (payload, ack) =>
+      act({ type: 'place', ships: Array.isArray(payload.ships) ? (payload.ships as { cells: number[] }[]) : [] }, ack),
+    );
+    on('game:shoot', (payload, ack) => act({ type: 'shoot', cell: Number(payload.cell) }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     // Seules les parties entre humains sont enregistrées : les classements n'ont plus qu'elles.
@@ -792,7 +796,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         recent: history.recent(5, game),
         streak: history.bestStreak('online', game),
       });
-      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots') } });
+      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

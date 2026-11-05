@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { type GameState, type PlayerView, type SlotsView, createDeck } from '@gof/engine';
+import { type BattleshipView, type GameState, type PlayerView, type SlotsView, createDeck, createRng, randomFleet } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -431,6 +431,58 @@ describe('serveur de jeu', () => {
     await waitFor(() => (human.game as unknown as SlotsView | undefined)?.phase === 'gameOver', 20000);
     const stats = await human.emitWithAck('stats:get');
     expect(stats.ok && stats.games.slots.recent).toEqual([]);
+  }, 30000);
+
+  it('fait jouer une bataille navale entre deux humains : flottes secrètes, tirs chacun son tour, classement à part', async () => {
+    await start();
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'battleship' });
+    if (!created.ok) throw new Error(created.error);
+    const bruno = connect('Bruno');
+    expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+    expect((await alice.emitWithAck('game:start', {})).ok).toBe(true);
+    const view = (c: Client) => c.game as unknown as BattleshipView | undefined;
+    await waitFor(() => [alice, bruno].every((c) => view(c)?.phase === 'placing'));
+
+    // Chacun place sa flotte quand il veut ; une flotte non réglementaire est refusée.
+    expect(await alice.emitWithAck('game:place', { ships: [{ cells: [0, 1] }] })).toEqual({ ok: false, error: 'invalidFleet' });
+    const random = createRng(4);
+    const fleets = [randomFleet(random), randomFleet(random)];
+    expect((await bruno.emitWithAck('game:place', { ships: fleets[1]! })).ok).toBe(true);
+    expect((await alice.emitWithAck('game:place', { ships: fleets[0]! })).ok).toBe(true);
+    await waitFor(() => view(alice)?.phase === 'playing');
+    // Alice voit sa flotte, et rien de celle de Bruno.
+    expect(view(alice)!.myShips).toEqual(fleets[0]);
+    expect(JSON.stringify(view(alice))).not.toContain(JSON.stringify(fleets[1]![0]!.cells));
+
+    // Chacun tire case après case ; la partie finit quand une flotte est coulée.
+    const next = [0, 0];
+    const players = [alice, bruno];
+    for (let shots = 0; view(alice)!.phase === 'playing'; shots++) {
+      expect(shots).toBeLessThan(200);
+      const turn = view(alice)!.currentPlayer;
+      const before = JSON.stringify(view(alice));
+      expect((await players[turn]!.emitWithAck('game:shoot', { cell: next[turn]!++ })).ok).toBe(true);
+      await waitFor(() => JSON.stringify(view(alice)) !== before);
+    }
+    expect(view(alice)!.revealed[1]).toHaveLength(5);
+    const stats = await alice.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.battleship.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.gof.recent).toEqual([]);
+  }, 60000);
+
+  it('laisse s’entraîner à la bataille navale contre un bot qui place et tire tout seul', async () => {
+    await start({ botDelayMs: 0, turnSecondMs: 1 });
+    const human = connect('Alice');
+    expect(await human.emitWithAck('room:create', { game: 'battleship', training: true })).toMatchObject({ ok: true });
+    expect((await human.emitWithAck('room:addBot', {})).ok).toBe(true);
+    expect((await human.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => (human.game as unknown as BattleshipView | undefined)?.phase === 'placing');
+    expect((await human.emitWithAck('game:place', { ships: randomFleet(createRng(2)) })).ok).toBe(true);
+    // Le bot place sa flotte, puis le minuteur tire pour l'humain : la partie va au bout.
+    await waitFor(() => (human.game as unknown as BattleshipView | undefined)?.phase === 'gameOver', 20000);
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.battleship.recent).toEqual([]);
   }, 30000);
 
   it('liste les salons qui attendent des joueurs, jeu par jeu', async () => {

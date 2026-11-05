@@ -14,14 +14,24 @@ export interface GameInfo {
   lowScoreWins?: boolean;
   /** Nouveau jeu encore en rodage : un badge « Bêta » l'annonce, jusqu'à ce que l'admin décide de l'enlever. */
   beta?: boolean;
+  /** Les bots de l'entraînement ont plusieurs niveaux, au choix du joueur. */
+  botLevels?: boolean;
 }
 
 export const GAMES: GameInfo[] = [
-  { id: 'gof', name: 'Gang of Four', tagline: 'Combinaisons, gangs et dragon rouge', players: '3 ou 4 joueurs', status: 'live', lowScoreWins: true },
+  { id: 'gof', name: 'Gang of Four', tagline: 'Combinaisons, gangs et dragon rouge', players: '3 ou 4 joueurs', status: 'live', lowScoreWins: true, botLevels: true },
   {
     id: 'slots',
     name: 'Duel Jackpot',
     tagline: 'Deux machines à sous, 100 € chacun : le premier à 300 € gagne',
+    players: '2 joueurs',
+    status: 'live',
+    beta: true,
+  },
+  {
+    id: 'battleship',
+    name: 'Bataille navale',
+    tagline: 'Place ta flotte en secret, et coule celle de l’autre',
     players: '2 joueurs',
     status: 'live',
     beta: true,

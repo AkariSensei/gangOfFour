@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { type ActionError, type SlotsError, createGame } from '@gof/engine';
+import { type ActionError, type BattleshipError, type SlotsError, createGame } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
 import { AVATARS, COLORS, type Cosmetics, type Look, type RoomError, type RoomView, type Session } from './protocol';
@@ -78,7 +78,7 @@ export interface OpenRoom {
   maxPlayers: number;
 }
 
-export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | SlotsError };
+export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | SlotsError | BattleshipError };
 
 /** Les règles du jeu d'un salon. */
 export const rulesOfRoom = (room: Room) => rulesOf(room.kind);
@@ -465,7 +465,7 @@ export class RoomManager {
       if (!scripted || scripted.player !== playerIndex || !same) return { ok: false, error: 'tutorialMove' };
     }
     const result = rulesOfRoom(room).act(room.game, playerIndex, action);
-    if (!result.ok) return { ok: false, error: result.error as ActionError | SlotsError };
+    if (!result.ok) return { ok: false, error: result.error as ActionError | SlotsError | BattleshipError };
     room.game = result.game;
     if (room.tutorial) room.tutorial.step += 1;
     return { ok: true };

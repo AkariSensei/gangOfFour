@@ -1,7 +1,16 @@
 import {
+  type BattleshipState,
   type GameState,
+  type Ship,
   type SlotsState,
   applyAction,
+  applyBattleshipAction,
+  battleshipBotShot,
+  battleshipToAct,
+  battleshipView,
+  cellsAfloat,
+  createBattleship,
+  randomFleet,
   applySlotsAction,
   createGame,
   createSlots,
@@ -13,11 +22,11 @@ import { type BotLevel, chooseBotAction } from './bot';
 import { type GameSummary, gofSummary } from './history';
 
 /** Les jeux jouables : chacun a ses règles ci-dessous. */
-export type GameId = 'gof' | 'slots';
-export const GAME_IDS: GameId[] = ['gof', 'slots'];
+export type GameId = 'gof' | 'slots' | 'battleship';
+export const GAME_IDS: GameId[] = ['gof', 'slots', 'battleship'];
 
 /** Partie en cours, de n'importe quel jeu ; ses règles savent la lire. */
-export type AnyGame = GameState | SlotsState;
+export type AnyGame = GameState | SlotsState | BattleshipState;
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
 export type PlayerAction =
@@ -25,6 +34,8 @@ export type PlayerAction =
   | { type: 'pass' }
   | { type: 'giveCard'; cardId: string }
   | { type: 'spin' }
+  | { type: 'place'; ships: Ship[] }
+  | { type: 'shoot'; cell: number }
   | { type: 'nextRound' }
   | { type: 'cut'; position: number };
 
@@ -85,6 +96,7 @@ const renamed = <T extends { players: { name: string }[] }>(game: T, index: numb
 
 const gof = (game: AnyGame) => game as GameState;
 const slots = (game: AnyGame) => game as SlotsState;
+const naval = (game: AnyGame) => game as BattleshipState;
 
 const GOF: GameRules = {
   id: 'gof',
@@ -94,7 +106,7 @@ const GOF: GameRules = {
     createGame(players, seed, { targetScore: TARGET_SCORES.includes(settings.targetScore!) ? settings.targetScore! : DEFAULT_TARGET_SCORE }),
   again: (game, players, seed) => createGame(players, seed, gof(game).config),
   act(game, playerIndex, action) {
-    if (action.type === 'spin') return { ok: false, error: 'wrongPhase' };
+    if (action.type === 'spin' || action.type === 'place' || action.type === 'shoot') return { ok: false, error: 'wrongPhase' };
     const result = applyAction(gof(game), action.type === 'nextRound' ? action : { ...action, playerIndex });
     return result.ok ? { ok: true, game: result.state } : result;
   },
@@ -171,7 +183,58 @@ const SLOTS: GameRules = {
   },
 };
 
-const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS };
+const BATTLESHIP: GameRules = {
+  id: 'battleship',
+  minPlayers: 2,
+  maxPlayers: 2,
+  create: (players, seed) => createBattleship(players, seed),
+  again: (_game, players, seed) => createBattleship(players, seed),
+  act(game, playerIndex, action) {
+    const result =
+      action.type === 'place'
+        ? applyBattleshipAction(naval(game), { type: 'place', playerIndex, ships: action.ships })
+        : action.type === 'shoot'
+          ? applyBattleshipAction(naval(game), { type: 'shoot', playerIndex, cell: action.cell })
+          : ({ ok: false, error: 'wrongPhase' } as const);
+    return result.ok ? { ok: true, game: result.state } : result;
+  },
+  toAct: (game) => battleshipToAct(naval(game)),
+  over: (game) => naval(game).phase === 'gameOver',
+  turnKey(game) {
+    const g = naval(game);
+    return `${g.phase}-${g.players.map((p) => p.shots.length).join('-')}-${g.currentPlayer}`;
+  },
+  // Chacun prend le temps de placer sa flotte ; le minuteur ne compte que les tirs.
+  untimed: (game) => naval(game).phase === 'placing',
+  botAction(game, index, random) {
+    const g = naval(game);
+    if (g.phase === 'placing') return { type: 'place', ships: randomFleet(random) };
+    return g.phase === 'playing' ? { type: 'shoot', cell: battleshipBotShot(g, index, random) } : null;
+  },
+  fallback: () => null,
+  timeout: (game, index) => (naval(game).phase === 'playing' ? { type: 'shoot', cell: battleshipBotShot(naval(game), index, Math.random) } : null),
+  stuck: () => false,
+  view: (game, index) => battleshipView(naval(game), index),
+  spectatorView: (game) => battleshipView(naval(game), -1),
+  rename: (game, index, name) => renamed(naval(game), index, name),
+  round: (game) => Math.max(...naval(game).players.map((p) => p.shots.length)),
+  // Le score d'un joueur : les cases de sa flotte encore à flot.
+  scores: (game) => naval(game).players.map((p, i) => (p.ships ? cellsAfloat(p.ships, naval(game).players[1 - i]!.shots) : 0)),
+  summary(game) {
+    const g = naval(game);
+    return {
+      game: 'battleship',
+      rounds: Math.max(...g.players.map((p) => p.shots.length)),
+      players: g.players.map((p, i) => ({
+        name: p.name,
+        score: p.ships ? cellsAfloat(p.ships, g.players[1 - i]!.shots) : 0,
+        winner: g.winners.includes(i),
+      })),
+    };
+  },
+};
+
+const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS, battleship: BATTLESHIP };
 
 /** Règles d'un jeu ; un salon sans jeu (d'avant les autres jeux) joue à Gang of Four. */
 export function rulesOf(game: GameId | undefined): GameRules {

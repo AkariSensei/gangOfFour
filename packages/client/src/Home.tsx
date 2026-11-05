@@ -6,6 +6,7 @@ import { CommunityScreen } from './Community';
 import { Leaderboard, useStats } from './Leaderboard';
 import { SlotIcon } from './SlotsTable';
 import { SlotsRules } from './SlotsRules';
+import { BattleshipRules } from './BattleshipRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonCard, SeasonScreen } from './Season';
@@ -34,6 +35,10 @@ const SCREENS = [
   'slots-jouer',
   'slots-regarder',
   'slots-classement',
+  'naval',
+  'naval-jouer',
+  'naval-regarder',
+  'naval-classement',
 ] as const;
 type Screen = (typeof SCREENS)[number];
 
@@ -53,6 +58,10 @@ const PARENT: Partial<Record<Screen, Screen>> = {
   'slots-jouer': 'slots',
   'slots-regarder': 'slots',
   'slots-classement': 'slots',
+  naval: 'jeux',
+  'naval-jouer': 'naval',
+  'naval-regarder': 'naval',
+  'naval-classement': 'naval',
   profil: 'jeux',
 };
 
@@ -60,8 +69,26 @@ const PARENT: Partial<Record<Screen, Screen>> = {
 const GAME_SCREENS: Record<GameId, { hub: Screen; play: Screen; watch: Screen; ranking: Screen }> = {
   gof: { hub: 'gof', play: 'jouer', watch: 'regarder', ranking: 'classement' },
   slots: { hub: 'slots', play: 'slots-jouer', watch: 'slots-regarder', ranking: 'slots-classement' },
+  battleship: { hub: 'naval', play: 'naval-jouer', watch: 'naval-regarder', ranking: 'naval-classement' },
 };
-const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot' };
+/** Le jeu d'un écran « jouer », « regarder » ou « classement ». */
+const gameOfScreen = (s: Screen): GameId =>
+  ((Object.entries(GAME_SCREENS) as [GameId, (typeof GAME_SCREENS)[GameId]][]).find(([, screens]) => [screens.play, screens.watch, screens.ranking].includes(s))?.[0] ?? 'gof');
+const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot', battleship: 'Bataille navale' };
+
+/** Une petite grille de bataille navale, avec un bateau touché, pour illustrer le jeu. */
+function NavalArt() {
+  const ship = [12, 13, 14, 15];
+  const hits = [13, 14];
+  const misses = [2, 21, 27, 30];
+  return (
+    <span className="naval-art">
+      {Array.from({ length: 36 }, (_, c) => (
+        <span key={c} className={ship.includes(c) ? (hits.includes(c) ? 'hit' : 'ship') : misses.includes(c) ? 'miss' : ''} />
+      ))}
+    </span>
+  );
+}
 
 /** Les trois rouleaux qui illustrent le Duel Jackpot. */
 function JackpotArt() {
@@ -258,6 +285,8 @@ export function Home({
                     <span className="game-card-art" aria-hidden>
                       {g.id === 'slots' ? (
                         <JackpotArt />
+                      ) : g.id === 'battleship' ? (
+                        <NavalArt />
                       ) : (
                         <>
                           <img src="/cards/PV.webp" alt="" />
@@ -389,9 +418,44 @@ export function Home({
             </div>
           </div>
         );
+      case 'naval':
+        return (
+          <div className="menu-screen game-hub naval-hub">
+            <button type="button" className="back-button hub-back" onClick={back}>
+              ← Jeux
+            </button>
+            <div className="menu-title">
+              <div className="naval-hub-art" aria-hidden>
+                <NavalArt />
+              </div>
+              <h1 className="game-title">
+                Bataille navale <span className="beta-badge big">Bêta</span>
+              </h1>
+              <p className="tagline">Place ta flotte en secret, et coule celle de l’autre.</p>
+            </div>
+            <div className="menu-side">
+              <nav className="game-menu" aria-label="Bataille navale">
+                <MenuItem primary icon="⚓" title="Jouer" subtitle="Une bataille à deux : crée un salon ou rejoins-en un" onClick={() => open('naval-jouer')} />
+                <MenuItem
+                  icon="👀"
+                  title="Regarder"
+                  subtitle={liveOf('battleship').length === 0 ? 'Aucune bataille en cours' : 'Batailles en cours des collègues'}
+                  pill={liveOf('battleship').length > 0 ? { text: `${liveOf('battleship').length} en cours`, live: true } : undefined}
+                  onClick={() => open('naval-regarder')}
+                />
+                <div className="menu-tiles two">
+                  <MenuItem tile icon="🏆" title="Classement" subtitle="Saison et général" onClick={() => open('naval-classement')} />
+                  <MenuItem tile icon="📜" title="Règles" subtitle="Flotte et tirs" onClick={() => setRules('battleship')} />
+                </div>
+              </nav>
+              {error && <p className="error">{error}</p>}
+            </div>
+          </div>
+        );
       case 'jouer':
-      case 'slots-jouer': {
-        const game: GameId = s === 'jouer' ? 'gof' : 'slots';
+      case 'slots-jouer':
+      case 'naval-jouer': {
+        const game = gameOfScreen(s);
         return (
           <SubScreen title="Jouer" onBack={back} backLabel={GAME_NAMES[game]}>
             <PlayScreen game={game} initialCode={game === 'gof' ? invite : ''} onEnter={onEnter} />
@@ -399,8 +463,9 @@ export function Home({
         );
       }
       case 'regarder':
-      case 'slots-regarder': {
-        const game: GameId = s === 'regarder' ? 'gof' : 'slots';
+      case 'slots-regarder':
+      case 'naval-regarder': {
+        const game = gameOfScreen(s);
         return (
           <SubScreen title="Regarder" onBack={back} backLabel={GAME_NAMES[game]} narrow>
             <LiveRooms rooms={liveOf(game)} onWatch={onEnter} />
@@ -408,8 +473,9 @@ export function Home({
         );
       }
       case 'classement':
-      case 'slots-classement': {
-        const game: GameId = s === 'classement' ? 'gof' : 'slots';
+      case 'slots-classement':
+      case 'naval-classement': {
+        const game = gameOfScreen(s);
         return (
           <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
             <div className="ranking-screen">
@@ -487,6 +553,7 @@ export function Home({
       </div>
       {rules === 'gof' && <Rules onClose={() => setRules(null)} />}
       {rules === 'slots' && <SlotsRules onClose={() => setRules(null)} />}
+      {rules === 'battleship' && <BattleshipRules onClose={() => setRules(null)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
     </main>
   );
@@ -558,8 +625,8 @@ function SubScreen({
   );
 }
 
-/** Bots de l'entraînement : trois à Gang of Four, un au Duel Jackpot. */
-const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1 };
+/** Bots de l'entraînement : trois à Gang of Four, un dans les jeux à deux. */
+const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1 };
 const BOT_COUNT: Record<number, string> = { 1: 'un bot', 3: 'trois bots' };
 
 /** Salons de ce jeu qui attendent des joueurs, rechargés toutes les 5 secondes. */
@@ -672,18 +739,21 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
         <div className="play-training-text">
           <h3>🤖 Entraînement contre les bots</h3>
           <p>
-            Toi contre {BOT_COUNT[TRAINING_BOTS[game]]} pour t’exercer{info ? ` à ${info.name}` : ''}.{' '}
+            Toi contre {BOT_COUNT[TRAINING_BOTS[game]]} pour t’exercer.{' '}
             <strong>Ne compte pas dans les classements et ne rapporte rien.</strong>
           </p>
         </div>
         <div className="play-training-actions">
-          <div className="segmented" role="radiogroup" aria-label="Niveau des bots">
-            {(Object.entries(LEVEL_LABELS) as [BotLevel, string][]).map(([id, label]) => (
-              <button key={id} type="button" role="radio" aria-checked={level === id} className={level === id ? 'on' : ''} onClick={() => setLevel(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Le niveau ne se choisit que pour les jeux où les bots en ont plusieurs. */}
+          {info?.botLevels && (
+            <div className="segmented" role="radiogroup" aria-label="Niveau des bots">
+              {(Object.entries(LEVEL_LABELS) as [BotLevel, string][]).map(([id, label]) => (
+                <button key={id} type="button" role="radio" aria-checked={level === id} className={level === id ? 'on' : ''} onClick={() => setLevel(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <button type="button" disabled={busy} onClick={() => void run(training)}>
             S’entraîner
           </button>

@@ -1,4 +1,5 @@
-import { type GameView, type RoomView, isSlotsView } from '../../server/src/protocol';
+import { type GameView, type RoomView, isBattleshipView, isSlotsView } from '../../server/src/protocol';
+import { BattleshipTable } from './BattleshipTable';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { SlotsTable } from './SlotsTable';
@@ -16,7 +17,9 @@ export function App() {
   /** La table du jeu du salon. */
   const table = (game: GameView, room: RoomView) => {
     const props = { room, messages, admin, felt: account.account?.felt, onLeave: () => remember(null) };
-    return isSlotsView(game) ? <SlotsTable game={game} {...props} /> : <Table game={game} {...props} />;
+    if (isSlotsView(game)) return <SlotsTable game={game} {...props} />;
+    if (isBattleshipView(game)) return <BattleshipTable game={game} {...props} />;
+    return <Table game={game} {...props} />;
   };
 
   let screen;

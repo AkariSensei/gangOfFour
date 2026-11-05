@@ -4817,3 +4817,270 @@ button.danger {
   text-shadow: none;
   filter: none;
 }
+
+/* ——— Bataille navale : deux grilles de 10 × 10 ——— */
+.game-card.live.game-battleship {
+  background: var(--pink);
+  box-shadow: 0 6px 0 #a3164a;
+}
+.game-card.live.game-battleship:hover {
+  box-shadow: 0 9px 0 #a3164a;
+}
+.game-card.live.game-battleship:active {
+  box-shadow: 0 2px 0 #a3164a;
+}
+.game-card.live.game-battleship .game-card-players {
+  color: var(--pink);
+}
+.naval-art {
+  display: inline-grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--ink);
+}
+.naval-art > span {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: #1f4e8a;
+}
+.naval-art > span.ship {
+  background: #c9bfe6;
+}
+.naval-art > span.hit {
+  background: var(--accent);
+}
+.naval-art > span.miss {
+  background: #1f4e8a radial-gradient(circle, #fff 0 25%, transparent 30%);
+}
+.game-card-art .naval-art {
+  position: absolute;
+  top: 0;
+  right: 0.4rem;
+  transform: rotate(5deg);
+}
+.naval-hub-art {
+  display: grid;
+  place-items: center;
+  margin-bottom: 1rem;
+}
+.naval-hub-art .naval-art {
+  gap: 5px;
+  padding: 10px;
+  border-radius: 20px;
+  box-shadow: 0 10px 0 #a3164a, 0 24px 50px rgba(0, 0, 0, 0.45);
+  background: var(--pink);
+}
+.naval-hub-art .naval-art > span {
+  width: clamp(22px, 4vw, 36px);
+  height: clamp(22px, 4vw, 36px);
+  border-radius: 7px;
+}
+.naval-hub .game-title {
+  color: var(--pink);
+}
+
+.naval-table {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.naval-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+.naval-status.active {
+  color: var(--accent);
+}
+.naval-last {
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  animation: pop-in 0.25s ease;
+}
+.naval-last.hit {
+  background: var(--accent);
+  color: var(--ink);
+}
+.naval-last.sunk {
+  background: var(--pink);
+  color: var(--ink);
+}
+.naval-boards {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 2.5rem);
+  align-items: start;
+  justify-content: center;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.naval-board {
+  position: relative;
+  display: grid;
+  gap: 0.6rem;
+  padding: clamp(0.7rem, 2vw, 1.1rem);
+  border-radius: 24px;
+  background: var(--panel);
+  border: 3px solid var(--line-strong);
+}
+.naval-board.enemy.targeted {
+  border-color: var(--accent);
+}
+.naval-board-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.naval-board-head .avatar {
+  width: 32px;
+  height: 32px;
+}
+.naval-board-head strong {
+  flex: 1;
+  min-width: 0;
+}
+.naval-afloat {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.naval-grid {
+  display: grid;
+  grid-template-columns: 1.4em repeat(10, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  max-width: min(520px, 62vh);
+  margin: 0 auto;
+}
+.naval-grid.small {
+  max-width: min(400px, 48vh);
+}
+.naval-corner,
+.naval-axis {
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.naval-cell {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: #1f4e8a;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  min-height: 0;
+}
+.naval-cell.clickable {
+  cursor: crosshair;
+}
+.naval-cell.clickable:hover {
+  background: #2f6cb8;
+  outline: 2px solid var(--accent);
+}
+.naval-cell.ship {
+  background: #c9bfe6;
+}
+.naval-cell.ship.selected {
+  background: var(--yellow);
+}
+.naval-cell.sunk {
+  background: #5b4a86;
+}
+.naval-cell.miss::after,
+.naval-cell.hit::after,
+.naval-cell.sunk::after {
+  content: '';
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+}
+.naval-cell.hit,
+.naval-cell.sunk.hit {
+  background: var(--accent);
+}
+.naval-cell.hit::after,
+.naval-cell.sunk::after {
+  inset: 18%;
+  background: none;
+  border-radius: 0;
+  /* Une croix : la case touchée. */
+  background:
+    linear-gradient(45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%),
+    linear-gradient(-45deg, transparent 42%, var(--ink) 42% 58%, transparent 58%);
+}
+.naval-cell.sunk {
+  background: var(--pink);
+}
+.naval-cell.last {
+  animation: naval-splash 0.6s ease;
+  outline: 2px solid #fff;
+  z-index: 1;
+}
+@keyframes naval-splash {
+  from {
+    transform: scale(1.35);
+  }
+}
+.naval-placement {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 1.2rem;
+  border-radius: 24px;
+  background: var(--panel);
+  border: 3px solid var(--line-strong);
+  text-align: center;
+  overflow-y: auto;
+}
+.naval-placement h2 {
+  margin: 0;
+  font-family: var(--font-title);
+}
+.naval-placement p {
+  margin: 0;
+}
+.naval-fleet-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.naval-fleet-list button.on {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.naval-placement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+@media (max-width: 760px) {
+  .naval-boards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .naval-grid,
+  .naval-grid.small {
+    max-width: 100%;
+  }
+  .naval-board.own .naval-grid {
+    max-width: 70%;
+  }
+}

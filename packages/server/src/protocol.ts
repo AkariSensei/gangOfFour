@@ -1,4 +1,4 @@
-import type { ActionError, Card, PlayerView, SlotsError, SlotsView } from '@gof/engine';
+import type { ActionError, BattleshipError, BattleshipView, Card, PlayerView, Ship, SlotsError, SlotsView } from '@gof/engine';
 import type { GameId } from './rules';
 import type { OpenRoom } from './rooms';
 export type { OpenRoom };
@@ -98,12 +98,15 @@ export interface IdeaView {
 
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
 export type GofView = PlayerView & { hands?: Card[][] };
-export type GameView = GofView | SlotsView;
+export type GameView = GofView | SlotsView | BattleshipView;
 export type { GameId };
 
 /** La vue est-elle celle d'un duel de machines à sous ? */
 export const isSlotsView = (view: GameView): view is SlotsView => 'game' in view && view.game === 'slots';
-export type { SlotsError };
+export type { SlotsError, BattleshipError };
+
+/** La vue est-elle celle d'une bataille navale ? */
+export const isBattleshipView = (view: GameView): view is BattleshipView => 'game' in view && view.game === 'battleship';
 
 /**
  * Classements d'un jeu, de la saison en cours (`seasonal`) et de toujours (`leaderboard`) : seulement les parties entre
@@ -272,6 +275,9 @@ export interface ClientToServerEvents {
   'game:giveCard': (payload: { cardId: string }, ack: Ack) => void;
   /** Duel de machines à sous : tirer, avec la mise du tour. */
   'game:spin': (ack: Ack) => void;
+  /** Bataille navale : placer sa flotte (une seule fois), puis tirer sur une case (0 à 99). */
+  'game:place': (payload: { ships: Ship[] }, ack: Ack) => void;
+  'game:shoot': (payload: { cell: number }, ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
   /** La saison en cours, et les classements de chaque jeu jouable. */
