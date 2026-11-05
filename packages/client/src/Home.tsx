@@ -10,7 +10,7 @@ import { SlotsRules } from './SlotsRules';
 import { BattleshipRules } from './BattleshipRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
-import { SeasonCard, SeasonScreen } from './Season';
+import { SeasonHeader, SeasonLine } from './Season';
 import { SITE_NAME, SITE_TAGLINE } from './site';
 import { useDaily, useMyProfile } from './useProfile';
 import { LEVEL_LABELS, errorLabel } from './labels';
@@ -20,12 +20,12 @@ import { socket, type useAccount } from './socket';
 const TUTORIAL_SEEN = 'gof-tutorial-seen';
 
 /**
- * Écrans de l'accueil, chacun avec son adresse (#saison…) : les trois onglets du site (les jeux, la saison, la
- * communauté), le profil, et les écrans d'un jeu (sa page, puis jouer, regarder, son classement).
+ * Écrans de l'accueil, chacun avec son adresse (#communaute…) : les deux onglets du site (les jeux, la communauté),
+ * le profil, et les écrans d'un jeu (sa page, puis jouer, regarder, son classement). Comme dans Plato, il n'y a pas de
+ * classement général : chaque jeu a le sien, sur sa page.
  */
 const SCREENS = [
   'jeux',
-  'saison',
   'communaute',
   'profil',
   'gof',
@@ -45,7 +45,6 @@ type Screen = (typeof SCREENS)[number];
 
 const TABS: { id: Screen; label: string }[] = [
   { id: 'jeux', label: 'Jeux' },
-  { id: 'saison', label: 'Saison' },
   { id: 'communaute', label: 'Communauté' },
 ];
 
@@ -269,7 +268,10 @@ export function Home({
       case 'jeux':
         return (
           <div className="catalog">
-            <h2 className="catalog-title">Jeux</h2>
+            <div className="catalog-head">
+              <h2 className="catalog-title">Jeux</h2>
+              <SeasonLine stats={stats} />
+            </div>
             <div className="game-cards">
               {GAMES.map((g) =>
                 g.status === 'live' ? (
@@ -313,15 +315,8 @@ export function Home({
               )}
             </div>
             <WaitingRooms onEnter={onEnter} />
-            <SeasonCard stats={stats} onClick={() => open('saison')} />
             {error && <p className="error">{error}</p>}
           </div>
-        );
-      case 'saison':
-        return (
-          <SubScreen title="Saison">
-            <SeasonScreen stats={stats} />
-          </SubScreen>
         );
       case 'communaute':
         return (
@@ -481,7 +476,8 @@ export function Home({
         return (
           <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
             <div className="ranking-screen">
-              <Leaderboard stats={stats} game={game} />
+              <SeasonHeader stats={stats} />
+              <Leaderboard stats={stats} game={game} title={`Classement ${GAME_NAMES[game]}`} />
             </div>
           </SubScreen>
         );

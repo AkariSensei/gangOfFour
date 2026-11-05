@@ -3866,99 +3866,6 @@ button.danger {
   letter-spacing: -0.02em;
 }
 
-/* La saison en cours, sous les jeux : son nom, le compte à rebours et le podium. */
-.season-card {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  border-radius: 20px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  text-align: left;
-  font-weight: 400;
-  box-shadow: none;
-}
-.season-card:not(:disabled):hover {
-  border-color: var(--accent-line);
-}
-.season-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-}
-.season-card-head strong {
-  font-family: var(--font-title);
-  font-weight: 500;
-  font-size: 1.35rem;
-}
-.season-card-left {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--accent-light);
-  font-weight: 500;
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-.season-podium {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
-}
-.season-podium li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 48px;
-  padding: 0 16px;
-  border-radius: 12px;
-  background: var(--surface-2);
-}
-.season-podium-rank {
-  width: 20px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-/* Le podium en trois teintes de la famille orange : ambre, abricot, rouille. */
-.rank-1 .season-podium-rank {
-  color: var(--amber);
-}
-.rank-2 .season-podium-rank {
-  color: var(--apricot);
-}
-.rank-3 .season-podium-rank {
-  color: var(--rust);
-}
-.season-podium-name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.season-podium-wins {
-  font-size: 0.875rem;
-  color: var(--page-sub);
-  font-variant-numeric: tabular-nums;
-}
-.season-card-empty {
-  color: var(--page-sub);
-}
-.season-card-note {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
 /*
  * Les jeux du catalogue, comme des boîtes de jeu posées sur la table : chacun sa teinte sombre (braise, ambre,
  * mer) sous son illustration. C'est le moment coloré de la page ; le reste reste calme.
@@ -4062,20 +3969,6 @@ button.danger {
   top: 0.5rem;
   left: clamp(1rem, 3vw, 1.75rem);
   z-index: 1;
-}
-
-.season-screen {
-  display: grid;
-  gap: 1rem;
-}
-.season-head h2 {
-  margin: 0 0 0.25rem;
-}
-.season-head p {
-  margin: 0.25rem 0;
-}
-.season-coming {
-  text-align: center;
 }
 
 .community {
@@ -5089,4 +4982,53 @@ button .lucide {
 }
 .new-idea-note {
   margin: 0;
+}
+
+/* La saison : une ligne discrète sur la page Jeux, et l'en-tête du classement de chaque jeu. */
+.catalog-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+.season-line {
+  margin: 0;
+  color: var(--page-sub);
+  font-size: 0.9375rem;
+}
+.season-line-left {
+  margin-left: 8px;
+  color: var(--accent-light);
+}
+.season-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 20px 24px;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.season-header h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-title);
+  font-weight: 500;
+  font-size: 1.25rem;
+}
+.season-header p {
+  margin: 0;
+}
+.season-header-left {
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-light);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-screen .season-header {
+  grid-column: 1 / -1;
 }

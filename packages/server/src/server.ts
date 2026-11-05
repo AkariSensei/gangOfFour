@@ -793,7 +793,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const statsOf = (game: GameId): GameStats => ({
         leaderboard: history.leaderboard(10, undefined, 'online', game),
         seasonal: history.leaderboard(10, season.id, 'online', game),
-        recent: history.recent(5, game),
+        recent: history.recent(5, game, 'online'),
         streak: history.bestStreak('online', game),
       });
       ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship') } });

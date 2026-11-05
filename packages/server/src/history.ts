@@ -237,8 +237,9 @@ export class GameHistory {
     return this.accounts?.get(this.owner(player))?.name ?? player.name;
   }
 
-  recent(limit = 5, game = DEFAULT_GAME): GameRecord[] {
-    return this.counted
+  /** `mode` : seulement les parties en ligne, ou seulement contre les bots (sans : toutes). */
+  recent(limit = 5, game = DEFAULT_GAME, mode?: RankingMode): GameRecord[] {
+    return this.ofMode(mode)
       .filter((r) => gameOf(r) === game)
       .slice(-limit)
       .reverse()

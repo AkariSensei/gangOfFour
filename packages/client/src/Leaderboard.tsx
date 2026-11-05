@@ -1,10 +1,20 @@
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { GameId, GameStats, Season } from '../../server/src/protocol';
+import type { GameId, GameStats, LeaderboardEntry, Season } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** Ce que montre la dernière colonne du classement, selon le jeu. */
+const AVERAGE_LABELS: Record<GameId, { title: string; text: (e: LeaderboardEntry) => string }> = {
+  gof: { title: 'Score moyen (le plus bas est le meilleur)', text: (e) => `moy. ${e.averageScore} pts` },
+  slots: { title: 'Solde moyen en fin de duel', text: (e) => `moy. ${e.averageScore} €` },
+  battleship: { title: 'Part des batailles gagnées', text: (e) => `${Math.round((100 * e.wins) / Math.max(1, e.games))} % gagnées` },
+};
+
+/** L'unité d'une partie, pour les dernières parties : des manches, des tours ou des tirs. */
+const ROUND_UNITS: Record<GameId, string> = { gof: 'manche', slots: 'tour', battleship: 'tir' };
 
 /** La saison en cours et les classements de chaque jeu. */
 export interface Stats {
@@ -109,8 +119,8 @@ export function Leaderboard({
               <span className="stat" title="Victoires / parties">
                 <strong>{e.wins}</strong> / {e.games}
               </span>
-              <span className="stat muted" title={withProfile ? 'Score moyen (le plus bas est le meilleur)' : 'Points moyens par partie'}>
-                moy. {e.averageScore}
+              <span className="stat muted" title={AVERAGE_LABELS[game].title}>
+                {AVERAGE_LABELS[game].text(e)}
               </span>
             </li>
           ))}
@@ -143,7 +153,7 @@ export function Leaderboard({
                     .map((p) => p.name)
                     .join(', ')}{' '}
                   <span className="muted">
-                    · {r.players.length} joueurs · {r.rounds} manche
+                    · {r.players.length} joueurs · {r.rounds} {ROUND_UNITS[game]}
                     {r.rounds > 1 ? 's' : ''}
                   </span>
                 </span>
