@@ -9,6 +9,7 @@ import { CommunityStore } from './community';
 import { GameHistory } from './history';
 import { seasonOf } from './seasons';
 import { SavedRooms } from './saved-rooms';
+import { SiteSettings } from './site';
 import { createStaticHandler } from './static';
 import type { GameState } from '@gof/engine';
 import { type ClientToServerEvents, type GameStats, type GameView, REACTIONS, type ServerToClientEvents } from './protocol';
@@ -92,6 +93,10 @@ export interface GameServerOptions {
   adminEmail?: string;
   /** Vérification du jeton Google (remplacée dans les tests). */
   verifyGoogle?: VerifyGoogle;
+  /** Fichier JSON des réglages du site (maintenance) ; sans fichier, ils restent en mémoire. */
+  siteFile?: string;
+  /** Site en maintenance tant que l'admin ne l'a pas rouvert (quand le fichier des réglages n'existe pas encore). */
+  maintenanceByDefault?: boolean;
 }
 
 type AnyAck = (result: unknown) => void;
@@ -127,6 +132,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   }
   const verifyGoogle = options.verifyGoogle ?? (options.googleClientId ? googleVerifier(options.googleClientId) : undefined);
   const errors = new ErrorLog(options.errorsFile);
+  const site = new SiteSettings(options.siteFile, { maintenance: options.maintenanceByDefault ?? false });
   const saved = new SavedRooms(options.roomsFile, () => rooms.all());
   rooms.restore(saved.load());
 
@@ -498,14 +504,25 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       return account && !account.blocked ? account : undefined;
     }
 
-    /** Pour s'asseoir à une table, il faut un compte avec un pseudo. */
+    /** Site en maintenance : seul l'admin entre encore dans les salons. */
+    const closed = () => site.maintenance && !accounts.isAdmin(me());
+
+    /** Pour s'asseoir à une table, il faut un compte avec un pseudo (et un site ouvert). */
     function player(): Result<{ account: NonNullable<ReturnType<typeof me>>; name: string }> {
       const account = me();
+      if (closed()) return { ok: false, error: 'maintenance' };
       if (!account) return { ok: false, error: 'notSignedIn' };
       if (!account.name) return { ok: false, error: 'noName' };
       return { ok: true, account, name: account.name };
     }
 
+    on('site:get', (_payload, ack) => ack({ ok: true, maintenance: site.maintenance }));
+    on('admin:maintenance', (payload, ack) => {
+      if (!accounts.isAdmin(me())) return ack({ ok: false, error: 'notAdmin' });
+      site.setMaintenance(payload.on === true);
+      io.emit('site:changed');
+      ack({ ok: true });
+    });
     on('account:get', (_payload, ack) => {
       const account = me();
       ack({ ok: true, account: account ? accounts.view(account) : null, googleClientId: options.googleClientId ?? null });
@@ -651,12 +668,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       const { account, name } = seated;
       return enter(rooms.join(text(payload.code), name, account, account.id, accounts.isAdmin(account)), ack);
     });
-    on('room:rejoin', (payload, ack) => enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack));
+    on('room:rejoin', (payload, ack) =>
+      closed() ? ack({ ok: false, error: 'maintenance' }) : enter(rooms.rejoin(text(payload.code), text(payload.token), payload.onlyIfFree === true), ack),
+    );
     on('room:leave', (_payload, ack) => {
       leaveCurrent();
       ack({ ok: true });
     });
     on('room:watch', async (payload, ack) => {
+      if (closed()) return ack({ ok: false, error: 'maintenance' });
       const room = rooms.get(text(payload.code));
       if (!room) return ack({ ok: false, error: 'roomNotFound' });
       if (!room.game) return ack({ ok: false, error: 'gameNotStarted' });

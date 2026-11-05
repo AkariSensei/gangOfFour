@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { AVATARS, type AccountView, type AdminAccount, COLORS, type InviteView, type Look } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { setMaintenance } from './Maintenance';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -403,6 +404,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           ✕
         </button>
         <h2>Comptes</h2>
+        <p className="admin-maintenance">
+          <button type="button" className="danger" onClick={async () => setError(await setMaintenance(true))}>
+            🔧 Fermer le site pour maintenance
+          </button>
+          <span className="muted small">Les joueurs verront un message ; toi seul pourras encore jouer.</span>
+        </p>
         {accounts && <Invites invites={invites} onChange={load} />}
         {!accounts && !error && <p className="muted">Chargement…</p>}
         {error && <p className="error">{error}</p>}

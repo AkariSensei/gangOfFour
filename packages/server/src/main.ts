@@ -30,6 +30,9 @@ const accountsFile = process.env.ACCOUNTS_FILE ?? join(dirname(historyFile), 'co
 // Le mur de la communauté (idées, bugs, votes et commentaires).
 const communityFile = process.env.COMMUNITY_FILE ?? join(dirname(historyFile), 'communaute.json');
 
+// Réglages du site choisis par l'admin (maintenance). Sans fichier, le site démarre fermé : l'admin le rouvre.
+const siteFile = process.env.SITE_FILE ?? join(dirname(historyFile), 'site.json');
+
 // Connexion Google : identifiant du client OAuth (GOOGLE_CLIENT_ID), et adresse Google de l'admin (ADMIN_EMAIL).
 const googleClientId = process.env.GOOGLE_CLIENT_ID || undefined;
 const adminEmail = process.env.ADMIN_EMAIL || undefined;
@@ -45,6 +48,8 @@ const { http, saveRooms, errors } = createGameServer({
   communityFile,
   googleClientId,
   adminEmail,
+  siteFile,
+  maintenanceByDefault: true,
 });
 
 // Filet de sécurité : une erreur imprévue est notée dans le journal mais n'arrête plus le serveur (et les parties).

@@ -23,6 +23,7 @@ export function combinationLabel(type: CombinationType, size: number): string {
 export const ERROR_LABELS: Record<RoomError | ActionError | PresidentError | 'disconnected', string> = {
   roomNotFound: 'Salon introuvable. Vérifie le code.',
   roomFull: 'Ce salon est complet.',
+  maintenance: 'Le site est en maintenance : reviens un peu plus tard.',
   trainingOnly: 'Les bots ne jouent qu’à l’entraînement.',
   trainingRoom: 'C’est une partie d’entraînement : on ne peut pas la rejoindre.',
   seatTaken: 'Ta place est déjà ouverte dans un autre onglet.',

@@ -231,6 +231,27 @@ describe('serveur de jeu', () => {
     expect(await again.emitWithAck('account:get')).toMatchObject({ account: { name: 'Camille' }, googleClientId: 'client-test' });
   });
 
+  it('ferme le site pour maintenance : seul l’admin entre encore dans un salon, et lui seul le rouvre', async () => {
+    await start({ adminEmail: 'chef@exemple.fr', maintenanceByDefault: true });
+    server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });
+    server.accounts.update('chef', { name: 'Maître' });
+    const admin = connectWith({ session: server.accounts.session('chef') });
+    const player = connect('Bruno');
+    expect(await player.emitWithAck('site:get')).toEqual({ ok: true, maintenance: true });
+    expect(await player.emitWithAck('room:create', {})).toEqual({ ok: false, error: 'maintenance' });
+    expect(await player.emitWithAck('admin:maintenance', { on: false })).toEqual({ ok: false, error: 'notAdmin' });
+    // L'admin, lui, joue pour tester.
+    const created = await admin.emitWithAck('room:create', {});
+    if (!created.ok) throw new Error(created.error);
+    expect(await player.emitWithAck('room:join', { code: created.code })).toEqual({ ok: false, error: 'maintenance' });
+    let changed = false;
+    player.on('site:changed', () => (changed = true));
+    expect(await admin.emitWithAck('admin:maintenance', { on: false })).toEqual({ ok: true });
+    await waitFor(() => changed);
+    expect(await player.emitWithAck('site:get')).toEqual({ ok: true, maintenance: false });
+    expect((await player.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+  });
+
   it("laisse l'admin renommer et bloquer les comptes", async () => {
     await start({ adminEmail: 'chef@exemple.fr' });
     server.accounts.signIn({ sub: 'chef', email: 'chef@exemple.fr' });

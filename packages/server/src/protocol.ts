@@ -129,6 +129,7 @@ export interface LiveRoom {
 
 export type RoomError =
   | 'roomNotFound'
+  | 'maintenance'
   | 'roomFull'
   | 'trainingOnly'
   | 'trainingRoom'
@@ -240,6 +241,10 @@ export interface ClientToServerEvents {
    * ne peut rejoindre et qui ne compte nulle part ; c'est le seul salon où l'on peut ajouter des bots.
    */
   'room:create': (payload: { game?: GameId; training?: boolean }, ack: Ack<Session>) => void;
+  /** Le site est-il en maintenance (fermé à tous sauf l'admin) ? */
+  'site:get': (ack: Ack<{ maintenance: boolean }>) => void;
+  /** L'admin ferme le site pour maintenance, ou le rouvre. */
+  'admin:maintenance': (payload: { on: boolean }, ack: Ack) => void;
   /** Salons de ce jeu qui attendent des joueurs, pour les rejoindre depuis la page du jeu. */
   'rooms:open': (payload: { game: GameId }, ack: Ack<{ rooms: OpenRoom[] }>) => void;
   'room:join': (payload: { code: string }, ack: Ack<Session>) => void;
@@ -309,6 +314,8 @@ export interface ServerToClientEvents {
   'stats:changed': () => void;
   /** Le mur de la communauté a changé : l'écran ouvert le recharge. */
   'community:changed': () => void;
+  /** L'admin a fermé ou rouvert le site. */
+  'site:changed': () => void;
   /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */
   'progress:gained': (gain: { gained: number; before: Progress; after: Progress; rewards: string[] }) => void;
 }

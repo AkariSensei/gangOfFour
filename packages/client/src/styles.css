@@ -4840,3 +4840,83 @@ button.danger {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ——— Maintenance : le site fermé pour travaux ——— */
+.maintenance {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+}
+.maintenance-box {
+  width: min(560px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border-radius: 28px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  text-align: center;
+}
+.maintenance-mark {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 2.4rem;
+  font-family: var(--font-title);
+  font-weight: 800;
+  border-radius: 22px;
+}
+.maintenance-box h1 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+.maintenance-box p {
+  margin: 0;
+  color: var(--page-sub);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.maintenance-cards {
+  font-size: 1.8rem;
+  letter-spacing: 0.4rem;
+}
+.maintenance-admin {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.maintenance-admin summary {
+  cursor: pointer;
+}
+.maintenance-admin[open] summary {
+  margin-bottom: 0.6rem;
+}
+.maintenance-banner {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.45rem 1rem;
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 700;
+}
+.maintenance-banner button.link {
+  color: var(--ink);
+  border-color: rgba(0, 0, 0, 0.35);
+}
+.admin-maintenance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+}
