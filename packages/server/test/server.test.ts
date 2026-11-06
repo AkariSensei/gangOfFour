@@ -427,12 +427,14 @@ describe('serveur de jeu', () => {
 
     const stats = await alice.emitWithAck('stats:get');
     expect(stats.ok && stats.games.slots.recent).toHaveLength(1);
-    // Les deux partaient de 1000 : le gagnant prend 24 points au perdant, et chacun l'apprend en fin de partie.
+    // Les deux partaient de 1000 : le gagnant prend 24 points au perdant, et chacun l'apprend en fin de partie. Les
+    // tirages sont au hasard : les deux peuvent aussi finir à égalité (ruinés au même tour), et chacun garde ses 1000.
     const ranking = stats.ok ? stats.games.slots.ranking : [];
-    expect(ranking.map((e) => e.rating)).toEqual([1024, 976]);
-    expect(ranking[0]!.name).toBe(end.winners[0] === 0 ? 'Alice' : 'Bruno');
+    const tie = end.winners.length !== 1;
+    expect(ranking.map((e) => e.rating)).toEqual(tie ? [1000, 1000] : [1024, 976]);
+    if (!tie) expect(ranking[0]!.name).toBe(end.winners[0] === 0 ? 'Alice' : 'Bruno');
     await waitFor(() => changes.length === 1);
-    expect(changes[0]).toEqual({ game: 'slots', before: 1000, after: end.winners[0] === 0 ? 1024 : 976 });
+    expect(changes[0]).toEqual({ game: 'slots', before: 1000, after: tie ? 1000 : end.winners[0] === 0 ? 1024 : 976 });
     // Le duel ne compte ni dans le classement de Gang of Four, ni dans son niveau.
     expect(stats.ok && stats.games.gof.recent).toEqual([]);
     expect(server.history.progressOfAccount(server.accounts.byName('Alice')!.id).xp).toBe(0);
