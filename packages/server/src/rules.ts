@@ -1,4 +1,17 @@
 import {
+  type ChessState,
+  DEFAULT_TIME_CONTROL,
+  NO_CLOCK,
+  TIME_CONTROLS,
+  applyChessAction,
+  chessBotAcceptsDraw,
+  chessBotMove,
+  chessTimeLeft,
+  chessToMove,
+  chessView,
+  createChess,
+  forfeitChess,
+  holdChessClock,
   type ReversiState,
   applyReversiAction,
   createReversi,
@@ -28,11 +41,11 @@ import { type BotLevel, chooseBotAction } from './bot';
 import { type GameSummary, gofSummary } from './history';
 
 /** Les jeux jouables : chacun a ses règles ci-dessous. */
-export type GameId = 'gof' | 'slots' | 'battleship' | 'reversi';
-export const GAME_IDS: GameId[] = ['gof', 'slots', 'battleship', 'reversi'];
+export type GameId = 'gof' | 'slots' | 'battleship' | 'reversi' | 'chess';
+export const GAME_IDS: GameId[] = ['gof', 'slots', 'battleship', 'reversi', 'chess'];
 
 /** Partie en cours, de n'importe quel jeu ; ses règles savent la lire. */
-export type AnyGame = GameState | SlotsState | BattleshipState | ReversiState;
+export type AnyGame = GameState | SlotsState | BattleshipState | ReversiState | ChessState;
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
 export type PlayerAction =
@@ -43,12 +56,20 @@ export type PlayerAction =
   | { type: 'place'; ships: Ship[] }
   | { type: 'shoot'; cell: number }
   | { type: 'move'; cell: number }
+  | { type: 'chessMove'; from: number; to: number; promotion?: number }
+  | { type: 'resign' }
+  | { type: 'draw'; answer: 'offer' | 'accept' | 'decline' }
+  | { type: 'flag' }
   | { type: 'nextRound' }
   | { type: 'cut'; position: number };
 
 /** Réglages choisis par l'hôte au lancement : chaque jeu prend ce qui le concerne. */
 export interface GameSettings {
   targetScore?: number;
+  /** Cadence des échecs (« 5+0 »…), ou sans pendule à l'entraînement. */
+  timeControl?: string;
+  /** Partie d'entraînement contre un bot (le salon le précise lui-même). */
+  training?: boolean;
 }
 
 /** Scores de fin de partie de Gang of Four que l'hôte peut choisir. */
@@ -87,6 +108,21 @@ export interface GameRules {
   round(game: AnyGame): number;
   scores(game: AnyGame): number[];
   summary(game: AnyGame): GameSummary;
+  /** Pendule tenue par le jeu lui-même (échecs) : le temps du joueur au trait, et l'arrêt pendant une pause. */
+  clock?: {
+    left(game: AnyGame, now: number): number | null;
+    hold(game: AnyGame, held: boolean, now: number): AnyGame;
+    /** Relance le tour en cours maintenant, sans rien décompter (après un redémarrage du serveur). */
+    restart(game: AnyGame, now: number): AnyGame;
+  };
+  /** Aucun bot ne remplace un joueur parti : sa pendule tourne, et l'autre peut réclamer la victoire. */
+  noStandIn?: boolean;
+  /** Le joueur `loser` est parti pour de bon : la partie s'arrête à son détriment. */
+  forfeit?(game: AnyGame, loser: number): AnyGame;
+  /** Partie finie mais annulée (personne n'a joué) : elle ne compte nulle part. */
+  uncounted?(game: AnyGame): boolean;
+  /** Temps de réflexion des bots, s'il diffère des 3 à 4 secondes habituelles. */
+  botDelayMs?(): number;
 }
 
 /** Action du moteur sans le siège : le salon l'ajoute lui-même. */
@@ -105,6 +141,7 @@ const gof = (game: AnyGame) => game as GameState;
 const slots = (game: AnyGame) => game as SlotsState;
 const naval = (game: AnyGame) => game as BattleshipState;
 const reversi = (game: AnyGame) => game as ReversiState;
+const chess = (game: AnyGame) => game as ChessState;
 
 const GOF: GameRules = {
   id: 'gof',
@@ -114,7 +151,9 @@ const GOF: GameRules = {
     createGame(players, seed, { targetScore: TARGET_SCORES.includes(settings.targetScore!) ? settings.targetScore! : DEFAULT_TARGET_SCORE }),
   again: (game, players, seed) => createGame(players, seed, gof(game).config),
   act(game, playerIndex, action) {
-    if (action.type === 'spin' || action.type === 'place' || action.type === 'shoot' || action.type === 'move') return { ok: false, error: 'wrongPhase' };
+    if (action.type !== 'play' && action.type !== 'pass' && action.type !== 'giveCard' && action.type !== 'nextRound' && action.type !== 'cut') {
+      return { ok: false, error: 'wrongPhase' };
+    }
     const result = applyAction(gof(game), action.type === 'nextRound' ? action : { ...action, playerIndex });
     return result.ok ? { ok: true, game: result.state } : result;
   },
@@ -284,7 +323,85 @@ const REVERSI: GameRules = {
   },
 };
 
-const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS, battleship: BATTLESHIP, reversi: REVERSI };
+/** Cadence d'une nouvelle partie d'échecs : sans pendule seulement à l'entraînement. */
+function timeControlOf(settings: GameSettings): string {
+  const chosen = settings.timeControl;
+  if (chosen === NO_CLOCK && settings.training) return NO_CLOCK;
+  return TIME_CONTROLS.some((c) => c.id === chosen) ? chosen! : DEFAULT_TIME_CONTROL;
+}
+
+const CHESS: GameRules = {
+  id: 'chess',
+  minPlayers: 2,
+  maxPlayers: 2,
+  create: (players, seed, settings) => createChess(players, seed, timeControlOf(settings), Date.now()),
+  // Revanche : même cadence, et les couleurs s'échangent.
+  again: (game, players, seed) => createChess(players, seed, chess(game).timeControl, Date.now(), { white: 1 - chess(game).white }),
+  act(game, playerIndex, action) {
+    const g = chess(game);
+    const now = Date.now();
+    const result =
+      action.type === 'chessMove'
+        ? applyChessAction(g, { type: 'move', playerIndex, from: action.from, to: action.to, ...(action.promotion ? { promotion: action.promotion } : {}) }, now)
+        : action.type === 'resign' || action.type === 'flag'
+          ? applyChessAction(g, { type: action.type, playerIndex }, now)
+          : action.type === 'draw'
+            ? applyChessAction(g, { type: 'draw', playerIndex, answer: action.answer }, now)
+            : ({ ok: false, error: 'wrongPhase' } as const);
+    return result.ok ? { ok: true, game: result.state } : result;
+  },
+  toAct: (game) => (chess(game).phase === 'playing' ? chessToMove(chess(game)) : -1),
+  over: (game) => chess(game).phase === 'gameOver',
+  turnKey: (game) => `${chess(game).moves.length}`,
+  // La pendule des échecs remplace le minuteur de tour.
+  untimed: () => true,
+  botAction(game, index, random, level) {
+    const g = chess(game);
+    if (g.drawOffer === 1 - index && chessBotAcceptsDraw(g, index)) return { type: 'draw', answer: 'accept' };
+    const move = chessBotMove(g, index, random, level);
+    return move ? { type: 'chessMove', ...move } : null;
+  },
+  fallback: () => null,
+  // Pendule à zéro : le drapeau tombe.
+  timeout: () => ({ type: 'flag' }),
+  stuck: () => false,
+  view: (game, index) => chessView(chess(game), index, Date.now()),
+  spectatorView: (game) => chessView(chess(game), -1, Date.now()),
+  rename: (game, index, name) => renamed(chess(game), index, name),
+  round: (game) => Math.ceil(chess(game).moves.length / 2),
+  // Score affiché aux spectateurs : le matériel de chacun (pions 1, pièces mineures 3, tour 5, dame 9).
+  scores(game) {
+    const g = chess(game);
+    const worth = [0, 1, 3, 3, 5, 9, 0];
+    const white = g.position.board.reduce((sum, p) => sum + (p > 0 ? worth[p]! : 0), 0);
+    const black = g.position.board.reduce((sum, p) => sum + (p < 0 ? worth[-p]! : 0), 0);
+    return g.white === 0 ? [white, black] : [black, white];
+  },
+  // Victoire 2, nulle 1, défaite 0 : à égalité de score, la nulle partage les points.
+  summary(game) {
+    const g = chess(game);
+    return {
+      game: 'chess',
+      rounds: Math.ceil(g.moves.length / 2),
+      players: g.players.map((p, i) => ({ name: p.name, score: g.winners.length === 0 ? 1 : g.winners.includes(i) ? 2 : 0, winner: g.winners.includes(i) })),
+    };
+  },
+  clock: {
+    left: (game, now) => chessTimeLeft(chess(game), now),
+    hold: (game, held, now) => holdChessClock(chess(game), held, now),
+    restart(game, now) {
+      const g = chess(game);
+      return g.clock && g.clock.since !== null ? { ...g, clock: { ...g.clock, since: now } } : g;
+    },
+  },
+  noStandIn: true,
+  forfeit: (game, loser) => forfeitChess(chess(game), loser, Date.now()),
+  uncounted: (game) => chess(game).end === 'aborted',
+  // Aux échecs, le bot joue vite : on n'attend pas plusieurs secondes un coup évident.
+  botDelayMs: () => 500 + Math.random() * 700,
+};
+
+const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS, battleship: BATTLESHIP, reversi: REVERSI, chess: CHESS };
 
 /** Règles d'un jeu ; un salon sans jeu (d'avant les autres jeux) joue à Gang of Four. */
 export function rulesOf(game: GameId | undefined): GameRules {

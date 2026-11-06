@@ -1,4 +1,4 @@
-import type { ActionError, BattleshipError, Card, CombinationType, ReversiError, SlotsError } from '@gof/engine';
+import type { ActionError, BattleshipError, Card, ChessError, CombinationType, ReversiError, SlotsError } from '@gof/engine';
 import type { BotLevel, RoomError } from '../../server/src/protocol';
 
 /** Niveaux de bot, affichés dans le salon et sur la table. */
@@ -20,7 +20,7 @@ export function combinationLabel(type: CombinationType, size: number): string {
   return ['Gang of Four', 'Gang of Five', 'Gang of Six', 'Gang of Seven'][size - 4] ?? 'Gang';
 }
 
-export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | BattleshipError | ReversiError | 'disconnected', string> = {
+export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | BattleshipError | ReversiError | ChessError | 'disconnected', string> = {
   roomNotFound: 'Salon introuvable. Vérifie le code.',
   roomFull: 'Ce salon est complet.',
   maintenance: 'Le site est en maintenance : reviens un peu plus tard.',
@@ -60,11 +60,14 @@ export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | Battles
   mustPlayHighestSingle: 'Le joueur suivant n\'a plus qu\'une carte : joue ta carte la plus forte.',
   mustLeadCombination: 'Le joueur suivant n\'a plus qu\'une carte : ouvre avec une combinaison.',
   invalidCut: 'Coupe le paquet entre deux cartes.',
-  invalidFleet: 'Flotte non réglementaire : cinq bateaux droits, qui ne se touchent pas.',
+  invalidFleet: 'Flotte non réglementaire : cinq bateaux droits, sans en empiler deux sur une case.',
   alreadyPlaced: 'Ta flotte est déjà placée.',
   invalidCell: 'Cette case n’existe pas.',
   alreadyShot: 'Tu as déjà tiré sur cette case.',
-  illegalMove: 'Ce coup ne retourne aucun pion : choisis une case marquée.',
+  illegalMove: 'Ce coup n’est pas permis.',
+  noDrawOffer: 'Pas de proposition de nulle possible maintenant.',
+  timeLeft: 'Il reste du temps à la pendule.',
+  opponentHere: 'Ton adversaire est encore là : attends qu’il soit parti depuis une minute.',
   serverError: 'Le serveur a eu un problème, réessaie.',
   emptyMessage: 'Message vide.',
   muted: 'Ton chat a été coupé dans ce salon.',

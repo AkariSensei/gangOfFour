@@ -1,4 +1,5 @@
-import { type GameView, type RoomView, isBattleshipView, isReversiView, isSlotsView } from '../../server/src/protocol';
+import { type GameView, type RoomView, isBattleshipView, isChessView, isReversiView, isSlotsView } from '../../server/src/protocol';
+import { ChessTable } from './ChessTable';
 import { ReversiTable } from './ReversiTable';
 import { BattleshipTable } from './BattleshipTable';
 import { Home } from './Home';
@@ -21,6 +22,7 @@ export function App() {
     if (isSlotsView(game)) return <SlotsTable game={game} {...props} />;
     if (isBattleshipView(game)) return <BattleshipTable game={game} {...props} />;
     if (isReversiView(game)) return <ReversiTable game={game} {...props} />;
+    if (isChessView(game)) return <ChessTable game={game} {...props} />;
     return <Table game={game} {...props} />;
   };
 

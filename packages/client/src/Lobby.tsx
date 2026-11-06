@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { BotLevel, ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
 import { ChatPanel, KickButton, MuteButton } from './Chat';
+import { TIME_CONTROLS } from '@gof/engine';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -14,6 +15,7 @@ const SEAT_COUNTS: Record<RoomView['game'], { min: number; max: number; name: st
   slots: { min: 2, max: 2, name: 'Duel Jackpot' },
   battleship: { min: 2, max: 2, name: 'Bataille navale' },
   reversi: { min: 2, max: 2, name: 'Reversi' },
+  chess: { min: 2, max: 2, name: 'Échecs' },
 };
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];
@@ -46,6 +48,8 @@ export function Lobby({
   const maxSeats = counts.max;
   const gof = room.game === 'gof';
   const [turnSeconds, setTurnSeconds] = useState(0);
+  const chess = room.game === 'chess';
+  const [timeControl, setTimeControl] = useState('5+0');
   const isHost = room.hostId === session.playerId;
   // Places dans l'ordre d'arrivée, en commençant par la sienne (en bas) ; les places vides restent à la fin.
   const mine = Math.max(0, room.players.findIndex((p) => p.id === session.playerId));
@@ -57,7 +61,7 @@ export function Lobby({
   const link = `${location.origin}${location.pathname}?salon=${room.code}`;
 
   async function start() {
-    const result = await socket.emitWithAck('game:start', gof ? { targetScore, turnSeconds } : { turnSeconds });
+    const result = await socket.emitWithAck('game:start', gof ? { targetScore, turnSeconds } : chess ? { timeControl } : { turnSeconds });
     if (!result.ok) setError(errorLabel(result.error));
   }
 
@@ -182,7 +186,19 @@ export function Lobby({
             </div>
           </div>
         )}
-        {isHost && (
+        {isHost && chess && (
+          <div className="target-score">
+            <span className="muted">Cadence</span>
+            <div className="segmented wrap" role="radiogroup" aria-label="Cadence">
+              {TIME_CONTROLS.map((c) => (
+                <button key={c.id} role="radio" aria-checked={timeControl === c.id} className={timeControl === c.id ? 'on' : ''} onClick={() => setTimeControl(c.id)}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isHost && !chess && (
           <div className="target-score">
             <span className="muted">Temps par tour</span>
             <div className="segmented" role="radiogroup" aria-label="Temps par tour">

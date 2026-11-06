@@ -1,4 +1,4 @@
-import type { ActionError, BattleshipError, BattleshipView, Card, PlayerView, ReversiError, ReversiView, Ship, SlotsError, SlotsView } from '@gof/engine';
+import type { ActionError, BattleshipError, BattleshipView, Card, ChessError, ChessView, PlayerView, ReversiError, ReversiView, Ship, SlotsError, SlotsView } from '@gof/engine';
 import type { GameId } from './rules';
 import type { OpenRoom } from './rooms';
 export type { OpenRoom };
@@ -98,15 +98,18 @@ export interface IdeaView {
 
 /** Partie telle qu'envoyée à un joueur ; un spectateur reçoit en plus la main de chacun (`hands`), qu'il affiche au choix. */
 export type GofView = PlayerView & { hands?: Card[][] };
-export type GameView = GofView | SlotsView | BattleshipView | ReversiView;
+export type GameView = GofView | SlotsView | BattleshipView | ReversiView | ChessView;
 export type { GameId };
 
 /** La vue est-elle celle d'un duel de machines à sous ? */
 export const isSlotsView = (view: GameView): view is SlotsView => 'game' in view && view.game === 'slots';
-export type { SlotsError, BattleshipError, ReversiError };
+export type { SlotsError, BattleshipError, ReversiError, ChessError };
 
 /** La vue est-elle celle d'une partie de Reversi ? */
 export const isReversiView = (view: GameView): view is ReversiView => 'game' in view && view.game === 'reversi';
+
+/** La vue est-elle celle d'une partie d'échecs ? */
+export const isChessView = (view: GameView): view is ChessView => 'game' in view && view.game === 'chess';
 
 /** La vue est-elle celle d'une bataille navale ? */
 export const isBattleshipView = (view: GameView): view is BattleshipView => 'game' in view && view.game === 'battleship';
@@ -160,6 +163,7 @@ export type RoomError =
   | 'muted'
   | 'kicked'
   | 'paused'
+  | 'opponentHere'
   | 'tutorialMove'
   | 'locked'
   | 'invalidInvite'
@@ -268,8 +272,8 @@ export interface ClientToServerEvents {
   'room:kick': (payload: { playerId: string }, ack: Ack) => void;
   /** L'hôte ou l'admin met la partie en pause (pour une réunion, un café) ou la relance. */
   'room:pause': (payload: { paused: boolean }, ack: Ack) => void;
-  /** `targetScore` : score de fin de Gang of Four (les autres jeux l'ignorent). */
-  'game:start': (payload: { targetScore?: number; turnSeconds?: number }, ack: Ack) => void;
+  /** `targetScore` : score de fin de Gang of Four ; `timeControl` : cadence des échecs (les autres jeux les ignorent). */
+  'game:start': (payload: { targetScore?: number; turnSeconds?: number; timeControl?: string }, ack: Ack) => void;
   'game:rematch': (ack: Ack) => void;
   'game:play': (payload: { cardIds: string[] }, ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
@@ -282,6 +286,14 @@ export interface ClientToServerEvents {
   'game:shoot': (payload: { cell: number }, ack: Ack) => void;
   /** Reversi : poser un pion sur une case (0 à 63). */
   'game:move': (payload: { cell: number }, ack: Ack) => void;
+  /** Échecs : jouer un coup (cases 0 = a1 à 63 = h8 ; `promotion` : 2 cavalier, 3 fou, 4 tour, 5 dame). */
+  'game:chessMove': (payload: { from: number; to: number; promotion?: number }, ack: Ack) => void;
+  /** Échecs : abandonner (avant que chacun ait joué, la partie est seulement annulée). */
+  'game:resign': (ack: Ack) => void;
+  /** Échecs : proposer la nulle, ou répondre à celle de l'adversaire. */
+  'game:draw': (payload: { answer: 'offer' | 'accept' | 'decline' }, ack: Ack) => void;
+  /** Échecs : l'adversaire est parti depuis une minute, le joueur resté réclame la victoire. */
+  'game:claim': (ack: Ack) => void;
   'game:nextRound': (ack: Ack) => void;
   'game:cut': (payload: { position: number }, ack: Ack) => void;
   /** La saison en cours, et les classements de chaque jeu jouable. */

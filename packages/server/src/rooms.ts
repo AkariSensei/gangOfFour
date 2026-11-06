@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { type ActionError, type BattleshipError, type ReversiError, type SlotsError, createGame } from '@gof/engine';
+import { type ActionError, type BattleshipError, type ChessError, type ReversiError, type SlotsError, createGame } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { TUTORIAL_SCRIPT, type TutorialMove, tutorialDeck } from './tutorial';
 import { AVATARS, COLORS, type Cosmetics, type Look, type RoomError, type RoomView, type Session } from './protocol';
@@ -78,7 +78,7 @@ export interface OpenRoom {
   maxPlayers: number;
 }
 
-export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | SlotsError | BattleshipError | ReversiError };
+export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: RoomError | ActionError | SlotsError | BattleshipError | ReversiError | ChessError };
 
 /** Les règles du jeu d'un salon. */
 export const rulesOfRoom = (room: Room) => rulesOf(room.kind);
@@ -339,8 +339,13 @@ export class RoomManager {
     const hostHere = !!room.seats.find((s) => s.playerId === room.hostId)?.connected;
     const seated = room.seats.some((s) => s.playerId === byId && !s.bot && !s.vacant);
     if (!isAdmin && !(seated && (byId === room.hostId || !hostHere))) return { ok: false, error: 'notHost' };
+    // Aux échecs, la pause arrête les pendules : seul l'admin peut la décider, sauf à l'entraînement.
+    if (rulesOfRoom(room).clock && !isAdmin && !room.training) return { ok: false, error: 'notHost' };
     if (paused) room.paused = true;
     else delete room.paused;
+    // Aux échecs, la pendule s'arrête avec la partie.
+    const clock = rulesOfRoom(room).clock;
+    if (clock) room.game = clock.hold(room.game, paused, Date.now());
     return { ok: true };
   }
 
@@ -361,8 +366,28 @@ export class RoomManager {
    */
   botToAct(code: string): Seat | null {
     const seat = this.seatToAct(code);
-    if (this.get(code)?.paused) return null;
-    return seat?.bot || (seat?.away && !this.isAbandoned(code)) ? seat : null;
+    const room = this.get(code);
+    if (!room || room.paused) return null;
+    const standIn = !rulesOfRoom(room).noStandIn && seat?.away && !this.isAbandoned(code);
+    return seat?.bot || standIn ? seat : null;
+  }
+
+  /**
+   * Aux jeux sans bot remplaçant (échecs), l'adversaire parti depuis un moment perd la partie si le joueur resté la
+   * réclame. Avant que chacun ait joué, la partie est seulement annulée.
+   */
+  claimVictory(code: string, playerId: string): Result {
+    const room = this.get(code);
+    if (!room) return { ok: false, error: 'roomNotFound' };
+    const rules = rulesOfRoom(room);
+    if (!room.game || !rules.forfeit) return { ok: false, error: 'gameNotStarted' };
+    if (rules.over(room.game)) return { ok: false, error: 'wrongPhase' };
+    const me = room.seats.findIndex((s) => s.playerId === playerId && !s.bot);
+    if (me < 0) return { ok: false, error: 'notInRoom' };
+    const gone = room.seats.findIndex((s, i) => i !== me && s.away && !s.connected);
+    if (gone < 0) return { ok: false, error: 'opponentHere' };
+    room.game = rules.forfeit(room.game, gone);
+    return { ok: true };
   }
 
   /**
@@ -409,6 +434,9 @@ export class RoomManager {
       // Un jeu retiré du site (le Président) : son salon est abandonné.
       if (room.kind && !isGameId(room.kind)) continue;
       room.seats.forEach((s) => (s.connected = !!s.bot));
+      // Le temps passé serveur arrêté n'est décompté à personne : la pendule repart maintenant.
+      const clock = rulesOf(room.kind).clock;
+      if (clock && room.game) room.game = clock.restart(room.game, Date.now());
       this.rooms.set(room.code, room);
     }
   }
@@ -423,7 +451,7 @@ export class RoomManager {
     room.game = rules.create(
       room.seats.map((s) => ({ id: s.playerId, name: s.name })),
       options.seed ?? randomInt(2 ** 31),
-      options,
+      { ...options, training: !!room.training },
     );
     room.turnSeconds = TURN_SECONDS.includes(options.turnSeconds!) ? options.turnSeconds : 0;
     return { ok: true };
@@ -465,7 +493,7 @@ export class RoomManager {
       if (!scripted || scripted.player !== playerIndex || !same) return { ok: false, error: 'tutorialMove' };
     }
     const result = rulesOfRoom(room).act(room.game, playerIndex, action);
-    if (!result.ok) return { ok: false, error: result.error as ActionError | SlotsError | BattleshipError | ReversiError };
+    if (!result.ok) return { ok: false, error: result.error as ActionError | SlotsError | BattleshipError | ReversiError | ChessError };
     room.game = result.game;
     if (room.tutorial) room.tutorial.step += 1;
     return { ok: true };

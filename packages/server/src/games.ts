@@ -21,6 +21,15 @@ export interface GameInfo {
 export const GAMES: GameInfo[] = [
   { id: 'gof', name: 'Gang of Four', tagline: 'Combinaisons, gangs et dragon rouge', players: '3 ou 4 joueurs', status: 'live', lowScoreWins: true, botLevels: true },
   {
+    id: 'chess',
+    name: 'Échecs',
+    tagline: 'Blitz ou rapide, à la pendule, avec toutes les règles',
+    players: '2 joueurs',
+    status: 'live',
+    beta: true,
+    botLevels: true,
+  },
+  {
     id: 'slots',
     name: 'Duel Jackpot',
     tagline: 'Deux machines à sous, 100 € chacun : le premier à 300 € gagne',

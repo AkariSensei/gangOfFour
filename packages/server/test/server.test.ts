@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { type BattleshipView, type GameState, type ReversiView, type PlayerView, type SlotsView, createDeck, createRng, randomFleet } from '@gof/engine';
+import { type BattleshipView, type ChessView, type GameState, type ReversiView, type PlayerView, type SlotsView, createDeck, createRng, randomFleet } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -541,7 +541,115 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.games.reversi.recent).toEqual([]);
   }, 40000);
 
+  it('fait jouer une partie d’échecs à la pendule entre deux humains, classée en points, et échange les couleurs à la revanche', async () => {
+    await start();
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'chess' });
+    if (!created.ok) throw new Error(created.error);
+    const bruno = connect('Bruno');
+    expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+    const changes: { before: number; after: number }[] = [];
+    alice.on('rating:changed', (c) => changes.push(c));
+    expect((await alice.emitWithAck('game:start', { timeControl: '3+2' })).ok).toBe(true);
+    const view = (c: Client) => c.game as unknown as ChessView | undefined;
+    await waitFor(() => [alice, bruno].every((c) => view(c)?.game === 'chess'));
+    const players = [alice, bruno];
+    const first = view(alice)!;
+    expect(first).toMatchObject({ timeControl: '3+2', currentPlayer: first.white, clock: { remaining: [180_000, 180_000], running: null } });
+    const white = players[first.white]!;
+    const black = players[1 - first.white]!;
+    expect(view(white)!.legal).toHaveLength(20);
+    expect(view(black)!.legal).toEqual([]);
+    expect(await black.emitWithAck('game:chessMove', { from: 52, to: 36 })).toEqual({ ok: false, error: 'notYourTurn' });
+    expect(await white.emitWithAck('game:chessMove', { from: 12, to: 36 })).toEqual({ ok: false, error: 'illegalMove' });
+
+    // Le mat du berger inversé : f3 e5 g4 Dh4 mat.
+    const moves: [Client, number, number][] = [
+      [white, 13, 21],
+      [black, 52, 36],
+      [white, 14, 30],
+      [black, 59, 31],
+    ];
+    for (const [who, from, to] of moves) {
+      const before = view(alice)!.moves.length;
+      expect((await who.emitWithAck('game:chessMove', { from, to })).ok).toBe(true);
+      await waitFor(() => view(alice)!.moves.length === before + 1);
+    }
+    await waitFor(() => view(alice)!.phase === 'gameOver');
+    expect(view(alice)).toMatchObject({ end: 'checkmate', winners: [1 - first.white] });
+    expect(view(alice)!.moves.map((m) => m.san)).toEqual(['f3', 'e5', 'g4', 'Qh4#']);
+    await waitFor(() => changes.length === 1);
+    expect(changes[0]!.after).toBe(alice === black ? 1024 : 976);
+
+    // Revanche : l'autre a les blancs, puis nulle par accord après deux coups.
+    expect((await bruno.emitWithAck('game:rematch')).ok).toBe(true);
+    await waitFor(() => view(alice)!.phase === 'playing');
+    expect(view(alice)!.white).toBe(1 - first.white);
+    const white2 = players[view(alice)!.white]!;
+    const black2 = players[1 - view(alice)!.white]!;
+    expect(await white2.emitWithAck('game:draw', { answer: 'offer' })).toEqual({ ok: false, error: 'noDrawOffer' });
+    await white2.emitWithAck('game:chessMove', { from: 12, to: 28 });
+    await black2.emitWithAck('game:chessMove', { from: 52, to: 36 });
+    await waitFor(() => view(alice)!.moves.length === 2);
+    expect((await white2.emitWithAck('game:draw', { answer: 'offer' })).ok).toBe(true);
+    await waitFor(() => view(black2)!.drawOffer !== null);
+    expect((await black2.emitWithAck('game:draw', { answer: 'accept' })).ok).toBe(true);
+    await waitFor(() => view(alice)!.phase === 'gameOver');
+    expect(view(alice)).toMatchObject({ end: 'agreement', winners: [] });
+    const stats = await alice.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.chess.recent).toHaveLength(2);
+  }, 30000);
+
+  it('aux échecs, aucun bot ne remplace un absent : le joueur resté réclame la victoire', async () => {
+    await start({ awayDelayMs: 30 });
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'chess' });
+    if (!created.ok) throw new Error(created.error);
+    const bruno = connect('Bruno');
+    await bruno.emitWithAck('room:join', { code: created.code });
+    await alice.emitWithAck('game:start', { timeControl: '10+0' });
+    const view = (c: Client) => c.game as unknown as ChessView | undefined;
+    await waitFor(() => view(alice)?.game === 'chess' && view(bruno)?.game === 'chess');
+    const white = [alice, bruno][view(alice)!.white]!;
+    const black = [alice, bruno][1 - view(alice)!.white]!;
+    await white.emitWithAck('game:chessMove', { from: 12, to: 28 });
+    await black.emitWithAck('game:chessMove', { from: 52, to: 36 });
+    await waitFor(() => view(alice)!.moves.length === 2);
+    expect(await alice.emitWithAck('game:claim')).toEqual({ ok: false, error: 'opponentHere' });
+    bruno.disconnect();
+    await waitFor(() => !!alice.room?.players[1]?.away);
+    // Toujours au même point : personne n'a joué à la place de Bruno.
+    expect(view(alice)!.moves).toHaveLength(2);
+    expect((await alice.emitWithAck('game:claim')).ok).toBe(true);
+    await waitFor(() => view(alice)!.phase === 'gameOver');
+    expect(view(alice)).toMatchObject({ end: 'abandon', winners: [0] });
+  });
+
+  it('laisse s’entraîner aux échecs contre un bot, sans pendule, sans compter la partie', async () => {
+    await start({ botDelayMs: 0 });
+    const human = connect('Alice');
+    expect(await human.emitWithAck('room:create', { game: 'chess', training: true })).toMatchObject({ ok: true });
+    expect((await human.emitWithAck('room:addBot', { level: 'easy' })).ok).toBe(true);
+    expect((await human.emitWithAck('game:start', { timeControl: 'none' })).ok).toBe(true);
+    const view = () => human.game as unknown as ChessView | undefined;
+    await waitFor(() => view()?.game === 'chess');
+    expect(view()!.clock).toBe(null);
+    if (view()!.white === 0) await human.emitWithAck('game:chessMove', { from: 12, to: 28 });
+    // Le bot répond tout seul.
+    await waitFor(() => view()!.currentPlayer === 0 && view()!.moves.length > 0, 5000);
+    if (view()!.moves.length < 2) {
+      await human.emitWithAck('game:chessMove', view()!.legal[0]!);
+      await waitFor(() => view()!.moves.length >= 3, 5000);
+    }
+    expect((await human.emitWithAck('game:resign')).ok).toBe(true);
+    await waitFor(() => view()!.phase === 'gameOver');
+    expect(view()!.end).toBe('resign');
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.chess.recent).toEqual([]);
+  }, 20000);
+
   it('liste les salons qui attendent des joueurs, jeu par jeu', async () => {
+
     await start();
     const alice = connect('Alice');
     const created = await alice.emitWithAck('room:create', { game: 'slots' });

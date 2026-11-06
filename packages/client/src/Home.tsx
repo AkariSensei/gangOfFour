@@ -9,6 +9,7 @@ import { SlotIcon } from './SlotsTable';
 import { SlotsRules } from './SlotsRules';
 import { BattleshipRules } from './BattleshipRules';
 import { ReversiRules } from './ReversiRules';
+import { ChessRules } from './ChessRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonHeader, SeasonLine } from './Season';
@@ -45,6 +46,10 @@ const SCREENS = [
   'reversi-jouer',
   'reversi-regarder',
   'reversi-classement',
+  'echecs',
+  'echecs-jouer',
+  'echecs-regarder',
+  'echecs-classement',
 ] as const;
 type Screen = (typeof SCREENS)[number];
 
@@ -71,6 +76,10 @@ const PARENT: Partial<Record<Screen, Screen>> = {
   'reversi-jouer': 'reversi',
   'reversi-regarder': 'reversi',
   'reversi-classement': 'reversi',
+  echecs: 'jeux',
+  'echecs-jouer': 'echecs',
+  'echecs-regarder': 'echecs',
+  'echecs-classement': 'echecs',
   profil: 'jeux',
 };
 
@@ -80,11 +89,26 @@ const GAME_SCREENS: Record<GameId, { hub: Screen; play: Screen; watch: Screen; r
   slots: { hub: 'slots', play: 'slots-jouer', watch: 'slots-regarder', ranking: 'slots-classement' },
   battleship: { hub: 'naval', play: 'naval-jouer', watch: 'naval-regarder', ranking: 'naval-classement' },
   reversi: { hub: 'reversi', play: 'reversi-jouer', watch: 'reversi-regarder', ranking: 'reversi-classement' },
+  chess: { hub: 'echecs', play: 'echecs-jouer', watch: 'echecs-regarder', ranking: 'echecs-classement' },
 };
 /** Le jeu d'un écran « jouer », « regarder » ou « classement ». */
 const gameOfScreen = (s: Screen): GameId =>
   ((Object.entries(GAME_SCREENS) as [GameId, (typeof GAME_SCREENS)[GameId]][]).find(([, screens]) => [screens.play, screens.watch, screens.ranking].includes(s))?.[0] ?? 'gof');
-const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot', battleship: 'Bataille navale', reversi: 'Reversi' };
+const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot', battleship: 'Bataille navale', reversi: 'Reversi', chess: 'Échecs' };
+
+/** Un coin d'échiquier en fin de partie : la dame blanche et le cavalier serrent le roi noir. */
+function ChessArt() {
+  const pieces: Record<number, string> = { 1: 'bK', 6: 'wN', 9: 'wQ', 12: 'bP', 14: 'wK' };
+  return (
+    <span className="chess-art">
+      {Array.from({ length: 16 }, (_, i) => (
+        <span key={i} className={(Math.floor(i / 4) + i) % 2 === 0 ? 'light' : 'dark'}>
+          {pieces[i] && <img src={`/pieces/${pieces[i]}.svg`} alt="" draggable={false} />}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** Un coin de plateau de Reversi, quelques pions orange et crème, pour illustrer le jeu. */
 function ReversiArt() {
@@ -314,6 +338,8 @@ export function Home({
                         <NavalArt />
                       ) : g.id === 'reversi' ? (
                         <ReversiArt />
+                      ) : g.id === 'chess' ? (
+                        <ChessArt />
                       ) : (
                         <>
                           <img src="/cards/PV.webp" alt="" />
@@ -507,10 +533,45 @@ export function Home({
             </div>
           </div>
         );
+      case 'echecs':
+        return (
+          <div className="menu-screen game-hub chess-hub">
+            <button type="button" className="back-button hub-back" onClick={back}>
+              <ArrowLeft /> Jeux
+            </button>
+            <div className="menu-title">
+              <div className="chess-hub-art" aria-hidden>
+                <ChessArt />
+              </div>
+              <h1 className="game-title">
+                Échecs <span className="beta-badge big">Bêta</span>
+              </h1>
+              <p className="tagline">Blitz ou rapide, à la pendule, avec toutes les règles</p>
+            </div>
+            <div className="menu-side">
+              <nav className="game-menu" aria-label="Échecs">
+                <MenuItem primary icon={<Play />} title="Jouer" subtitle="Choisis ta cadence : crée un salon ou rejoins-en un" onClick={() => open('echecs-jouer')} />
+                <MenuItem
+                  icon={<Eye />}
+                  title="Regarder"
+                  subtitle={liveOf('chess').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
+                  pill={liveOf('chess').length > 0 ? { text: `${liveOf('chess').length} en cours`, live: true } : undefined}
+                  onClick={() => open('echecs-regarder')}
+                />
+                <div className="menu-tiles two">
+                  <MenuItem tile icon={<Trophy />} title="Classement" subtitle="Points de la saison" onClick={() => open('echecs-classement')} />
+                  <MenuItem tile icon={<BookOpen />} title="Règles" subtitle="Pendule, nulles, prémouvements" onClick={() => setRules('chess')} />
+                </div>
+              </nav>
+              {error && <p className="error">{error}</p>}
+            </div>
+          </div>
+        );
       case 'jouer':
       case 'slots-jouer':
       case 'naval-jouer':
-      case 'reversi-jouer': {
+      case 'reversi-jouer':
+      case 'echecs-jouer': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Jouer" onBack={back} backLabel={GAME_NAMES[game]}>
@@ -521,7 +582,8 @@ export function Home({
       case 'regarder':
       case 'slots-regarder':
       case 'naval-regarder':
-      case 'reversi-regarder': {
+      case 'reversi-regarder':
+      case 'echecs-regarder': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Regarder" onBack={back} backLabel={GAME_NAMES[game]} narrow>
@@ -532,7 +594,8 @@ export function Home({
       case 'classement':
       case 'slots-classement':
       case 'naval-classement':
-      case 'reversi-classement': {
+      case 'reversi-classement':
+      case 'echecs-classement': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
@@ -617,6 +680,7 @@ export function Home({
       {rules === 'slots' && <SlotsRules onClose={() => setRules(null)} />}
       {rules === 'battleship' && <BattleshipRules onClose={() => setRules(null)} />}
       {rules === 'reversi' && <ReversiRules onClose={() => setRules(null)} />}
+      {rules === 'chess' && <ChessRules onClose={() => setRules(null)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
     </main>
   );
@@ -689,7 +753,14 @@ function SubScreen({
 }
 
 /** Bots de l'entraînement : trois à Gang of Four, un dans les jeux à deux. */
-const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1, reversi: 1 };
+const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1, reversi: 1, chess: 1 };
+/** Cadences de l'entraînement aux échecs : sans pendule par défaut, pour réfléchir à son aise. */
+const TRAINING_CLOCKS = [
+  { id: 'none', label: 'Sans pendule' },
+  { id: '3+2', label: '3 + 2' },
+  { id: '5+0', label: '5 min' },
+  { id: '10+0', label: '10 min' },
+];
 const BOT_COUNT: Record<number, string> = { 1: 'un bot', 3: 'trois bots' };
 
 /** Salons de ces jeux qui attendent des joueurs, rechargés toutes les 5 secondes. */
@@ -760,6 +831,7 @@ function WaitingRooms({ onEnter }: { onEnter: (s: Session) => void }) {
  */
 function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode: string; onEnter: (s: Session) => void }) {
   const [level, setLevel] = useState<BotLevel>('normal');
+  const [trainingClock, setTrainingClock] = useState('none');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const open = useOpenRooms([game]);
@@ -782,7 +854,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
       const added = await socket.emitWithAck('room:addBot', { level });
       if (!added.ok) return added;
     }
-    const started = await socket.emitWithAck('game:start', {});
+    const started = await socket.emitWithAck('game:start', game === 'chess' ? { timeControl: trainingClock } : {});
     if (!started.ok) {
       await socket.emitWithAck('room:leave');
       return started;
@@ -856,6 +928,15 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
               {(Object.entries(LEVEL_LABELS) as [BotLevel, string][]).map(([id, label]) => (
                 <button key={id} type="button" role="radio" aria-checked={level === id} className={level === id ? 'on' : ''} onClick={() => setLevel(id)}>
                   {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {game === 'chess' && (
+            <div className="segmented" role="radiogroup" aria-label="Pendule de l’entraînement">
+              {TRAINING_CLOCKS.map((c) => (
+                <button key={c.id} type="button" role="radio" aria-checked={trainingClock === c.id} className={trainingClock === c.id ? 'on' : ''} onClick={() => setTrainingClock(c.id)}>
+                  {c.label}
                 </button>
               ))}
             </div>

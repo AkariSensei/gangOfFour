@@ -10,7 +10,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'sh
 export const pointsFormat = new Intl.NumberFormat('fr-FR');
 
 /** L'unité d'une partie, pour les dernières parties : des manches, des tours ou des tirs. */
-const ROUND_UNITS: Record<GameId, string> = { gof: 'manche', slots: 'tour', battleship: 'tir', reversi: 'coup' };
+const ROUND_UNITS: Record<GameId, string> = { gof: 'manche', slots: 'tour', battleship: 'tir', reversi: 'coup', chess: 'coup' };
 
 /** La saison en cours et les classements de chaque jeu. */
 export interface Stats {

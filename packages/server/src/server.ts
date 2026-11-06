@@ -144,6 +144,8 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     // Ne comptent que les parties entre humains : ni le tutoriel (une manche écrite à l'avance), ni l'entraînement,
     // ni une table où l'hôte avait encore pu asseoir des bots (salons d'avant l'entraînement).
     if (room.tutorial || room.training || room.seats.some((s) => s.bot)) return;
+    // Une partie annulée (personne n'a joué son premier coup) ne compte pas.
+    if (rulesOfRoom(room).uncounted?.(room.game)) return;
     const game = room.game;
     const gameId = rulesOfRoom(room).id;
     // Les points de chacun avant la partie, pour lui annoncer ce qu'elle lui a rapporté.
@@ -216,8 +218,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         } catch (error) {
           errors.record('bot', error);
         }
-      }, (bot ? (rooms.get(code)?.tutorial ? tutorialDelay : botDelay()) : passDelay) + (justCut ? cutPause : 0)),
+      }, (bot ? (rooms.get(code)?.tutorial ? tutorialDelay : thinkingDelay(code)) : passDelay) + (justCut ? cutPause : 0)),
     );
+  }
+
+  /** Temps de réflexion du bot de ce salon : celui de son jeu, ou les 3 à 4 secondes habituelles. */
+  function thinkingDelay(code: string) {
+    const room = rooms.get(code);
+    const own = room ? rulesOfRoom(room).botDelayMs : undefined;
+    return options.botDelayMs ?? (own ? own() : botDelay());
   }
 
   /** Le bot dont c'est le tour joue (s'il est toujours de mise), puis on regarde si le suivant est aussi un bot. */
@@ -262,6 +271,25 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     const game = room?.game;
     const seat = rooms.seatToAct(code);
     const current = turnTimers.get(code);
+    // Échecs : la pendule est dans la partie ; le serveur fait tomber le drapeau quand le temps du joueur au trait est écoulé.
+    const clock = room && game ? rulesOfRoom(room).clock : undefined;
+    if (room && game && clock) {
+      clearTimeout(current?.timer);
+      turnTimers.delete(code);
+      const left = room.paused ? null : clock.left(game, Date.now());
+      if (left === null || !seat) return null;
+      const turn = `${rulesOfRoom(room).turnKey(game)}-${seat.playerId}`;
+      const timer = setTimeout(() => {
+        turnTimers.delete(code);
+        try {
+          timeUp(code, turn);
+        } catch (error) {
+          errors.record('pendule', error);
+        }
+      }, left + 25);
+      turnTimers.set(code, { turn, endsAt: Date.now() + left, timer });
+      return null;
+    }
     // Le tour est identifié par la manche, la phase, le pli et le joueur : tant qu'il ne change pas, le temps court.
     const turn = room && game && seat ? `${rulesOfRoom(room).turnKey(game)}-${seat.playerId}` : '';
     // Pas de minuteur pendant l'échange : le gagnant prend le temps de choisir les cartes qu'il rend.
@@ -778,7 +806,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     on('room:removeBot', (payload, ack) => handle(ack, (code, playerId) => rooms.removeBot(code, playerId, text(payload.botId))));
     on('game:start', (payload, ack) =>
       handle(ack, (code, playerId) =>
-        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds) }),
+        rooms.start(code, playerId, { targetScore: Number(payload.targetScore), turnSeconds: Number(payload.turnSeconds), timeControl: text(payload.timeControl) }),
       ),
     );
     on('game:rematch', (_payload, ack) => handle(ack, (code, playerId) => rooms.rematch(code, playerId)));
@@ -794,6 +822,21 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     );
     on('game:shoot', (payload, ack) => act({ type: 'shoot', cell: Number(payload.cell) }, ack));
     on('game:move', (payload, ack) => act({ type: 'move', cell: Number(payload.cell) }, ack));
+    on('game:chessMove', (payload, ack) =>
+      act({ type: 'chessMove', from: Number(payload.from), to: Number(payload.to), ...(payload.promotion ? { promotion: Number(payload.promotion) } : {}) }, ack),
+    );
+    on('game:resign', (_payload, ack) => act({ type: 'resign' }, ack));
+    on('game:draw', (payload, ack) => {
+      const answer = payload.answer === 'accept' || payload.answer === 'decline' ? payload.answer : 'offer';
+      act({ type: 'draw', answer }, ack);
+    });
+    on('game:claim', (_payload, ack) =>
+      handle(ack, (code, playerId) => {
+        const result = rooms.claimVictory(code, playerId);
+        if (result.ok) recordIfFinished(code);
+        return result;
+      }),
+    );
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     // Seules les parties entre humains sont enregistrées : les classements n'ont plus qu'elles.
@@ -804,7 +847,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         recent: history.recent(5, game, 'online'),
         streak: history.bestStreak('online', game),
       });
-      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship'), reversi: statsOf('reversi') } });
+      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship'), reversi: statsOf('reversi'), chess: statsOf('chess') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

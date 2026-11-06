@@ -122,7 +122,7 @@ describe('RoomManager', () => {
     const { rooms, host, others } = roomWith(4);
     rooms.start(host.code, host.playerId, { seed: 42 });
     const room = rooms.get(host.code)!;
-    const current = room.seats[room.game!.currentPlayer]!;
+    const current = room.seats[(room.game as GameState).currentPlayer]!;
     const someoneElse = [host, ...others].find((s) => s.playerId !== current.playerId)!;
     expect(rooms.act(host.code, someoneElse.playerId, { type: 'play', cardIds: ['m1'] })).toEqual({
       ok: false,
