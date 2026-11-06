@@ -5,3 +5,4 @@ export * from './random';
 export * from './scoring';
 export * from './slots';
 export * from './battleship';
+export * from './reversi';

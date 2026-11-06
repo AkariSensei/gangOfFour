@@ -8,6 +8,7 @@ import { Leaderboard, useStats } from './Leaderboard';
 import { SlotIcon } from './SlotsTable';
 import { SlotsRules } from './SlotsRules';
 import { BattleshipRules } from './BattleshipRules';
+import { ReversiRules } from './ReversiRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonHeader, SeasonLine } from './Season';
@@ -40,6 +41,10 @@ const SCREENS = [
   'naval-jouer',
   'naval-regarder',
   'naval-classement',
+  'reversi',
+  'reversi-jouer',
+  'reversi-regarder',
+  'reversi-classement',
 ] as const;
 type Screen = (typeof SCREENS)[number];
 
@@ -62,6 +67,10 @@ const PARENT: Partial<Record<Screen, Screen>> = {
   'naval-jouer': 'naval',
   'naval-regarder': 'naval',
   'naval-classement': 'naval',
+  reversi: 'jeux',
+  'reversi-jouer': 'reversi',
+  'reversi-regarder': 'reversi',
+  'reversi-classement': 'reversi',
   profil: 'jeux',
 };
 
@@ -70,11 +79,24 @@ const GAME_SCREENS: Record<GameId, { hub: Screen; play: Screen; watch: Screen; r
   gof: { hub: 'gof', play: 'jouer', watch: 'regarder', ranking: 'classement' },
   slots: { hub: 'slots', play: 'slots-jouer', watch: 'slots-regarder', ranking: 'slots-classement' },
   battleship: { hub: 'naval', play: 'naval-jouer', watch: 'naval-regarder', ranking: 'naval-classement' },
+  reversi: { hub: 'reversi', play: 'reversi-jouer', watch: 'reversi-regarder', ranking: 'reversi-classement' },
 };
 /** Le jeu d'un écran « jouer », « regarder » ou « classement ». */
 const gameOfScreen = (s: Screen): GameId =>
   ((Object.entries(GAME_SCREENS) as [GameId, (typeof GAME_SCREENS)[GameId]][]).find(([, screens]) => [screens.play, screens.watch, screens.ranking].includes(s))?.[0] ?? 'gof');
-const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot', battleship: 'Bataille navale' };
+const GAME_NAMES: Record<GameId, string> = { gof: 'Gang of Four', slots: 'Duel Jackpot', battleship: 'Bataille navale', reversi: 'Reversi' };
+
+/** Un coin de plateau de Reversi, quelques pions orange et crème, pour illustrer le jeu. */
+function ReversiArt() {
+  const discs: (0 | 1 | -1)[] = [-1, 1, 0, -1, 1, 0, 0, 1, 0, 0, 1, -1, -1, 1, 0, 0];
+  return (
+    <span className="reversi-art">
+      {discs.map((d, i) => (
+        <span key={i}>{d >= 0 && <span className={`disc disc-${d}`} />}</span>
+      ))}
+    </span>
+  );
+}
 
 /** Une petite grille de bataille navale, avec un bateau touché, pour illustrer le jeu. */
 function NavalArt() {
@@ -290,6 +312,8 @@ export function Home({
                         <JackpotArt />
                       ) : g.id === 'battleship' ? (
                         <NavalArt />
+                      ) : g.id === 'reversi' ? (
+                        <ReversiArt />
                       ) : (
                         <>
                           <img src="/cards/PV.webp" alt="" />
@@ -449,9 +473,44 @@ export function Home({
             </div>
           </div>
         );
+      case 'reversi':
+        return (
+          <div className="menu-screen game-hub reversi-hub">
+            <button type="button" className="back-button hub-back" onClick={back}>
+              <ArrowLeft /> Jeux
+            </button>
+            <div className="menu-title">
+              <div className="reversi-hub-art" aria-hidden>
+                <ReversiArt />
+              </div>
+              <h1 className="game-title">
+                Reversi <span className="beta-badge big">Bêta</span>
+              </h1>
+              <p className="tagline">Encadre les pions de l’autre pour les retourner</p>
+            </div>
+            <div className="menu-side">
+              <nav className="game-menu" aria-label="Reversi">
+                <MenuItem primary icon={<Play />} title="Jouer" subtitle="Une partie à deux : crée un salon ou rejoins-en un" onClick={() => open('reversi-jouer')} />
+                <MenuItem
+                  icon={<Eye />}
+                  title="Regarder"
+                  subtitle={liveOf('reversi').length === 0 ? 'Aucune partie en cours' : 'Parties en cours des collègues'}
+                  pill={liveOf('reversi').length > 0 ? { text: `${liveOf('reversi').length} en cours`, live: true } : undefined}
+                  onClick={() => open('reversi-regarder')}
+                />
+                <div className="menu-tiles two">
+                  <MenuItem tile icon={<Trophy />} title="Classement" subtitle="Points de la saison" onClick={() => open('reversi-classement')} />
+                  <MenuItem tile icon={<BookOpen />} title="Règles" subtitle="Une règle, des conseils" onClick={() => setRules('reversi')} />
+                </div>
+              </nav>
+              {error && <p className="error">{error}</p>}
+            </div>
+          </div>
+        );
       case 'jouer':
       case 'slots-jouer':
-      case 'naval-jouer': {
+      case 'naval-jouer':
+      case 'reversi-jouer': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Jouer" onBack={back} backLabel={GAME_NAMES[game]}>
@@ -461,7 +520,8 @@ export function Home({
       }
       case 'regarder':
       case 'slots-regarder':
-      case 'naval-regarder': {
+      case 'naval-regarder':
+      case 'reversi-regarder': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Regarder" onBack={back} backLabel={GAME_NAMES[game]} narrow>
@@ -471,7 +531,8 @@ export function Home({
       }
       case 'classement':
       case 'slots-classement':
-      case 'naval-classement': {
+      case 'naval-classement':
+      case 'reversi-classement': {
         const game = gameOfScreen(s);
         return (
           <SubScreen title="Classement" onBack={back} backLabel={GAME_NAMES[game]}>
@@ -555,6 +616,7 @@ export function Home({
       {rules === 'gof' && <Rules onClose={() => setRules(null)} />}
       {rules === 'slots' && <SlotsRules onClose={() => setRules(null)} />}
       {rules === 'battleship' && <BattleshipRules onClose={() => setRules(null)} />}
+      {rules === 'reversi' && <ReversiRules onClose={() => setRules(null)} />}
       {admin && <AdminPanel onClose={() => setAdmin(false)} />}
     </main>
   );
@@ -627,7 +689,7 @@ function SubScreen({
 }
 
 /** Bots de l'entraînement : trois à Gang of Four, un dans les jeux à deux. */
-const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1 };
+const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1, reversi: 1 };
 const BOT_COUNT: Record<number, string> = { 1: 'un bot', 3: 'trois bots' };
 
 /** Salons de ces jeux qui attendent des joueurs, rechargés toutes les 5 secondes. */

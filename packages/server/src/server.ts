@@ -793,6 +793,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       act({ type: 'place', ships: Array.isArray(payload.ships) ? (payload.ships as { cells: number[] }[]) : [] }, ack),
     );
     on('game:shoot', (payload, ack) => act({ type: 'shoot', cell: Number(payload.cell) }, ack));
+    on('game:move', (payload, ack) => act({ type: 'move', cell: Number(payload.cell) }, ack));
     on('game:nextRound', (_payload, ack) => act({ type: 'nextRound' }, ack));
     on('game:cut', (payload, ack) => act({ type: 'cut', position: Number(payload.position) }, ack));
     // Seules les parties entre humains sont enregistrées : les classements n'ont plus qu'elles.
@@ -803,7 +804,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
         recent: history.recent(5, game, 'online'),
         streak: history.bestStreak('online', game),
       });
-      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship') } });
+      ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship'), reversi: statsOf('reversi') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));
 

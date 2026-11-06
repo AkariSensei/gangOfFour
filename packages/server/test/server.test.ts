@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { type BattleshipView, type GameState, type PlayerView, type SlotsView, createDeck, createRng, randomFleet } from '@gof/engine';
+import { type BattleshipView, type GameState, type ReversiView, type PlayerView, type SlotsView, createDeck, createRng, randomFleet } from '@gof/engine';
 import { type Socket, io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -503,6 +503,44 @@ describe('serveur de jeu', () => {
     expect(stats.ok && stats.games.battleship.recent).toEqual([]);
   }, 30000);
 
+  it('fait jouer une partie de Reversi entre deux humains, classée en points', async () => {
+    await start();
+    const alice = connect('Alice');
+    const created = await alice.emitWithAck('room:create', { game: 'reversi' });
+    if (!created.ok) throw new Error(created.error);
+    const bruno = connect('Bruno');
+    expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
+    expect((await alice.emitWithAck('game:start', {})).ok).toBe(true);
+    const view = (c: Client) => c.game as unknown as ReversiView | undefined;
+    await waitFor(() => [alice, bruno].every((c) => view(c)?.game === 'reversi'));
+    expect(view(alice)).toMatchObject({ you: 0, currentPlayer: 0, players: [{ discs: 2 }, { discs: 2 }] });
+    expect(await alice.emitWithAck('game:move', { cell: 0 })).toEqual({ ok: false, error: 'illegalMove' });
+    // Chacun joue le premier coup permis jusqu'à la fin.
+    const players = [alice, bruno];
+    for (let moves = 0; view(alice)!.phase === 'playing'; moves++) {
+      expect(moves).toBeLessThan(80);
+      const turn = view(alice)!;
+      const before = JSON.stringify(turn);
+      expect((await players[turn.currentPlayer]!.emitWithAck('game:move', { cell: turn.legal[0]! })).ok).toBe(true);
+      await waitFor(() => JSON.stringify(view(alice)) !== before);
+    }
+    const stats = await alice.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.reversi.recent).toHaveLength(1);
+    expect(stats.ok && stats.games.reversi.ranking).toHaveLength(2);
+  }, 60000);
+
+  it('laisse s’entraîner au Reversi contre un bot difficile', async () => {
+    await start({ botDelayMs: 0, turnSecondMs: 1 });
+    const human = connect('Alice');
+    expect(await human.emitWithAck('room:create', { game: 'reversi', training: true })).toMatchObject({ ok: true });
+    expect((await human.emitWithAck('room:addBot', { level: 'hard' })).ok).toBe(true);
+    // Le minuteur joue pour l'humain : la partie va au bout toute seule.
+    expect((await human.emitWithAck('game:start', { turnSeconds: 30 })).ok).toBe(true);
+    await waitFor(() => (human.game as unknown as ReversiView | undefined)?.phase === 'gameOver', 30000);
+    const stats = await human.emitWithAck('stats:get');
+    expect(stats.ok && stats.games.reversi.recent).toEqual([]);
+  }, 40000);
+
   it('liste les salons qui attendent des joueurs, jeu par jeu', async () => {
     await start();
     const alice = connect('Alice');
@@ -523,7 +561,7 @@ describe('serveur de jeu', () => {
     expect(stats).toMatchObject({
       ok: true,
       season: { id: expect.stringMatching(/^\d{4}-(hiver|printemps|ete|automne)$/) },
-      games: { gof: { ranking: [] }, slots: { ranking: [] }, battleship: { ranking: [] } },
+      games: { gof: { ranking: [] }, slots: { ranking: [] }, battleship: { ranking: [] }, reversi: { ranking: [] } },
     });
   });
 

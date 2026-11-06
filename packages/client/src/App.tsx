@@ -1,4 +1,5 @@
-import { type GameView, type RoomView, isBattleshipView, isSlotsView } from '../../server/src/protocol';
+import { type GameView, type RoomView, isBattleshipView, isReversiView, isSlotsView } from '../../server/src/protocol';
+import { ReversiTable } from './ReversiTable';
 import { BattleshipTable } from './BattleshipTable';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
@@ -19,6 +20,7 @@ export function App() {
     const props = { room, messages, admin, felt: account.account?.felt, onLeave: () => remember(null) };
     if (isSlotsView(game)) return <SlotsTable game={game} {...props} />;
     if (isBattleshipView(game)) return <BattleshipTable game={game} {...props} />;
+    if (isReversiView(game)) return <ReversiTable game={game} {...props} />;
     return <Table game={game} {...props} />;
   };
 

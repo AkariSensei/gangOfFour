@@ -29,6 +29,15 @@ export const GAMES: GameInfo[] = [
     beta: true,
   },
   {
+    id: 'reversi',
+    name: 'Reversi',
+    tagline: 'Encadre les pions de l’autre pour les retourner',
+    players: '2 joueurs',
+    status: 'live',
+    beta: true,
+    botLevels: true,
+  },
+  {
     id: 'battleship',
     name: 'Bataille navale',
     tagline: 'Place ta flotte en secret, et coule celle de l’autre',

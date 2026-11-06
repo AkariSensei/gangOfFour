@@ -13,6 +13,7 @@ const SEAT_COUNTS: Record<RoomView['game'], { min: number; max: number; name: st
   gof: { min: 3, max: 4, name: 'Gang of Four' },
   slots: { min: 2, max: 2, name: 'Duel Jackpot' },
   battleship: { min: 2, max: 2, name: 'Bataille navale' },
+  reversi: { min: 2, max: 2, name: 'Reversi' },
 };
 /** Temps par tour proposés (0 : pas de minuteur). */
 const TURN_SECONDS = [0, 30, 60];

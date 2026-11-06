@@ -1,4 +1,4 @@
-import type { ActionError, BattleshipError, Card, CombinationType, SlotsError } from '@gof/engine';
+import type { ActionError, BattleshipError, Card, CombinationType, ReversiError, SlotsError } from '@gof/engine';
 import type { BotLevel, RoomError } from '../../server/src/protocol';
 
 /** Niveaux de bot, affichés dans le salon et sur la table. */
@@ -20,7 +20,7 @@ export function combinationLabel(type: CombinationType, size: number): string {
   return ['Gang of Four', 'Gang of Five', 'Gang of Six', 'Gang of Seven'][size - 4] ?? 'Gang';
 }
 
-export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | BattleshipError | 'disconnected', string> = {
+export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | BattleshipError | ReversiError | 'disconnected', string> = {
   roomNotFound: 'Salon introuvable. Vérifie le code.',
   roomFull: 'Ce salon est complet.',
   maintenance: 'Le site est en maintenance : reviens un peu plus tard.',
@@ -64,6 +64,7 @@ export const ERROR_LABELS: Record<RoomError | ActionError | SlotsError | Battles
   alreadyPlaced: 'Ta flotte est déjà placée.',
   invalidCell: 'Cette case n’existe pas.',
   alreadyShot: 'Tu as déjà tiré sur cette case.',
+  illegalMove: 'Ce coup ne retourne aucun pion : choisis une case marquée.',
   serverError: 'Le serveur a eu un problème, réessaie.',
   emptyMessage: 'Message vide.',
   muted: 'Ton chat a été coupé dans ce salon.',

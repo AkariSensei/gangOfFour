@@ -1,4 +1,10 @@
 import {
+  type ReversiState,
+  applyReversiAction,
+  createReversi,
+  reversiBotMove,
+  reversiView,
+  countDiscs,
   type BattleshipState,
   type GameState,
   type Ship,
@@ -22,11 +28,11 @@ import { type BotLevel, chooseBotAction } from './bot';
 import { type GameSummary, gofSummary } from './history';
 
 /** Les jeux jouables : chacun a ses règles ci-dessous. */
-export type GameId = 'gof' | 'slots' | 'battleship';
-export const GAME_IDS: GameId[] = ['gof', 'slots', 'battleship'];
+export type GameId = 'gof' | 'slots' | 'battleship' | 'reversi';
+export const GAME_IDS: GameId[] = ['gof', 'slots', 'battleship', 'reversi'];
 
 /** Partie en cours, de n'importe quel jeu ; ses règles savent la lire. */
-export type AnyGame = GameState | SlotsState | BattleshipState;
+export type AnyGame = GameState | SlotsState | BattleshipState | ReversiState;
 
 /** Action de jeu telle qu'envoyée par un joueur : son siège est déduit du serveur, jamais du client. */
 export type PlayerAction =
@@ -36,6 +42,7 @@ export type PlayerAction =
   | { type: 'spin' }
   | { type: 'place'; ships: Ship[] }
   | { type: 'shoot'; cell: number }
+  | { type: 'move'; cell: number }
   | { type: 'nextRound' }
   | { type: 'cut'; position: number };
 
@@ -97,6 +104,7 @@ const renamed = <T extends { players: { name: string }[] }>(game: T, index: numb
 const gof = (game: AnyGame) => game as GameState;
 const slots = (game: AnyGame) => game as SlotsState;
 const naval = (game: AnyGame) => game as BattleshipState;
+const reversi = (game: AnyGame) => game as ReversiState;
 
 const GOF: GameRules = {
   id: 'gof',
@@ -106,7 +114,7 @@ const GOF: GameRules = {
     createGame(players, seed, { targetScore: TARGET_SCORES.includes(settings.targetScore!) ? settings.targetScore! : DEFAULT_TARGET_SCORE }),
   again: (game, players, seed) => createGame(players, seed, gof(game).config),
   act(game, playerIndex, action) {
-    if (action.type === 'spin' || action.type === 'place' || action.type === 'shoot') return { ok: false, error: 'wrongPhase' };
+    if (action.type === 'spin' || action.type === 'place' || action.type === 'shoot' || action.type === 'move') return { ok: false, error: 'wrongPhase' };
     const result = applyAction(gof(game), action.type === 'nextRound' ? action : { ...action, playerIndex });
     return result.ok ? { ok: true, game: result.state } : result;
   },
@@ -234,7 +242,49 @@ const BATTLESHIP: GameRules = {
   },
 };
 
-const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS, battleship: BATTLESHIP };
+const REVERSI: GameRules = {
+  id: 'reversi',
+  minPlayers: 2,
+  maxPlayers: 2,
+  create: (players, seed) => createReversi(players, seed),
+  again: (_game, players, seed) => createReversi(players, seed),
+  act(game, playerIndex, action) {
+    if (action.type !== 'move') return { ok: false, error: 'wrongPhase' };
+    const result = applyReversiAction(reversi(game), { type: 'move', playerIndex, cell: action.cell });
+    return result.ok ? { ok: true, game: result.state } : result;
+  },
+  toAct: (game) => (reversi(game).phase === 'playing' ? reversi(game).currentPlayer : -1),
+  over: (game) => reversi(game).phase === 'gameOver',
+  turnKey: (game) => `${reversi(game).moves}-${reversi(game).currentPlayer}`,
+  untimed: () => false,
+  botAction(game, index, random, level) {
+    const cell = reversiBotMove(reversi(game), index, random, level);
+    return cell === null ? null : { type: 'move', cell };
+  },
+  fallback: () => null,
+  // Temps écoulé : le serveur joue le coup qu'aurait choisi un bot moyen.
+  timeout(game, index) {
+    const cell = reversiBotMove(reversi(game), index, Math.random, 'normal');
+    return cell === null ? null : { type: 'move', cell };
+  },
+  stuck: () => false,
+  view: (game, index) => reversiView(reversi(game), index),
+  spectatorView: (game) => reversiView(reversi(game), -1),
+  rename: (game, index, name) => renamed(reversi(game), index, name),
+  round: (game) => reversi(game).moves,
+  scores: (game) => countDiscs(reversi(game).board),
+  summary(game) {
+    const g = reversi(game);
+    const discs = countDiscs(g.board);
+    return {
+      game: 'reversi',
+      rounds: g.moves,
+      players: g.players.map((p, i) => ({ name: p.name, score: discs[i]!, winner: g.winners.includes(i) })),
+    };
+  },
+};
+
+const RULES: Record<GameId, GameRules> = { gof: GOF, slots: SLOTS, battleship: BATTLESHIP, reversi: REVERSI };
 
 /** Règles d'un jeu ; un salon sans jeu (d'avant les autres jeux) joue à Gang of Four. */
 export function rulesOf(game: GameId | undefined): GameRules {

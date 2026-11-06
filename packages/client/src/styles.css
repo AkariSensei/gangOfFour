@@ -5212,3 +5212,286 @@ button .lucide {
 .rating-change span {
   color: var(--page-sub);
 }
+
+/* ——— Reversi : un tapis vert, des pions orange et crème qui se retournent ——— */
+.game-card.game-reversi {
+  --cover: #16301f;
+}
+.reversi-art {
+  display: inline-grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 2px;
+  padding: 6px;
+  border-radius: 10px;
+  background: #0f2418;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+}
+.reversi-art > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  background: #1f4a33;
+}
+.reversi-art .disc {
+  width: 80%;
+  height: 80%;
+}
+.game-card-art .reversi-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.reversi-hub-art {
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+}
+.reversi-hub-art .reversi-art {
+  grid-template-columns: repeat(4, clamp(36px, 6vw, 56px));
+  gap: 4px;
+  padding: 10px;
+  border-radius: 16px;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+}
+.reversi-hub-art .reversi-art > span {
+  width: clamp(36px, 6vw, 56px);
+  height: clamp(36px, 6vw, 56px);
+  border-radius: 6px;
+}
+
+/* Les pions : un disque en relief, dans une seule teinte (orange, ou crème). */
+.disc {
+  display: block;
+  width: 84%;
+  height: 84%;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22),
+    0 2px 4px rgba(0, 0, 0, 0.45);
+}
+.disc-0 {
+  background: radial-gradient(circle at 35% 30%, #ffb067, var(--accent) 55%, #c4570c);
+}
+.disc-1 {
+  background: radial-gradient(circle at 35% 30%, #fffdf7, #efe6d6 55%, #bdb19d);
+}
+.disc.flip {
+  animation: disc-flip 0.42s var(--ease);
+}
+.disc.fresh {
+  animation: disc-drop 0.28s var(--ease);
+}
+@keyframes disc-flip {
+  from {
+    transform: scaleX(0.05);
+  }
+}
+@keyframes disc-drop {
+  from {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.reversi-table {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.reversi-main {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 12px;
+  width: min(640px, 100%);
+  margin: 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.reversi-score {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  width: 100%;
+}
+.reversi-player {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  transition: border-color 0.2s var(--ease);
+}
+.reversi-player.active {
+  border-color: var(--accent-line);
+}
+.reversi-player .avatar {
+  width: 34px;
+  height: 34px;
+}
+.reversi-player-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.reversi-player-text strong {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reversi-player-text small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.reversi-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-title);
+  font-weight: 500;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.reversi-count .disc {
+  width: 20px;
+  height: 20px;
+}
+/* La part du plateau de chacun, en une barre : l'orange à gauche, le crème à droite. */
+.reversi-share {
+  grid-column: 1 / -1;
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.reversi-share span {
+  flex-basis: 0;
+  transition: flex-grow 0.4s var(--ease);
+}
+.reversi-share-0 {
+  background: var(--accent);
+}
+.reversi-share-1 {
+  background: #e6dccb;
+}
+.reversi-status {
+  margin: 0;
+  min-height: 1.5em;
+  color: var(--page-sub);
+  text-align: center;
+}
+.reversi-status.active {
+  color: var(--text);
+  font-weight: 500;
+}
+.reversi-board-wrap {
+  width: 100%;
+  max-width: min(560px, 62vh);
+  padding: 10px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #3a2a1c, #2a1d12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.18),
+    0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.reversi-board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: #0f2418;
+}
+.reversi-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: #1f4a33;
+  box-shadow: none;
+}
+.reversi-cell.playable {
+  cursor: pointer;
+}
+.reversi-cell.playable:hover {
+  background: #275c40;
+}
+/* Les coups permis : un petit point de sa couleur ; au survol, le pion qu'on poserait. */
+.reversi-hint {
+  width: 22%;
+  height: 22%;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+.reversi-hint.p0 {
+  background: var(--accent);
+}
+.reversi-hint.p1 {
+  background: #efe6d6;
+}
+.reversi-cell.playable:hover .reversi-hint {
+  width: 84%;
+  height: 84%;
+  opacity: 0.4;
+  transition:
+    width 0.12s var(--ease),
+    height 0.12s var(--ease);
+}
+.reversi-cell.last::after {
+  content: '';
+  position: absolute;
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  background: rgba(26, 20, 16, 0.55);
+}
+.reversi-foot {
+  margin: 0;
+  text-align: center;
+}
+.reversi-final {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.reversi-final span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reversi-final .disc {
+  width: 28px;
+  height: 28px;
+}
+@media (max-width: 760px) {
+  .reversi-player {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .reversi-player .avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .reversi-count {
+    font-size: 1.25rem;
+  }
+  .reversi-board-wrap {
+    max-width: 100%;
+    padding: 6px;
+  }
+}
