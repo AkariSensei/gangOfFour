@@ -1,6 +1,6 @@
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { GameId, GameStats, Season } from '../../server/src/protocol';
+import { GAMES, type GameId, type GameStats, type Season } from '../../server/src/protocol';
 import { Profile } from './Profile';
 import { socket } from './socket';
 
@@ -63,13 +63,21 @@ export function Leaderboard({
   seasonOnly?: boolean;
 }) {
   const [shown, setShown] = useState<string | null>(null);
+  const [chosenFormat, setChosenFormat] = useState<string | null>(null);
 
   if (!all) return null;
   const stats = all.games[game];
+  // Jeux à plusieurs formats : un classement par format, en commençant par celui où l'on joue le plus.
+  const formats = stats.formats;
+  const played = (f: { ranking: { games: number }[] }) => f.ranking.reduce((sum, e) => sum + e.games, 0);
+  const format = formats ? (formats.find((f) => f.id === chosenFormat) ?? [...formats].sort((a, b) => played(b) - played(a))[0]) : undefined;
+  const formatOfId = (id?: string) => GAMES.find((g) => g.id === game)?.formats?.find((f) => f.id === id);
+  const formatLabel = (id?: string) => formatOfId(id)?.label;
+  const formatPhrase = (id?: string) => formatOfId(id)?.phrase ?? '';
   // La fiche d'un joueur ne parle que de Gang of Four pour l'instant : pas de fiche depuis les autres classements.
   const withProfile = game === 'gof';
   // Les points de la saison : chacun part de 1000, seules les parties entre humains comptent.
-  const ranking = stats.ranking;
+  const ranking = format ? format.ranking : stats.ranking;
 
   return (
     <>
@@ -77,12 +85,23 @@ export function Leaderboard({
         <div className="leaderboard-head">
           <h2>{title}</h2>
         </div>
+        {formats && (
+          <div className="segmented ranking-formats" role="tablist" aria-label="Format">
+            {formats.map((f) => (
+              <button key={f.id} type="button" role="tab" aria-selected={f.id === format?.id} className={f.id === format?.id ? 'on' : ''} onClick={() => setChosenFormat(f.id)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
         {shown && <Profile name={shown} onClose={() => setShown(null)} />}
         <p className="muted small">
           Chacun part de 1000 points à chaque saison. Gagner contre plus fort que soi rapporte plus, perdre contre plus faible
           coûte plus.{withProfile && ' Clique sur un nom pour voir ses statistiques.'}
         </p>
-        {ranking.length === 0 && <p className="muted">Aucune partie classée cette saison pour l'instant.</p>}
+        {ranking.length === 0 && (
+          <p className="muted">{format ? `Aucune partie classée ${formatPhrase(format.id)} cette saison pour l'instant.` : "Aucune partie classée cette saison pour l'instant."}</p>
+        )}
         <ol className="ranking">
           {ranking.map((e, i) => (
             <li key={e.name}>
@@ -128,12 +147,14 @@ export function Leaderboard({
                 <span className="muted">{dateFormat.format(new Date(r.finishedAt))}</span>
                 <span>
                   <Trophy />{' '}
-                  {r.players
-                    .filter((p) => p.winner)
-                    .map((p) => p.name)
-                    .join(', ')}{' '}
+                  {r.players.some((p) => p.winner)
+                    ? r.players
+                        .filter((p) => p.winner)
+                        .map((p) => p.name)
+                        .join(', ')
+                    : `Nulle entre ${r.players.map((p) => p.name).join(' et ')}`}{' '}
                   <span className="muted">
-                    · {r.players.length} joueurs · {r.rounds} {ROUND_UNITS[game]}
+                    · {r.format ? formatLabel(r.format) : `${r.players.length} joueurs`} · {r.rounds} {ROUND_UNITS[game]}
                     {r.rounds > 1 ? 's' : ''}
                   </span>
                 </span>

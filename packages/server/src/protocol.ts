@@ -120,6 +120,8 @@ export const isBattleshipView = (view: GameView): view is BattleshipView => 'gam
  */
 export interface GameStats {
   ranking: RatingEntry[];
+  /** Jeux à plusieurs formats (cadences, nombre de joueurs) : un classement par format. */
+  formats?: { id: string; label: string; ranking: RatingEntry[] }[];
   recent: GameRecord[];
   streak: WinStreak | null;
 }
@@ -337,7 +339,8 @@ export interface ServerToClientEvents {
   /** Le mur de la communauté a changé : l'écran ouvert le recharge. */
   'community:changed': () => void;
   /** Ce que la partie qui se termine a rapporté (ou coûté) au joueur en points de classement, dans ce jeu. */
-  'rating:changed': (change: { game: GameId; before: number; after: number }) => void;
+  /** Points gagnés ou perdus dans la partie ; `format` : le classement concerné (« blitz », « 4 »), pour les jeux qui en ont plusieurs. */
+  'rating:changed': (change: { game: GameId; before: number; after: number; format?: string }) => void;
   /** L'admin a fermé ou rouvert le site. */
   'site:changed': () => void;
   /** Expérience gagnée avec la partie qui se termine : niveau avant et après, et récompenses débloquées en route. */

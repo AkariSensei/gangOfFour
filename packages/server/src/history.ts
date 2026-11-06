@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { GameState } from '@gof/engine';
 import { BOT_LEVELS, type BotLevel } from './bot';
 import { dayOf, streakOf } from './daily';
-import { DEFAULT_GAME, GAMES } from './games';
+import { DEFAULT_GAME, GAMES, formatOf } from './games';
 import { seasonOf } from './seasons';
 import { type RatedGame, START_RATING, computeRatings, shown } from './rating';
 import { type GameForXp, type Progress, type Unlocks, progressOf, totalXp, unlocksOf } from './progression';
@@ -17,6 +17,8 @@ export interface GameRecord {
   archived?: boolean;
   /** Partie classée en points (entre humains, jouée depuis l'arrivée des points) ; les plus anciennes n'en ont pas. */
   rated?: boolean;
+  /** Format qui a son propre classement (la cadence aux échecs) ; à Gang of Four, il se déduit du nombre de joueurs. */
+  format?: string;
   players: {
     name: string;
     score: number;
@@ -92,6 +94,7 @@ const key = (name: string) => name.trim().toLocaleLowerCase('fr');
 export interface GameSummary {
   game: string;
   rounds: number;
+  format?: string;
   players: { name: string; score: number; winner: boolean; roundsWon?: number; gangs?: number; worstRound?: number }[];
 }
 
@@ -163,6 +166,7 @@ export class GameHistory {
       game: summary.game,
       finishedAt: finishedAt.toISOString(),
       rounds: summary.rounds,
+      ...(summary.format ? { format: summary.format } : {}),
       // Seules les tables sans bot comptent pour les points.
       ...(bots.length === 0 ? { rated: true } : {}),
       players: summary.players.map((p, i) => ({
@@ -178,14 +182,16 @@ export class GameHistory {
 
   /**
    * Points de la saison dans un jeu : chacun part de 1000 à chaque saison, et seules les parties classées comptent.
-   * Les places viennent du vainqueur, puis du score (le plus bas est le meilleur à Gang of Four).
+   * Les places viennent du vainqueur, puis du score (le plus bas est le meilleur à Gang of Four). `format` : seulement
+   * les parties de ce format (une cadence, un nombre de joueurs), qui a son propre classement.
    */
-  private ratingsOf(game: string, season: string) {
+  private ratingsOf(game: string, season: string, format?: string) {
     const lowScoreWins = !!GAMES.find((g) => g.id === game)?.lowScoreWins;
     const better = (a: GameRecord['players'][number], b: GameRecord['players'][number]) =>
       (a.winner && !b.winner) || (a.winner === b.winner && (lowScoreWins ? a.score < b.score : a.score > b.score));
     const games: RatedGame[] = this.counted
       .filter((r) => r.rated && gameOf(r) === game && seasonOf(new Date(r.finishedAt)).id === season)
+      .filter((r) => format === undefined || formatOf(game, r) === format)
       .map((r) => {
         const humans = r.players.filter((p) => this.ranked(p));
         return {
@@ -201,16 +207,16 @@ export class GameHistory {
   }
 
   /** Classement en points d'un jeu pour la saison (en cours par défaut), du plus fort au moins fort. */
-  ratingBoard(game = DEFAULT_GAME, season = seasonOf(new Date()).id, limit = 20): RatingEntry[] {
-    return [...this.ratingsOf(game, season).values()]
+  ratingBoard(game = DEFAULT_GAME, season = seasonOf(new Date()).id, limit = 20, format?: string): RatingEntry[] {
+    return [...this.ratingsOf(game, season, format).values()]
       .sort((a, b) => b.rating - a.rating || b.games - a.games)
       .slice(0, limit)
       .map((r) => ({ name: r.name, rating: shown(r.rating), games: r.games, wins: r.wins }));
   }
 
-  /** Points d'un compte dans un jeu cette saison (1000 tant qu'il n'a pas joué). */
-  ratingOfAccount(owner: string, game = DEFAULT_GAME, season = seasonOf(new Date()).id): number {
-    return shown(this.ratingsOf(game, season).get(owner)?.rating ?? START_RATING);
+  /** Points d'un compte dans un jeu (et un format) cette saison (1000 tant qu'il n'y a pas joué). */
+  ratingOfAccount(owner: string, game = DEFAULT_GAME, season = seasonOf(new Date()).id, format?: string): number {
+    return shown(this.ratingsOf(game, season, format).get(owner)?.rating ?? START_RATING);
   }
 
   /** Parties qui comptent : celles d'après la dernière remise à zéro. */

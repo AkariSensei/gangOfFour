@@ -6,6 +6,7 @@ import { newRewards } from './progression';
 import { ErrorLog } from './errors';
 import { type VerifyGoogle, googleVerifier } from './google';
 import { CommunityStore } from './community';
+import { GAMES, formatOf } from './games';
 import { GameHistory } from './history';
 import { seasonOf } from './seasons';
 import { SavedRooms } from './saved-rooms';
@@ -146,14 +147,16 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     if (room.tutorial || room.training || room.seats.some((s) => s.bot)) return;
     // Une partie annulée (personne n'a joué son premier coup) ne compte pas.
     if (rulesOfRoom(room).uncounted?.(room.game)) return;
-    const game = room.game;
     const gameId = rulesOfRoom(room).id;
-    // Les points de chacun avant la partie, pour lui annoncer ce qu'elle lui a rapporté.
+    const summary = rulesOfRoom(room).summary(room.game);
+    // Les points de chacun avant la partie (dans le classement de son format), pour lui annoncer ce qu'elle lui a rapporté.
+    const format = formatOf(gameId, summary);
     const accountsHere = [...new Set(room.seats.flatMap((s) => (s.account ? [s.account] : [])))];
-    const before = new Map(accountsHere.map((id) => [id, history.ratingOfAccount(id, gameId)]));
+    const pointsOf = (id: string) => history.ratingOfAccount(id, gameId, undefined, format);
+    const before = new Map(accountsHere.map((id) => [id, pointsOf(id)]));
     withProgress(room, () =>
       history.add(
-        rulesOfRoom(room).summary(game),
+        summary,
         new Date(),
         botSeats(room),
         room.seats.map((s) => s.account),
@@ -161,7 +164,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
       ),
     );
     for (const id of accountsHere) {
-      const change = { game: gameId, before: before.get(id)!, after: history.ratingOfAccount(id, gameId) };
+      const change = { game: gameId, before: before.get(id)!, after: pointsOf(id), ...(format ? { format } : {}) };
       for (const s of io.sockets.sockets.values()) if (s.data.accountId === id && s.data.code === room.code && !s.data.spectator) s.emit('rating:changed', change);
     }
     io.emit('stats:changed');
@@ -842,11 +845,15 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     // Seules les parties entre humains sont enregistrées : les classements n'ont plus qu'elles.
     on('stats:get', (_payload, ack) => {
       const season = seasonOf(new Date());
-      const statsOf = (game: GameId): GameStats => ({
-        ranking: history.ratingBoard(game, season.id),
-        recent: history.recent(5, game, 'online'),
-        streak: history.bestStreak('online', game),
-      });
+      const statsOf = (game: GameId): GameStats => {
+        const formats = GAMES.find((g) => g.id === game)?.formats;
+        return {
+          ranking: history.ratingBoard(game, season.id),
+          ...(formats ? { formats: formats.map((f) => ({ id: f.id, label: f.label, ranking: history.ratingBoard(game, season.id, 20, f.id) })) } : {}),
+          recent: history.recent(5, game, 'online'),
+          streak: history.bestStreak('online', game),
+        };
+      };
       ack({ ok: true, season, games: { gof: statsOf('gof'), slots: statsOf('slots'), battleship: statsOf('battleship'), reversi: statsOf('reversi'), chess: statsOf('chess') } });
     });
     on('stats:player', (payload, ack) => ack({ ok: true, profile: history.profile(text(payload.name)) }));

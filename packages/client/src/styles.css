@@ -655,6 +655,16 @@ button.mute.on {
   padding: 0.25rem 0.75rem;
   min-height: 0;
 }
+/* Un onglet par format (cadence, nombre de joueurs) : sur toute la largeur, sous le titre. */
+.segmented.ranking-formats {
+  display: flex;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+.ranking-formats button {
+  flex: 1;
+  font-size: 0.875rem;
+}
 /* En ligne / contre les bots : sur toute la largeur, sous le titre. */
 .segmented.ranking-mode {
   display: flex;

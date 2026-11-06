@@ -296,4 +296,29 @@ describe('GameHistory', () => {
     expect(history.ratingBoard('gof', next)).toEqual([]);
     expect(history.ratingBoard('slots')).toEqual([]);
   });
+
+  it('tient un classement par format : à 3 et à 4 joueurs, et par cadence aux échecs', () => {
+    const history = new GameHistory(join(mkdtempSync(join(tmpdir(), 'gof-')), 'parties.json'));
+    history.record(finished({ Alice: 10, Bruno: 50, Chloé: 90 }));
+    history.record(finished({ Bruno: 10, Alice: 50, Chloé: 60, David: 90 }));
+    expect(history.ratingBoard('gof', undefined, 20, '3').map((e) => e.name)).toEqual(['Alice', 'Bruno', 'Chloé']);
+    expect(history.ratingBoard('gof', undefined, 20, '4').map((e) => e.name)).toEqual(['Bruno', 'Alice', 'Chloé', 'David']);
+    // Sans format : toutes les tables ensemble.
+    expect(history.ratingBoard('gof')).toHaveLength(4);
+
+    const duel = (format: string, winner: string, loser: string) =>
+      history.add({ game: 'chess', rounds: 30, format, players: [{ name: winner, score: 2, winner: true }, { name: loser, score: 0, winner: false }] });
+    duel('blitz', 'Alice', 'Bruno');
+    duel('bullet', 'Bruno', 'Alice');
+    expect(history.ratingBoard('chess', undefined, 20, 'blitz').map((e) => [e.name, e.rating])).toEqual([
+      ['Alice', 1024],
+      ['Bruno', 976],
+    ]);
+    expect(history.ratingBoard('chess', undefined, 20, 'bullet').map((e) => [e.name, e.rating])).toEqual([
+      ['Bruno', 1024],
+      ['Alice', 976],
+    ]);
+    expect(history.ratingBoard('chess', undefined, 20, 'rapide')).toEqual([]);
+    expect(history.ratingOfAccount('pseudo:alice', 'chess', undefined, 'blitz')).toBe(1024);
+  });
 });

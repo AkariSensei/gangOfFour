@@ -380,9 +380,12 @@ const CHESS: GameRules = {
   // Victoire 2, nulle 1, défaite 0 : à égalité de score, la nulle partage les points.
   summary(game) {
     const g = chess(game);
+    // Chaque famille de cadence (bullet, blitz, rapide, classique) a son classement.
+    const category = TIME_CONTROLS.find((c) => c.id === g.timeControl)?.category;
     return {
       game: 'chess',
       rounds: Math.ceil(g.moves.length / 2),
+      ...(category ? { format: category } : {}),
       players: g.players.map((p, i) => ({ name: p.name, score: g.winners.length === 0 ? 1 : g.winners.includes(i) ? 2 : 0, winner: g.winners.includes(i) })),
     };
   },

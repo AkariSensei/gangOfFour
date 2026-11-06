@@ -548,7 +548,7 @@ describe('serveur de jeu', () => {
     if (!created.ok) throw new Error(created.error);
     const bruno = connect('Bruno');
     expect((await bruno.emitWithAck('room:join', { code: created.code })).ok).toBe(true);
-    const changes: { before: number; after: number }[] = [];
+    const changes: { before: number; after: number; format?: string }[] = [];
     alice.on('rating:changed', (c) => changes.push(c));
     expect((await alice.emitWithAck('game:start', { timeControl: '3+2' })).ok).toBe(true);
     const view = (c: Client) => c.game as unknown as ChessView | undefined;
@@ -580,6 +580,8 @@ describe('serveur de jeu', () => {
     expect(view(alice)!.moves.map((m) => m.san)).toEqual(['f3', 'e5', 'g4', 'Qh4#']);
     await waitFor(() => changes.length === 1);
     expect(changes[0]!.after).toBe(alice === black ? 1024 : 976);
+    // Le 3 + 2 est une partie de blitz : elle compte dans le classement du blitz, et seulement là.
+    expect(changes[0]).toMatchObject({ game: 'chess', format: 'blitz' });
 
     // Revanche : l'autre a les blancs, puis nulle par accord après deux coups.
     expect((await bruno.emitWithAck('game:rematch')).ok).toBe(true);
@@ -598,6 +600,13 @@ describe('serveur de jeu', () => {
     expect(view(alice)).toMatchObject({ end: 'agreement', winners: [] });
     const stats = await alice.emitWithAck('stats:get');
     expect(stats.ok && stats.games.chess.recent).toHaveLength(2);
+    const formats = stats.ok ? stats.games.chess.formats! : [];
+    expect(formats.map((f) => [f.id, f.ranking.length])).toEqual([
+      ['bullet', 0],
+      ['blitz', 2],
+      ['rapide', 0],
+      ['classique', 0],
+    ]);
   }, 30000);
 
   it('aux échecs, aucun bot ne remplace un absent : le joueur resté réclame la victoire', async () => {

@@ -422,14 +422,14 @@ export function canMate(board: number[], color: Side): boolean {
 
 // ————————————————————————————————————— La partie —————————————————————————————————————
 
-/** Cadences proposées : temps de départ en minutes et incrément en secondes. */
+/** Cadences proposées : temps de départ en minutes, incrément en secondes, et la famille qui a son propre classement. */
 export const TIME_CONTROLS = [
-  { id: '1+0', minutes: 1, increment: 0, label: 'Bullet 1 min' },
-  { id: '3+2', minutes: 3, increment: 2, label: 'Blitz 3 + 2' },
-  { id: '5+0', minutes: 5, increment: 0, label: 'Blitz 5 min' },
-  { id: '10+0', minutes: 10, increment: 0, label: 'Rapide 10 min' },
-  { id: '15+10', minutes: 15, increment: 10, label: 'Rapide 15 + 10' },
-  { id: '30+0', minutes: 30, increment: 0, label: 'Classique 30 min' },
+  { id: '1+0', minutes: 1, increment: 0, label: 'Bullet 1 min', category: 'bullet' },
+  { id: '3+2', minutes: 3, increment: 2, label: 'Blitz 3 + 2', category: 'blitz' },
+  { id: '5+0', minutes: 5, increment: 0, label: 'Blitz 5 min', category: 'blitz' },
+  { id: '10+0', minutes: 10, increment: 0, label: 'Rapide 10 min', category: 'rapide' },
+  { id: '15+10', minutes: 15, increment: 10, label: 'Rapide 15 + 10', category: 'rapide' },
+  { id: '30+0', minutes: 30, increment: 0, label: 'Classique 30 min', category: 'classique' },
 ] as const;
 export const DEFAULT_TIME_CONTROL = '5+0';
 /** Sans pendule : seulement à l'entraînement. */
