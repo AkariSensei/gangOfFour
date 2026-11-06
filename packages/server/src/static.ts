@@ -49,8 +49,12 @@ async function compressedFile(file: string, mtimeMs: number, encoding: Encoding)
   return entry[encoding];
 }
 
-/** Durée de cache : les fichiers de Vite ont un nom unique par version, les cartes changent rarement. */
+/**
+ * Durée de cache : les fichiers de Vite ont un nom unique par version, les cartes changent rarement. Les fichiers de
+ * marque (logo, abeille) gardent le même nom d'une version à l'autre : un jour seulement, pour qu'une retouche arrive.
+ */
 function cacheControl(path: string): string {
+  if (path.startsWith('/assets/brand/')) return 'public, max-age=86400';
   if (path.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
   if (path.startsWith('/cards/')) return 'public, max-age=604800';
   return 'no-cache';
