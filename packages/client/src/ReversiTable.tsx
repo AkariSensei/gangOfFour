@@ -1,8 +1,9 @@
-import { Eye, Pause, Timer, Trophy, Users } from 'lucide-react';
+import { Eye, Pause, Timer } from 'lucide-react';
 import { BOARD, type ReversiView } from '@gof/engine';
 import { type CSSProperties, useEffect, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { ChatButton } from './Chat';
 import { RatingChange, useRatingChange } from './RatingChange';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
@@ -220,9 +221,11 @@ export function ReversiTable({
       {game.phase === 'gameOver' && endOpen && (
         <div className="overlay" role="dialog" aria-label="Fin de la partie">
           <div className="panel modal pop-in duel-over">
-            <div className="trophy" aria-hidden>
-              {game.winners.length > 1 ? <Users /> : <Trophy />}
-            </div>
+            <Bee
+              mood={game.winners.length > 1 ? 'surprised' : spectator ? 'happy' : game.winners.includes(me) ? 'victory' : 'sad'}
+              motion={game.winners.length === 1 && game.winners.includes(me) ? 'hop' : undefined}
+              className="end-bee"
+            />
             <h2>
               {game.winners.length > 1
                 ? 'Égalité'

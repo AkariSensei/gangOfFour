@@ -3,6 +3,7 @@ import { type Card, type Cut, type PlayerView, type TrickEntry, COLOR_RANK, anal
 import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { type BotLevel, type ChatMessage, type GofView, type Look, REACTIONS, type RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { ChatButton, KickButton, MuteButton } from './Chat';
 import { CardView, cardImage } from './CardView';
 import { LEVEL_LABELS, cardLabel, combinationLabel, errorLabel } from './labels';
@@ -317,6 +318,11 @@ function RoundOver({
           <TutorialOutcome />
         ) : over ? (
           <>
+            <Bee
+              mood={game.you < 0 ? 'happy' : game.winners.includes(game.you) ? 'victory' : 'sad'}
+              motion={game.winners.includes(game.you) ? 'hop' : undefined}
+              className="end-bee"
+            />
             <h2>{winnerNames} gagne la partie</h2>
             <Podium game={game} seats={seats} />
           </>
@@ -700,9 +706,7 @@ export function PauseOverlay({ onResume }: { onResume?: () => void }) {
   return (
     <div className="overlay pause-overlay" role="dialog" aria-label="Partie en pause">
       <div className="panel modal pop-in">
-        <div className="trophy" aria-hidden>
-          <Pause />
-        </div>
+        <Bee mood="thinking" className="end-bee" />
         <h2>Pause</h2>
         {onResume ? (
           <button className="primary" onClick={onResume}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SITE_NAME } from './site';
 
 /** Choix du joueur de recevoir une notification quand son tour arrive (gardé sur ce navigateur). */
 const NOTIFY_KEY = 'gof-notify';
@@ -55,7 +56,7 @@ export function useTurnAlert(message: string | null, notify: boolean) {
     let notification: Notification | undefined;
     if (notify && supported() && Notification.permission === 'granted') {
       try {
-        notification = new Notification('Gang of Four', { body: message, icon: '/cards/1M.webp', tag: 'gof-turn' });
+        notification = new Notification(SITE_NAME, { body: message, icon: '/assets/brand/ludora-icon-192.png', tag: 'gof-turn' });
         notification.onclick = () => {
           window.focus();
           notification?.close();

@@ -13,7 +13,8 @@ import { ChessRules } from './ChessRules';
 import { Rules } from './Rules';
 import { FIRST_LEVEL, ProfileScreen } from './Progress';
 import { SeasonHeader, SeasonLine } from './Season';
-import { SITE_NAME, SITE_TAGLINE } from './site';
+import { SITE_NAME, SITE_NEWS, SITE_TAGLINE } from './site';
+import { Bee, HiveLoader } from './Bee';
 import { useDaily, useMyProfile } from './useProfile';
 import { LEVEL_LABELS, errorLabel } from './labels';
 import { socket, type useAccount } from './socket';
@@ -265,20 +266,16 @@ export function Home({
   function landing(): ReactNode {
     return (
       <div className="menu-screen">
-        <div className="menu-title">
-          <div className="home-fan" aria-hidden>
-            <img src="/cards/PV.webp" alt="" />
-            <img src="/cards/1M.webp" alt="" />
-            <img src="/cards/DR.webp" alt="" />
-            <img src="/cards/PJ.webp" alt="" />
-            <img className="home-logo" src="/cards/dos.webp" alt="" />
-          </div>
-          <h1 className="game-title site-title">{SITE_NAME}</h1>
+        <div className="menu-title landing-title">
+          <Bee motion="idle" className="landing-bee" />
+          <h1 className="site-title">
+            <img src="/assets/brand/ludora-wordmark.svg" alt={SITE_NAME} />
+          </h1>
           <p className="tagline">{SITE_TAGLINE}</p>
         </div>
         <div className="menu-side">
           {account === undefined ? (
-            <p className="muted menu-loading">Connexion…</p>
+            <HiveLoader text="Connexion à la ruche…" />
           ) : account === null ? (
             <section className="panel signin-panel">
               {invitation ? (
@@ -309,28 +306,36 @@ export function Home({
   }
 
   function render(s: Screen): ReactNode {
+    const news = SITE_NEWS;
     if (!signedIn) return landing();
     switch (s) {
       case 'jeux':
         return (
           <div className="catalog">
             <div className="catalog-head">
-              <h2 className="catalog-title">Jeux</h2>
-              <SeasonLine stats={stats} />
+              <div>
+                <h2 className="catalog-title">Jeux</h2>
+                <SeasonLine stats={stats} />
+              </div>
+              {news && (
+                <button type="button" className="news-card" onClick={() => open(GAME_SCREENS[news.game].hub)}>
+                  <Bee mood="playing" />
+                  <span>
+                    <strong>{news.title}</strong>
+                    <small>{news.text}</small>
+                  </span>
+                </button>
+              )}
             </div>
-            <div className="game-cards">
+            <Hive>
               {GAMES.map((g) =>
                 g.status === 'live' ? (
-                  <button key={g.id} type="button" className={`game-card live game-${g.id}`} onClick={() => open(GAME_SCREENS[g.id as GameId].hub)}>
-                    <span className="game-card-top">
-                      <span className="game-card-players">{g.players}</span>
-                      {g.beta && <span className="beta-badge">Bêta</span>}
-                      {liveOf(g.id as GameId).length > 0 && (
-                        <span className="game-card-live">
-                          {liveOf(g.id as GameId).length} partie{liveOf(g.id as GameId).length > 1 ? 's' : ''} en cours
-                        </span>
-                      )}
-                    </span>
+                  <button key={g.id} type="button" className={`hex-card live game-${g.id}`} onClick={() => open(GAME_SCREENS[g.id as GameId].hub)} title={g.tagline}>
+                    {liveOf(g.id as GameId).length > 0 && (
+                      <span className="hex-card-live">
+                        {liveOf(g.id as GameId).length} en cours
+                      </span>
+                    )}
                     <span className="game-card-art" aria-hidden>
                       {g.id === 'slots' ? (
                         <JackpotArt />
@@ -349,21 +354,24 @@ export function Home({
                       )}
                     </span>
                     <strong>{g.name}</strong>
-                    <small>{g.tagline}</small>
+                    <span className="hex-card-meta">
+                      <span className="hex-card-players">
+                        <i className="hex-dot" aria-hidden />
+                        {g.players}
+                      </span>
+                      {g.beta && <span className="beta-badge">Bêta</span>}
+                    </span>
+                    <span className="sr-only">{g.tagline}</span>
                   </button>
                 ) : (
-                  <div key={g.id} className={`game-card upcoming status-${g.status} game-${g.id}`}>
-                    <span className="game-card-top">
-                      <span className="game-card-status">{g.status === 'soon' ? 'Bientôt' : 'Plus tard'}</span>
-                    </span>
+                  <div key={g.id} className={`hex-card upcoming status-${g.status} game-${g.id}`}>
+                    <span className="hex-card-live">{g.status === 'soon' ? 'Bientôt' : 'Plus tard'}</span>
                     <strong>{g.name}</strong>
-                    <small>
-                      {g.tagline} · {g.players}
-                    </small>
+                    <small>{g.players}</small>
                   </div>
                 ),
               )}
-            </div>
+            </Hive>
             <WaitingRooms onEnter={onEnter} />
             {error && <p className="error">{error}</p>}
           </div>
@@ -381,13 +389,15 @@ export function Home({
               <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
-              {/* Les cartes maîtresses du jeu en éventail derrière le dos de carte. */}
-              <div className="home-fan" aria-hidden>
-                <img src="/cards/PV.webp" alt="" />
-                <img src="/cards/1M.webp" alt="" />
-                <img src="/cards/DR.webp" alt="" />
-                <img src="/cards/PJ.webp" alt="" />
-                <img className="home-logo" src="/cards/dos.webp" alt="" />
+              {/* Les cartes maîtresses du jeu en éventail derrière le dos de carte, dans son alvéole. */}
+              <div className="hub-hex game-gof" aria-hidden>
+                <div className="home-fan">
+                  <img src="/cards/PV.webp" alt="" />
+                  <img src="/cards/1M.webp" alt="" />
+                  <img src="/cards/DR.webp" alt="" />
+                  <img src="/cards/PJ.webp" alt="" />
+                  <img className="home-logo" src="/cards/dos.webp" alt="" />
+                </div>
               </div>
               <h1 className="game-title">
                 Gang <span>of</span> Four
@@ -438,8 +448,10 @@ export function Home({
               <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
-              <div className="slots-hub-machine" aria-hidden>
-                <JackpotArt />
+              <div className="hub-hex game-slots" aria-hidden>
+                <div className="slots-hub-machine">
+                  <JackpotArt />
+                </div>
               </div>
               <h1 className="game-title">
                 Duel Jackpot <span className="beta-badge big">Bêta</span>
@@ -472,8 +484,10 @@ export function Home({
               <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
-              <div className="naval-hub-art" aria-hidden>
-                <NavalArt />
+              <div className="hub-hex game-battleship" aria-hidden>
+                <div className="naval-hub-art">
+                  <NavalArt />
+                </div>
               </div>
               <h1 className="game-title">
                 Bataille navale <span className="beta-badge big">Bêta</span>
@@ -506,8 +520,10 @@ export function Home({
               <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
-              <div className="reversi-hub-art" aria-hidden>
-                <ReversiArt />
+              <div className="hub-hex game-reversi" aria-hidden>
+                <div className="reversi-hub-art">
+                  <ReversiArt />
+                </div>
               </div>
               <h1 className="game-title">
                 Reversi <span className="beta-badge big">Bêta</span>
@@ -540,8 +556,10 @@ export function Home({
               <ArrowLeft /> Jeux
             </button>
             <div className="menu-title">
-              <div className="chess-hub-art" aria-hidden>
-                <ChessArt />
+              <div className="hub-hex game-chess" aria-hidden>
+                <div className="chess-hub-art">
+                  <ChessArt />
+                </div>
               </div>
               <h1 className="game-title">
                 Échecs <span className="beta-badge big">Bêta</span>
@@ -620,11 +638,9 @@ export function Home({
     <main className="home-menu">
       {signedIn && account && (
         <header className="menu-topbar">
-          <button type="button" className="site-brand" onClick={() => (screen === 'jeux' ? undefined : open('jeux'))}>
-            <span className="site-mark" aria-hidden>
-              {SITE_NAME.charAt(0)}
-            </span>
-            {SITE_NAME}
+          <button type="button" className="site-brand" onClick={() => (screen === 'jeux' ? undefined : open('jeux'))} aria-label={`${SITE_NAME} : les jeux`}>
+            <img className="site-logo" src="/assets/brand/ludora-logo-horizontal.svg" alt="" />
+            <img className="site-logo-small" src="/assets/brand/ludora-bee-head.svg" alt="" />
           </button>
           <nav className="site-tabs" aria-label="Menu principal">
             {TABS.map((t) => (
@@ -752,6 +768,58 @@ function SubScreen({
   );
 }
 
+/**
+ * Les jeux en alvéoles, comme une ruche : des rangées qui alternent n et n − 1 cases, décalées d'une demi-case. Le
+ * nombre de cases par rangée suit la largeur disponible, et vise deux rangées tant que les jeux y tiennent.
+ */
+function Hive({ children }: { children: ReactNode[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(3);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const style = getComputedStyle(el);
+      const cell = parseFloat(style.getPropertyValue('--hex-w')) || 232;
+      const gap = parseFloat(style.getPropertyValue('--hex-gap')) || 14;
+      setFit(Math.max(2, Math.floor((el.clientWidth + gap) / (cell + gap))));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const cols = Math.min(fit, Math.max(2, Math.ceil((children.length + 1) / 2)));
+  const rows: ReactNode[][] = [];
+  for (let i = 0, wide = true; i < children.length; wide = !wide) {
+    const n = wide ? cols : cols - 1;
+    rows.push(children.slice(i, i + n));
+    i += n;
+  }
+  return (
+    <div ref={ref} className="hive">
+      {rows.map((row, i) => (
+        <div key={i} className="hive-row">
+          {row}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** L'alvéole d'un salon qui attend : ses places prises, et son état (il manque des joueurs, ou on peut déjà lancer). */
+function RoomCell({ room }: { room: OpenRoom }) {
+  const waiting = room.players < room.minPlayers;
+  return (
+    <>
+      <span className={`room-cell ${waiting ? 'wait' : 'open'}`} aria-hidden>
+        {room.players}/{room.maxPlayers}
+      </span>
+      <span className={`room-status ${waiting ? 'wait' : 'open'}`}>{waiting ? 'En attente' : 'Disponible'}</span>
+    </>
+  );
+}
+
 /** Bots de l'entraînement : trois à Gang of Four, un dans les jeux à deux. */
 const TRAINING_BOTS: Record<GameId, number> = { gof: 3, slots: 1, battleship: 1, reversi: 1, chess: 1 };
 /** Cadences de l'entraînement aux échecs : sans pendule par défaut, pour réfléchir à son aise. */
@@ -804,6 +872,7 @@ function WaitingRooms({ onEnter }: { onEnter: (s: Session) => void }) {
         <ul className="open-rooms">
           {rooms.map((r) => (
             <li key={r.code}>
+              <RoomCell room={r} />
               <span className="open-room-text">
                 <strong>
                   {GAME_NAMES[r.game]} · salon de {r.host}
@@ -897,6 +966,7 @@ function PlayScreen({ game, initialCode, onEnter }: { game: GameId; initialCode:
             <ul className="open-rooms">
               {open.map((r) => (
                 <li key={r.code}>
+                  <RoomCell room={r} />
                   <span className="open-room-text">
                     <strong>Salon de {r.host}</strong>
                     <small>
@@ -989,6 +1059,9 @@ function LiveRooms({ rooms, onWatch }: { rooms: LiveRoom[]; onWatch: (s: Session
         <ul>
           {rooms.map((r) => (
             <li key={r.code}>
+              <span className="room-cell live" aria-hidden>
+                {r.round}
+              </span>
               <div className="live-info">
                 <span className="live-players">{r.players.map((p) => `${p.name}${p.bot ? ' (bot)' : ''} ${p.score}`).join(' · ')}</span>
                 <span className="muted">
@@ -997,6 +1070,7 @@ function LiveRooms({ rooms, onWatch }: { rooms: LiveRoom[]; onWatch: (s: Session
                 </span>
               </div>
               <div className="live-actions">
+                <span className="room-status live">En cours</span>
                 {r.open && (
                   <button className="primary" onClick={() => watch(r.code, true)} title="Prendre la place laissée libre, tenue par un bot">
                     Jouer

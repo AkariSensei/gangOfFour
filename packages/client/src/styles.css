@@ -1,7 +1,7 @@
 :root {
   /*
-   * DA « table de la salle de pause » : l'interface en gris légèrement chauds, l'orange en plusieurs teintes
-   * pour l'action, la sélection et le tour en cours. La couleur riche reste dans les jeux eux-mêmes.
+   * Ludora : une nuit de ruche (gris chauds), la crème pour lire, l'orange pour agir et le miel pour la marque, les
+   * récompenses et les bonnes nouvelles. La couleur riche reste dans les jeux eux-mêmes, chacun avec sa teinte.
    */
   --bg: #141210;
   --deep: #0f0d0b;
@@ -10,8 +10,8 @@
   --surface-2: #211d1a;
   --line: rgba(239, 233, 222, 0.08);
   --line-strong: rgba(239, 233, 222, 0.14);
-  --text: #efe9de;
-  --page-title: #efe9de;
+  --text: #f3ebdd;
+  --page-title: #f3ebdd;
   --page-sub: #b8ae9f;
   --muted: #8f877b;
   /* Encre fixe, pour le texte posé sur l'orange ou sur une carte blanche. */
@@ -26,8 +26,17 @@
   --apricot: #f39a5b;
   --peach: #ffd2b0;
   --rust: #b8501f;
-  /* Anciens noms, gardés pour les règles qui s'en servent : ils pointent vers la famille orange. */
-  --yellow: var(--amber);
+  /* Le miel de la marque : la mascotte, les récompenses, les séries, les points gagnés. */
+  --honey: #ffc53d;
+  --pollen: #ffe58a;
+  --honey-deep: #d9730a;
+  --honey-soft: rgba(255, 197, 61, 0.12);
+  --honey-line: rgba(255, 197, 61, 0.3);
+  /* La cire des ailes et la propolis (l'encre de l'abeille). */
+  --wax: #fffaf0;
+  --propolis: #2a190e;
+  /* Anciens noms, gardés pour les règles qui s'en servent : le jaune devient le miel, le reste suit l'orange. */
+  --yellow: var(--honey);
   --pink: var(--apricot);
   --cyan: var(--peach);
   --danger: #e5484d;
@@ -38,7 +47,7 @@
   --wood-light: #8a5a2e;
   --radius: 16px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font-title: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
+  --font-title: 'Rubik', 'Figtree', system-ui, sans-serif;
   /* Largeur d'une carte de la main, qui s'adapte à l'écran. */
   --card-w: clamp(48px, 5.4vw, 96px);
   --pile-w: clamp(46px, 4.6vw, 84px);
@@ -73,11 +82,11 @@ body {
   overflow-x: hidden;
 }
 
-/* Les titres : la hiérarchie vient de la taille et de la couleur, pas de la graisse. */
+/* Les titres en Rubik, affirmés ; la hiérarchie vient surtout de la taille et de la couleur. */
 h1,
 h2,
 h3 {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 button {
@@ -1529,10 +1538,6 @@ button.mute.on {
   margin: 0;
   font-family: var(--font-title);
   font-size: 1.35rem;
-}
-.trophy {
-  font-size: 3rem;
-  line-height: 1;
 }
 
 /* Podium de fin de partie : trois marches de bois, le gagnant au centre sur la plus haute. */
@@ -3074,7 +3079,7 @@ button.danger {
 }
 .game-title {
   font-family: var(--font-title);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--page-title);
   font-size: clamp(2.5rem, 5.5vw, 4.5rem);
   letter-spacing: -0.03em;
@@ -3780,32 +3785,32 @@ button.danger {
 }
 
 /* ——— Le site : en-tête avec les onglets, catalogue des jeux, saison, communauté ——— */
+/* Le logo Ludora : l'abeille et le nom ; sur téléphone, la tête de l'abeille seule. */
 .site-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-title);
-  font-weight: 600;
-  font-size: 1.35rem;
-  letter-spacing: -0.01em;
-  color: var(--text);
+  min-height: 0;
+  padding: 4px;
   background: none;
   border: none;
-  padding: 4px;
+  box-shadow: none;
   cursor: pointer;
 }
-/* Logo provisoire : l'initiale du site sur une petite carte orange, posée à plat, en attendant le vrai. */
-.site-mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 32px;
-  border-radius: 5px;
-  background: var(--accent);
-  color: var(--ink);
-  font-size: 0.95rem;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 2px rgba(26, 20, 16, 0.18);
+.site-logo {
+  display: block;
+  height: 34px;
+}
+.site-logo-small {
+  display: none;
+  height: 36px;
+}
+@media (max-width: 480px) {
+  .site-logo {
+    display: none;
+  }
+  .site-logo-small {
+    display: block;
+  }
 }
 .site-tabs {
   display: flex;
@@ -3830,8 +3835,9 @@ button.danger {
   background: var(--surface-2);
 }
 .site-tabs button.on {
-  background: var(--accent-soft);
-  color: var(--accent-light);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--honey);
 }
 .menu-topbar-actions {
   display: flex;
@@ -3871,106 +3877,11 @@ button.danger {
 .catalog-title {
   margin: 0;
   font-family: var(--font-title);
-  font-weight: 500;
-  font-size: 2rem;
+  font-weight: 700;
+  font-size: 2.5rem;
   letter-spacing: -0.02em;
 }
 
-/*
- * Les jeux du catalogue, comme des boîtes de jeu posées sur la table : chacun sa teinte sombre (braise, ambre,
- * mer) sous son illustration. C'est le moment coloré de la page ; le reste reste calme.
- */
-.game-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-.game-card {
-  --cover: #2a1a10;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 4px;
-  min-height: 240px;
-  padding: 24px;
-  border-radius: 20px;
-  text-align: left;
-  font-weight: 400;
-  color: var(--text);
-  background: linear-gradient(165deg, var(--cover), var(--panel) 70%);
-  border: 1px solid var(--line);
-  overflow: hidden;
-  box-shadow: none;
-}
-.game-card strong {
-  font-family: var(--font-title);
-  font-weight: 500;
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-.game-card small {
-  font-size: 0.9375rem;
-  color: var(--page-sub);
-}
-.game-card-top {
-  position: absolute;
-  top: 20px;
-  left: 24px;
-  right: 24px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.game-card-players {
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--page-sub);
-  background: rgba(15, 13, 11, 0.5);
-}
-.game-card.live {
-  cursor: pointer;
-  transition:
-    border-color 0.16s var(--ease),
-    transform 0.14s var(--ease);
-}
-.game-card.live:hover {
-  border-color: var(--accent-line);
-}
-.game-card-live {
-  margin-left: auto;
-  font-size: 0.8125rem;
-  color: var(--peach);
-}
-.game-card-art {
-  position: absolute;
-  top: 56px;
-  right: 24px;
-  height: 104px;
-  width: 140px;
-}
-.game-card-art img {
-  position: absolute;
-  top: 0;
-  width: 62px;
-  border-radius: 6px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
-}
-.game-card-art img:nth-child(1) {
-  right: 70px;
-  transform: rotate(-14deg);
-}
-.game-card-art img:nth-child(2) {
-  right: 38px;
-  transform: rotate(-2deg);
-}
-.game-card-art img:nth-child(3) {
-  right: 6px;
-  transform: rotate(12deg);
-}
 .game-hub {
   position: relative;
 }
@@ -4286,13 +4197,10 @@ button.danger {
   background: var(--panel);
   text-align: center;
 }
-.maintenance-mark {
-  width: 4.5rem;
-  height: 4.5rem;
-  font-size: 2.4rem;
-  font-family: var(--font-title);
-  font-weight: 600;
-  border-radius: 22px;
+.maintenance-bee {
+  display: block;
+  width: 140px;
+  margin: 0 auto;
 }
 .maintenance-box h1 {
   margin: 0;
@@ -4369,13 +4277,13 @@ button.danger {
 }
 
 /* ——— Duel Jackpot : deux machines à sous face à face ——— */
-.game-card.game-gof {
+.game-gof {
   --cover: #3a2112;
 }
-.game-card.game-slots {
+.game-slots {
   --cover: #3a2a10;
 }
-.game-card.game-battleship {
+.game-battleship {
   --cover: #14262b;
 }
 /* Les trois rouleaux du Jackpot, dans leur caisse de machine en laiton sombre. */
@@ -4396,11 +4304,6 @@ button.danger {
   height: 52px;
   border-radius: 6px;
   background: linear-gradient(180deg, #e9dfcf, #fffaf2 35%, #fffaf2 65%, #e9dfcf);
-}
-.game-card-art .jackpot-art {
-  position: absolute;
-  top: 8px;
-  right: 0;
 }
 .slot-seven {
   font-family: var(--font-title);
@@ -4708,11 +4611,6 @@ button.danger {
 }
 .naval-art > span.miss {
   background: #24414a radial-gradient(circle, #fff 0 25%, transparent 30%);
-}
-.game-card-art .naval-art {
-  position: absolute;
-  top: 0;
-  right: 0;
 }
 .naval-hub-art {
   display: grid;
@@ -5101,11 +4999,6 @@ button .lucide {
   width: 55%;
   height: 55%;
 }
-.trophy .lucide {
-  width: 40px;
-  height: 40px;
-  color: var(--amber);
-}
 .machine-who strong,
 .naval-board-head {
   display: flex;
@@ -5224,7 +5117,7 @@ button .lucide {
 }
 
 /* ——— Reversi : un tapis vert, des pions orange et crème qui se retournent ——— */
-.game-card.game-reversi {
+.game-reversi {
   --cover: #16301f;
 }
 .reversi-art {
@@ -5247,11 +5140,6 @@ button .lucide {
 .reversi-art .disc {
   width: 80%;
   height: 80%;
-}
-.game-card-art .reversi-art {
-  position: absolute;
-  top: 0;
-  right: 0;
 }
 .reversi-hub-art {
   display: grid;
@@ -5507,7 +5395,7 @@ button .lucide {
 }
 
 /* ——— Échecs : un échiquier en bois clair, la pendule de chacun, la feuille de partie à côté ——— */
-.game-card.game-chess {
+.game-chess {
   --cover: #2a1f16;
 }
 .chess-art {
@@ -5534,11 +5422,6 @@ button .lucide {
 .chess-art .dark,
 .chess-square.dark {
   background: #b5835a;
-}
-.game-card-art .chess-art {
-  position: absolute;
-  top: 0;
-  right: 0;
 }
 .chess-hub-art {
   display: grid;
@@ -5943,5 +5826,597 @@ button.chess-move.current {
   .chess-clock {
     min-width: 84px;
     font-size: 1.3rem;
+  }
+}
+
+/* ——— Ludora : la ruche (alvéoles, salons) et l'abeille (mascotte, attente, fins de partie) ——— */
+
+/* Texte lu par les lecteurs d'écran seulement. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Le catalogue : un motif d'alvéoles à peine visible derrière le titre, l'encart des nouveautés à droite. */
+.catalog {
+  position: relative;
+  isolation: isolate;
+}
+.catalog::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -24px;
+  right: -80px;
+  width: 640px;
+  max-width: 100%;
+  height: 420px;
+  background: url('/assets/brand/ludora-comb.svg') 0 0 / 56px 97px;
+  -webkit-mask-image: radial-gradient(ellipse at 75% 15%, #000, transparent 70%);
+  mask-image: radial-gradient(ellipse at 75% 15%, #000, transparent 70%);
+  pointer-events: none;
+}
+.catalog-head {
+  align-items: flex-end;
+}
+/* Les éléments de la grille ne s'élargissent pas à leur contenu : la ruche se mesure sur la largeur de l'écran. */
+.catalog > *,
+.catalog-head > * {
+  min-width: 0;
+}
+.news-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(440px, 100%);
+  min-height: 0;
+  padding: 8px 18px 8px 8px;
+  border-radius: 16px;
+  border: 1px solid var(--honey-line);
+  background: linear-gradient(100deg, var(--honey-soft), transparent 70%), var(--panel);
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+  transition: border-color 0.2s var(--ease);
+}
+.news-card:hover {
+  border-color: var(--honey);
+}
+.news-card .bee {
+  flex: none;
+  width: 52px;
+}
+.news-card:hover .bee {
+  animation: bee-hop 0.7s var(--ease);
+}
+.news-card strong {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.news-card small {
+  font-size: 0.8125rem;
+  color: var(--page-sub);
+}
+
+/*
+ * Les jeux en alvéoles : des hexagones qui s'emboîtent, rangée sur rangée. Chaque alvéole garde la teinte de son jeu ;
+ * le contour s'allume en orange et miel au survol. La forme vient d'un clip-path sur deux couches (contour et fond),
+ * pour que le bouton lui-même garde un vrai focus clavier.
+ */
+.hive {
+  width: 100%;
+  --hex-w: 232px;
+  --hex-gap: 14px;
+  --hex-h: calc(var(--hex-w) * 1.1547);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hive-row {
+  display: flex;
+  gap: var(--hex-gap);
+}
+.hive-row + .hive-row {
+  margin-top: calc(var(--hex-h) * -0.25 + var(--hex-gap) * 0.866);
+}
+.hex-card {
+  --cover: #2a1a10;
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: var(--hex-w);
+  height: var(--hex-h);
+  min-height: 0;
+  /* En pourcentage, la marge se calculerait sur la rangée : elle suit donc la taille de l'alvéole. */
+  padding: calc(var(--hex-h) * 0.16) calc(var(--hex-w) * 0.12) calc(var(--hex-h) * 0.13);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-weight: 400;
+  text-align: center;
+  transition: transform 0.25s var(--ease);
+}
+.hex-card::before,
+.hex-card::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.hex-card::before {
+  inset: 0;
+  background: var(--line-strong);
+  transition: background 0.25s var(--ease);
+}
+.hex-card::after {
+  inset: 1.5px;
+  background: linear-gradient(170deg, var(--cover), var(--panel) 72%);
+}
+.hex-card.live {
+  cursor: pointer;
+}
+.hex-card.live:hover,
+.hex-card.live:focus-visible {
+  transform: translateY(-6px);
+}
+.hex-card.live:hover::before,
+.hex-card.live:focus-visible::before {
+  background: linear-gradient(160deg, var(--accent), var(--honey));
+}
+.hex-card.live:focus-visible {
+  outline: none;
+}
+.hex-card.live:focus-visible::after {
+  inset: 3px;
+}
+.hex-card .game-card-art {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 92px;
+  margin-bottom: 8px;
+  transition: transform 0.3s var(--ease);
+}
+.hex-card.live:hover .game-card-art {
+  transform: scale(1.06);
+}
+.hex-card .game-card-art > span {
+  position: static;
+}
+/* Gang of Four : trois cartes en éventail. */
+.hex-card .game-card-art > img {
+  position: absolute;
+  top: 2px;
+  width: 54px;
+  border-radius: 6px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+}
+.hex-card .game-card-art > img:nth-child(1) {
+  right: 70px;
+  transform: rotate(-14deg);
+}
+.hex-card .game-card-art > img:nth-child(2) {
+  right: 43px;
+  transform: rotate(-2deg);
+}
+.hex-card .game-card-art > img:nth-child(3) {
+  right: 16px;
+  transform: rotate(12deg);
+}
+.hex-card strong {
+  position: relative;
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+.hex-card small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.hex-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+}
+.hex-card-players {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--page-sub);
+}
+.hex-dot {
+  width: 9px;
+  height: 10px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  opacity: 0.8;
+}
+.hex-card-live {
+  position: absolute;
+  top: 12%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-light);
+}
+.hex-card.live .hex-card-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+.hex-card.upcoming {
+  color: var(--muted);
+}
+.hex-card.upcoming::after {
+  background: var(--deep);
+}
+.hex-card.upcoming .hex-card-live {
+  color: var(--muted);
+}
+@media (max-width: 760px) {
+  .hive {
+    --hex-w: 176px;
+    --hex-gap: 10px;
+  }
+  .hex-card .game-card-art {
+    scale: 0.76;
+    margin: -12px 0 -8px;
+  }
+  .hex-card strong {
+    font-size: 1.05rem;
+  }
+}
+@media (max-width: 420px) {
+  .hive {
+    --hex-w: 152px;
+    --hex-gap: 8px;
+  }
+  .hex-card {
+    gap: 4px;
+  }
+  .hex-card .game-card-art {
+    scale: 0.62;
+    margin: -20px 0 -14px;
+  }
+  .hex-card strong {
+    font-size: 0.95rem;
+  }
+  .hex-card-players {
+    font-size: 0.75rem;
+  }
+}
+
+/* La page d'un jeu : son illustration posée dans une grande alvéole, à sa teinte. */
+.hub-hex {
+  --cover: #2a1a10;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: clamp(220px, 24vw, 300px);
+  aspect-ratio: 0.866;
+  margin: 0 auto 20px;
+}
+.hub-hex::before,
+.hub-hex::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.hub-hex::before {
+  inset: 0;
+  background: var(--honey-line);
+}
+.hub-hex::after {
+  inset: 2px;
+  background: linear-gradient(170deg, var(--cover), var(--panel) 75%);
+}
+.hub-hex > * {
+  margin: 0;
+}
+/* L'éventail de Gang of Four dépasse à peine de son alvéole. */
+.hub-hex .home-fan {
+  scale: 0.82;
+}
+
+/* Les salons : chacun dans son alvéole, avec son état (il manque des joueurs, on peut lancer, ça joue). */
+.room-cell {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 46px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  font-family: var(--font-title);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.room-cell.open {
+  background: rgba(76, 195, 138, 0.16);
+  color: var(--ok);
+}
+.room-cell.wait {
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+.room-cell.live {
+  background: var(--accent-soft);
+  color: var(--accent-light);
+}
+.room-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.room-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.room-status.open {
+  color: var(--ok);
+  background: rgba(76, 195, 138, 0.12);
+}
+.room-status.wait {
+  color: var(--honey);
+  background: var(--honey-soft);
+}
+.room-status.live {
+  align-self: center;
+  color: var(--accent-light);
+  background: var(--accent-soft);
+}
+.room-status.live::before {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+.open-rooms li > .open-room-text {
+  order: 1;
+}
+.open-rooms li > .room-status {
+  order: 2;
+}
+.open-rooms li > button {
+  order: 3;
+}
+.live-rooms li {
+  justify-content: flex-start;
+}
+.live-rooms .live-info {
+  flex: 1;
+}
+@media (max-width: 480px) {
+  .open-rooms li > .room-status {
+    display: none;
+  }
+}
+@keyframes live-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* L'abeille, insérée dans la page : elle flotte et cligne des yeux, bat des ailes en vol, saute de joie. */
+.bee {
+  display: inline-block;
+  line-height: 0;
+}
+.bee svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.bee-idle {
+  animation: bee-float 4.5s ease-in-out infinite;
+}
+.bee-idle .bee-face ellipse,
+.bee-idle .bee-face circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bee-blink 6s infinite;
+}
+.bee-fly .bee-wing {
+  transform-box: fill-box;
+}
+.bee-fly .bee-wing-left {
+  transform-origin: 100% 85%;
+  animation: bee-flutter-left 0.14s ease-in-out infinite alternate;
+}
+.bee-fly .bee-wing-right {
+  transform-origin: 0 85%;
+  animation: bee-flutter-right 0.14s ease-in-out infinite alternate;
+}
+.bee-hop {
+  animation: bee-hop 0.9s var(--ease) both;
+}
+@keyframes bee-float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes bee-blink {
+  0%,
+  94%,
+  100% {
+    transform: none;
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes bee-flutter-left {
+  to {
+    transform: rotate(14deg) scaleY(0.8);
+  }
+}
+@keyframes bee-flutter-right {
+  to {
+    transform: rotate(-14deg) scaleY(0.8);
+  }
+}
+@keyframes bee-hop {
+  0% {
+    transform: translateY(10px) scale(0.9);
+    opacity: 0;
+  }
+  45% {
+    transform: translateY(-12px) scale(1.04);
+    opacity: 1;
+  }
+  75% {
+    transform: none;
+  }
+}
+
+/* Attente : l'abeille vole d'une alvéole à l'autre, qui s'allument à son passage. */
+.hive-loader {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 12px 0;
+}
+.hive-loader-cells {
+  position: relative;
+  width: 168px;
+  height: 64px;
+}
+.hive-loader-cells > span:not(.bee) {
+  position: absolute;
+  top: 12px;
+  width: 44px;
+  height: 50px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: var(--surface);
+  animation: hive-glow 2.4s ease-in-out infinite;
+}
+.hive-loader-cells > span:nth-child(1) {
+  left: 0;
+}
+.hive-loader-cells > span:nth-child(2) {
+  left: 62px;
+  animation-delay: 0.8s;
+}
+.hive-loader-cells > span:nth-child(3) {
+  left: 124px;
+  animation-delay: 1.6s;
+}
+.hive-loader-bee {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  width: 44px;
+  animation: hive-fly 2.4s var(--ease) infinite;
+}
+.hive-loader-text {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+@keyframes hive-glow {
+  0%,
+  100% {
+    background: var(--surface);
+  }
+  15%,
+  30% {
+    background: rgba(255, 197, 61, 0.55);
+  }
+}
+@keyframes hive-fly {
+  0% {
+    transform: translate(0, 0) rotate(-6deg);
+  }
+  33% {
+    transform: translate(62px, -6px) rotate(4deg);
+  }
+  66% {
+    transform: translate(124px, 0) rotate(-4deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(-6deg);
+  }
+}
+.app-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+
+/* L'accueil sans compte : l'abeille au-dessus du nom. */
+.landing-title {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+.landing-bee {
+  width: clamp(160px, 22vw, 250px);
+}
+.site-title {
+  margin: 8px 0 12px;
+  line-height: 0;
+}
+.site-title img {
+  height: clamp(44px, 6vw, 68px);
+}
+
+/* Fins de partie et pause : l'abeille au-dessus du titre, et une lueur de miel pour les fins de partie. */
+.end-bee {
+  display: block;
+  width: 116px;
+  margin: -6px auto 0;
+}
+.modal.duel-over,
+.modal.game-over {
+  background-image: radial-gradient(circle at 50% 0, rgba(255, 197, 61, 0.12), transparent 60%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bee,
+  .bee *,
+  .hive-loader-cells > *,
+  .hex-card,
+  .hex-card .game-card-art,
+  .hex-card-live::before,
+  .room-status::before {
+    animation: none !important;
+    transition: none !important;
+  }
+  .hex-card.live:hover,
+  .hex-card.live:focus-visible {
+    transform: none;
   }
 }

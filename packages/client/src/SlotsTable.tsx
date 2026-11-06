@@ -1,8 +1,9 @@
-import { Coins, Eye, Pause, Timer, Trophy } from 'lucide-react';
+import { Eye, Pause, Timer } from 'lucide-react';
 import { SLOT_SYMBOLS, type SlotSpin, type SlotSymbol, type SlotsView, payoutOf } from '@gof/engine';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { ChatButton } from './Chat';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
 import { RatingChange, useRatingChange } from './RatingChange';
@@ -184,9 +185,7 @@ function DuelOver({
   return (
     <div className="overlay" role="dialog" aria-label="Fin du duel">
       <div className="panel modal pop-in duel-over">
-        <div className="trophy" aria-hidden>
-          {won ? <Trophy /> : <Coins />}
-        </div>
+        <Bee mood={shared ? 'surprised' : won ? 'victory' : game.you < 0 ? 'happy' : 'sad'} motion={won ? 'hop' : undefined} className="end-bee" />
         <h2>{shared ? 'Égalité' : game.you < 0 ? `${game.players[game.winners[0]!]!.name} gagne` : won ? 'Tu gagnes le duel' : 'Perdu'}</h2>
         <div className="duel-balances">
           {game.players.map((p, i) => (

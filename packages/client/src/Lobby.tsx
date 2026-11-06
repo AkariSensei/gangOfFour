@@ -2,6 +2,7 @@ import { VolumeX, X } from 'lucide-react';
 import { useState } from 'react';
 import type { BotLevel, ChatMessage, RoomView, Session } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { HiveLoader } from './Bee';
 import { ChatPanel, KickButton, MuteButton } from './Chat';
 import { TIME_CONTROLS } from '@gof/engine';
 import { LEVEL_LABELS, errorLabel } from './labels';
@@ -215,6 +216,9 @@ export function Lobby({
               ))}
             </div>
           </div>
+        )}
+        {room.players.length < counts.min && (
+          <HiveLoader text={counts.min - room.players.length > 1 ? `En attente de ${counts.min - room.players.length} joueurs…` : 'En attente d’un joueur…'} />
         )}
         {!room.training && (
           <p className="muted small lobby-note">Le salon est visible dans les salons actifs : les collègues peuvent le rejoindre depuis la page du jeu.</p>

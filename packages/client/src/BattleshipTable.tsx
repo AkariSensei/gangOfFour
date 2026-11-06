@@ -1,8 +1,9 @@
-import { Anchor, Eye, Pause, RotateCw, Shuffle, Timer, Trophy, Waves } from 'lucide-react';
+import { Eye, Pause, RotateCw, Shuffle, Timer } from 'lucide-react';
 import { type BattleshipView, FLEET, GRID, type Ship, kindOf, randomFleet, shipAt, validFleet } from '@gof/engine';
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { ChatButton } from './Chat';
 import { ShipArt } from './NavalShips';
 import { PauseOverlay, ReactionButton, useCountdown, useReactions } from './Table';
@@ -447,9 +448,7 @@ export function BattleshipTable({
       {game.phase === 'gameOver' && endOpen && (
         <div className="overlay" role="dialog" aria-label="Fin de la bataille">
           <div className="panel modal pop-in duel-over">
-            <div className="trophy" aria-hidden>
-              {game.winners.includes(me) ? <Trophy /> : spectator ? <Anchor /> : <Waves />}
-            </div>
+            <Bee mood={game.winners.includes(me) ? 'victory' : spectator ? 'happy' : 'sad'} motion={game.winners.includes(me) ? 'hop' : undefined} className="end-bee" />
             <h2>
               {spectator
                 ? `${game.players[game.winners[0]!]!.name} gagne`

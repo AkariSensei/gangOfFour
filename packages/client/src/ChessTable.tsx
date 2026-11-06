@@ -1,4 +1,4 @@
-import { ArrowDownUp, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Copy, ExternalLink, Eye, Flag, Handshake, Pause, Trophy, Users } from 'lucide-react';
+import { ArrowDownUp, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Copy, ExternalLink, Eye, Flag, Handshake, Pause } from 'lucide-react';
 import {
   type ChessEnd,
   type ChessMove,
@@ -17,6 +17,7 @@ import {
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RoomView } from '../../server/src/protocol';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { ChatButton } from './Chat';
 import { RatingChange, useRatingChange } from './RatingChange';
 import { PauseOverlay, ReactionButton, useReactions } from './Table';
@@ -642,9 +643,11 @@ export function ChessTable({
       {!playing && endOpen && (
         <div className="overlay" role="dialog" aria-label="Fin de la partie">
           <div className="panel modal pop-in duel-over chess-over">
-            <div className="trophy" aria-hidden>
-              {game.winners.length === 0 ? <Users /> : game.winners.includes(me) || spectator ? <Trophy /> : <Flag />}
-            </div>
+            <Bee
+              mood={game.end === 'aborted' ? 'surprised' : game.winners.length === 0 ? 'thinking' : spectator ? 'happy' : game.winners.includes(me) ? 'victory' : 'sad'}
+              motion={game.winners.includes(me) ? 'hop' : undefined}
+              className="end-bee"
+            />
             <h2>
               {game.end === 'aborted'
                 ? 'Partie annulée'

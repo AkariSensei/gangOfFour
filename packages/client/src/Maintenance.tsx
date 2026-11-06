@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { GoogleButton } from './Account';
 import { errorLabel } from './labels';
 import { SITE_NAME } from './site';
+import { Bee } from './Bee';
 import { socket, type useAccount } from './socket';
 
 /** Le site est-il fermé pour maintenance ? null tant que le serveur n'a pas répondu. */
@@ -44,9 +45,7 @@ export function MaintenanceScreen({ account: me }: { account: ReturnType<typeof 
   return (
     <main className="maintenance">
       <div className="maintenance-box pop-in">
-        <span className="site-mark maintenance-mark" aria-hidden>
-          {SITE_NAME.charAt(0)}
-        </span>
+        <Bee mood="thinking" motion="idle" className="maintenance-bee" />
         <h1>Site en maintenance</h1>
         <p>
           {SITE_NAME} se refait une beauté et prépare de nouveaux jeux. Reviens un peu plus tard : les parties reprendront très

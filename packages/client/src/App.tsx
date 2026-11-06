@@ -2,6 +2,7 @@ import { type GameView, type RoomView, isBattleshipView, isChessView, isReversiV
 import { ChessTable } from './ChessTable';
 import { ReversiTable } from './ReversiTable';
 import { BattleshipTable } from './BattleshipTable';
+import { HiveLoader } from './Bee';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { SlotsTable } from './SlotsTable';
@@ -27,8 +28,13 @@ export function App() {
   };
 
   let screen;
-  // Maintenance : tout le monde voit le message, sauf l'admin qui teste le site (rien tant qu'on ne sait pas encore).
-  if (maintenance === null) screen = null;
+  // Maintenance : tout le monde voit le message, sauf l'admin qui teste le site (l'abeille tant qu'on ne sait pas encore).
+  if (maintenance === null)
+    screen = (
+      <main className="app-loading">
+        <HiveLoader text="Connexion à la ruche…" />
+      </main>
+    );
   else if (maintenance && !admin) screen = <MaintenanceScreen account={account} />;
   else if (!session || !room) screen = <Home onEnter={remember} account={account} notice={kicked ? errorLabel('kicked') : ''} />;
   else if (session.spectator) screen = game ? table(game, room) : null;
