@@ -379,6 +379,7 @@ export function Home({
       case 'communaute':
         return (
           <SubScreen title="Communauté" narrow>
+            <HiveNow live={live} onEnter={onEnter} />
             <CommunityScreen admin={!!account?.admin} />
           </SubScreen>
         );
@@ -772,7 +773,7 @@ function SubScreen({
  * Les jeux en alvéoles, comme une ruche : des rangées qui alternent n et n − 1 cases, décalées d'une demi-case. Le
  * nombre de cases par rangée suit la largeur disponible, et vise deux rangées tant que les jeux y tiennent.
  */
-function Hive({ children }: { children: ReactNode[] }) {
+function Hive({ children, className = '' }: { children: ReactNode[]; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(3);
   useEffect(() => {
@@ -797,13 +798,78 @@ function Hive({ children }: { children: ReactNode[] }) {
     i += n;
   }
   return (
-    <div ref={ref} className="hive">
+    <div ref={ref} className={`hive ${className}`}>
       {rows.map((row, i) => (
         <div key={i} className="hive-row">
           {row}
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * La ruche en ce moment, en tête de la Communauté : les salons qui attendent un joueur et les parties en cours, tous jeux
+ * confondus, chacun dans son alvéole. Un clic rejoint le salon, ou regarde la partie.
+ */
+function HiveNow({ live, onEnter }: { live: LiveRoom[]; onEnter: (s: Session) => void }) {
+  const waiting = useOpenRooms(GAMES.filter((g) => g.status === 'live').map((g) => g.id as GameId)) ?? [];
+  const [error, setError] = useState('');
+  async function enter(code: string, watch: boolean) {
+    setError('');
+    const result = watch ? await socket.emitWithAck('room:watch', { code }) : await socket.emitWithAck('room:join', { code });
+    if (result.ok) onEnter(result);
+    else setError(errorLabel(result.error));
+  }
+  const cells = [
+    ...waiting.map((r) => {
+      const state = r.players < r.minPlayers ? 'wait' : 'open';
+      return { code: r.code, game: r.game, who: `Salon de ${r.host}`, state, label: state === 'wait' ? 'En attente' : 'Disponible', watch: false };
+    }),
+    ...live.map((r) => ({
+      code: r.code,
+      game: r.game ?? 'gof',
+      who: r.players
+        .filter((p) => !p.bot)
+        .map((p) => p.name)
+        .join(' · '),
+      state: 'live',
+      label: 'En cours',
+      watch: true,
+    })),
+  ];
+  return (
+    <section className="hive-now">
+      <div className="hive-now-head">
+        <h2>La ruche en ce moment</h2>
+        <span className="muted small">
+          {waiting.length} salon{waiting.length > 1 ? 's' : ''} en attente · {live.length} partie{live.length > 1 ? 's' : ''} en cours
+        </span>
+      </div>
+      {cells.length === 0 ? (
+        <div className="hive-now-empty">
+          <Bee mood="thinking" />
+          <p>La ruche est calme. Crée un salon depuis la page d’un jeu : il apparaîtra ici, et les collègues pourront le rejoindre.</p>
+        </div>
+      ) : (
+        <Hive className="small">
+          {cells.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              className={`hex-card live game-${c.game}`}
+              onClick={() => void enter(c.code, c.watch)}
+              title={c.watch ? 'Regarder la partie' : 'Rejoindre le salon'}
+            >
+              <strong>{GAME_NAMES[c.game]}</strong>
+              <small>{c.who}</small>
+              <span className={`room-status ${c.state}`}>{c.label}</span>
+            </button>
+          ))}
+        </Hive>
+      )}
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }
 

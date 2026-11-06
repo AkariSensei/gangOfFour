@@ -2,6 +2,7 @@ import { ChevronUp } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { IdeaView } from '../../server/src/protocol';
 import { wallText } from '../../server/src/wallText';
+import { Bee } from './Bee';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -55,6 +56,7 @@ export function CommunityScreen({ admin }: { admin: boolean }) {
   const shown = (ideas ?? []).filter((i) => filter === 'all' || i.kind === filter);
   return (
     <div className="community">
+      <p className="community-lead">Propose, vote et commente : la ruche décide de la suite du site.</p>
       <NewIdea onPost={(kind, title, text) => run(socket.emitWithAck('community:post', { kind, title, text }))} />
       <div className="community-head">
         <h2>Le mur</h2>
@@ -74,7 +76,12 @@ export function CommunityScreen({ admin }: { admin: boolean }) {
       </div>
       {error && <p className="error">{error}</p>}
       {ideas === null && <p className="muted">Chargement…</p>}
-      {ideas && shown.length === 0 && <p className="muted">Rien pour l’instant : lance la première idée</p>}
+      {ideas && shown.length === 0 && (
+        <div className="hive-now-empty">
+          <Bee mood="thinking" />
+          <p>Rien pour l’instant : lance la première idée</p>
+        </div>
+      )}
       <ul className="ideas">
         {shown.map((idea) => (
           <li key={idea.id} className={`idea status-${idea.status}`}>

@@ -3,6 +3,7 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { type AccountView, FELTS, FRAMES, LEVEL_TITLES, MAX_LEVEL, type PlayerProfile, type Progress } from '../../server/src/protocol';
 import { AccountForm } from './Account';
 import { Avatar } from './Avatar';
+import { Bee } from './Bee';
 import { errorLabel } from './labels';
 import { socket } from './socket';
 
@@ -73,6 +74,7 @@ export function ProfileScreen({
             {progress.maxed ? 'niveau maximal atteint' : `encore ${remaining} XP pour le niveau ${progress.level + 1}`}
           </small>
         </div>
+        <Bee mood={progress.maxed ? 'victory' : 'happy'} className="level-bee" />
       </section>
 
       <div className="profile-columns">
